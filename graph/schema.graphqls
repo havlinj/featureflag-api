@@ -1,0 +1,40 @@
+
+# -------------------------
+# Feature Flag types
+# -------------------------
+
+type FeatureFlag {
+  id: ID!
+  key: String!
+  description: String
+  enabled: Boolean!
+  environment: String!
+}
+
+input CreateFlagInput {
+  key: String!
+  description: String
+  environment: String!
+}
+
+input UpdateFlagInput {
+  key: String!
+  enabled: Boolean!
+}
+
+# -------------------------
+# Queries
+# -------------------------
+
+type Query {
+  evaluateFlag(key: String!, userId: ID!): Boolean!
+}
+
+# -------------------------
+# Mutations
+# -------------------------
+
+type Mutation {
+  createFlag(input: CreateFlagInput!): FeatureFlag!
+  updateFlag(input: UpdateFlagInput!): FeatureFlag!
+}
