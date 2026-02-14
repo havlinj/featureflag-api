@@ -7,3 +7,9 @@ exec:
 model:
   filename: graph/model/models_gen.go 
   package: model
+
+resolver:
+  package: graph
+  layout: follow-schema 
+  dir: graph
+  filename_template: "{name}.resolvers.go"
