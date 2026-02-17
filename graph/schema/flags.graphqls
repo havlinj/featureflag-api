@@ -1,8 +1,4 @@
 
-# -------------------------
-# Feature Flag types
-# -------------------------
-
 type FeatureFlag {
   id: ID!
   key: String!
@@ -22,17 +18,9 @@ input UpdateFlagInput {
   enabled: Boolean!
 }
 
-# -------------------------
-# Queries
-# -------------------------
-
 type Query {
   evaluateFlag(key: String!, userId: ID!): Boolean!
 }
-
-# -------------------------
-# Mutations
-# -------------------------
 
 type Mutation {
   createFlag(input: CreateFlagInput!): FeatureFlag!

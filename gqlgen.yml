@@ -1,15 +1,15 @@
 schema:
-  - graph/schema.graphqls   
+  - graph/schema/*.graphqls   
 
 exec:
   filename: graph/generated.go  
 
 model:
-  filename: graph/model/models_gen.go 
   package: model
+  filename: graph/model/models_gen.go 
 
 resolver:
-  package: graph
+  package: graphql
   layout: follow-schema 
-  dir: graph
+  dir: transport/graphql
   filename_template: "{name}.resolvers.go"
