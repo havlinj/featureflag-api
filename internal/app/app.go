@@ -1,9 +1,7 @@
 package app
 
-import "github.com/jan-havlin-dev/featureflag-api/internal/app/server"
-
 type App struct {
-	Server server.Server
+	Server Server
 }
 
 func New () *App {

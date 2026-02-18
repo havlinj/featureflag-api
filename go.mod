@@ -13,4 +13,4 @@ require (
 	github.com/sosodev/duration v1.3.1 // indirect
 )
 
-replace github.com/jan-havlin-dev/featureflag-api  => ../featureflag-api
+//replace github.com/jan-havlin-dev/featureflag-api  => ../featureflag-api
