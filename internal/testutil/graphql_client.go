@@ -3,7 +3,7 @@ package testutil
 import (
 	"crypto/tls"
 	"net/http"
-	"github.com/jan-havlin-dev/featureflag-api/transport/graphql/types"
+	"github.com/jan-havlin-dev/featureflag-api/transport/graphql"
 )
 
 type GraphQLClient struct {
@@ -12,7 +12,7 @@ type GraphQLClient struct {
     Client    *http.Client
 }
 
-func New(url, authToken string) *GraphQLClient {
+func NewClient(url, authToken string) *GraphQLClient {
     return &GraphQLClient{
         URL:       url,
         AuthToken: authToken,
@@ -24,7 +24,7 @@ func New(url, authToken string) *GraphQLClient {
     }
 }
 
-func (c *GraphQLClient) DoRequest(query string, variables map[string]interface{}) (*types.GraphQLResponse, error) {
+func (c *GraphQLClient) DoRequest(query string, variables map[string]interface{}) (*graphql.GraphQLResponse, error) {
     panic("unimplemented")
 /*     reqBody := GraphQLRequest{
         Query:     query,
