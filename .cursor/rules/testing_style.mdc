@@ -1,0 +1,91 @@
+---
+alwaysApply: true
+---
+---
+title: Testing Style & Guidelines
+description: Guidelines for writing unit and integration tests in the Feature Flag & Experiment Management backend.
+version: 1.0.0
+schema: cursor-mdc-v1
+tags: [testing, go, integration, unit]
+cursor:
+  version: 1.0.0
+  features: [test-guidelines, code-quality]
+  experimental: false
+---
+
+# Testing Style & Guidelines
+
+This document defines rules and best practices for writing tests in Go for this project.
+
+---
+
+## General Principles
+
+- Tests must be written in English.
+- All business logic should have unit test coverage.
+- Integration tests must verify DB interactions and GraphQL endpoints.
+- Tests should be deterministic and isolated.
+- Prefer table-driven tests for similar scenarios.
+- Test names must clearly describe the scenario being tested.
+- Keep test functions under 23 lines where possible; split complex tests into helper functions.
+- If a developer writes or modifies a test, wait until it is complete and then verify that its 
+  structure follows the rules in this file. Notify the developer if it does not.
+
+---
+
+## Unit Tests
+
+- Focus on the service layer (flags, experiments, rollout logic).
+- Mock repositories for isolated testing.
+- Avoid testing transport layer or DB in unit tests.
+- Validate both positive and negative cases.
+- Prefer pure functions in unit tests to simplify assertions.
+
+Example:
+
+```go
+func TestAssignVariant_Calculation(t *testing.T) {
+    cases := []struct{
+        name string
+        userID string
+        expectedVariant string
+    }{
+        {"User A", "user-123", "A"},
+        {"User B", "user-456", "B"},
+    }
+
+    for _, c := range cases {
+        t.Run(c.name, func(t *testing.T) {
+            result := AssignVariant(c.userID)
+            if result != c.expectedVariant {
+                t.Errorf("expected %s, got %s", c.expectedVariant, result)
+            }
+        })
+    }
+}
+
+## ntegration Tests
+
+- Use Dockerized PostgreSQL or testcontainers for DB tests.
+- Test GraphQL queries and mutations through the transport layer.
+- Validate proper role-based access and permissions.
+- Ensure deterministic behavior of feature flag rollout and experiment assignments.
+
+## Naming & Structure
+
+- Unit test files: *_test.go in same package as code under test.
+- Integration test files: integration_*_test.go in tests/ folder.
+- Test functions: Test<Functionality>_<Scenario> pattern.
+- Avoid duplicated setup code by using helper functions.
+
+## Assertions & Error Handling
+
+- Always assert expected results explicitly.
+- Check for errors returned and handle in tests.
+- Prefer descriptive error messages for easier debugging.
+
+## Miscellaneous
+
+- Run gofmt -w . on tests as well.
+- Avoid relying on global state or external side effects.
+- Keep tests fast, reliable, and repeatable.

@@ -1,0 +1,169 @@
+---
+alwaysApply: true
+---
+title: Coding Style & Conventions
+description: Coding standards and clean code principles for the Feature Flag & Experiment Management backend.
+version: 1.0.0
+schema: cursor-mdc-v1
+tags: [coding-style, go, clean-code]
+cursor:
+  version: 1.0.0
+  features: [style-enforcement, code-generation-guidance]
+  experimental: false
+---
+
+# Coding Style & Conventions
+
+This document defines coding standards for the project.
+
+All code must follow clean code principles, idiomatic Go conventions, and maintain high readability and maintainability.
+
+English must be used everywhere:
+- Code
+- Identifiers
+- Comments
+- Documentation
+
+---
+
+## Core Principles
+
+- Prefer clarity over cleverness.
+- Code must be easy to read and self-explanatory.
+- Names must clearly describe purpose and intent.
+- Avoid unnecessary abstractions.
+- Keep functions small and focused.
+- Avoid hidden side effects.
+- Maintain strict separation of concerns.
+
+---
+
+## Function Design Rules
+
+- A function MUST NOT exceed 23 lines of code.
+- Split complex logic into smaller private helper functions.
+- Each function must have a single, well-defined responsibility.
+- Function names must describe what they do, not how they do it.
+- Prefer early returns over nested blocks.
+- Avoid deep nesting.
+
+Preferred pattern:
+
+    if err != nil {
+        return err
+    }
+
+Avoid:
+
+    if err == nil {
+        // large nested block
+    }
+
+---
+
+## Naming Conventions
+
+- Use rather short but meaningful names.
+- Avoid vague names such as: data, info, tmp, obj.
+- Use domain terminology consistently (flag, experiment, variant, assignment).
+- Boolean variables must sound like predicates (isEnabled, hasAccess, canEdit).
+- Interface names must describe behavior (FlagRepository, ExperimentService).
+
+---
+
+## Go-Specific Guidelines
+
+- Always write idiomatic Go.
+- Follow official Go conventions and formatting.
+- Run `gofmt -w .` regularly.
+- Prefer composition over inheritance.
+- Keep interfaces small and focused.
+- Return errors explicitly; never hide them.
+- Do not panic in business logic.
+- Use context.Context for request-scoped operations.
+- Avoid global mutable state - with possible exceptions,
+  but use a safe concurency primitive then (e.g. mutex) 
+
+Error handling rules:
+
+- Always check returned errors.
+- Wrap errors with meaningful context when appropriate.
+- Never silently ignore errors.
+- Always propagate errors using well-explanatory messages 
+
+Example:
+
+    return fmt.Errorf("failed to create flag: %w", err)
+
+---
+
+## Functional Style Preference
+
+- Prefer functional style where it improves clarity.
+- Use pure functions whenever possible.
+- Avoid mutating shared state.
+- Favor immutability when it aligns with idiomatic Go.
+- Idiomatic Go always takes precedence over functional purity.
+- Do not force functional patterns if they reduce readability.
+
+---
+
+## Comments Policy
+
+- Comments must be written in English.
+- Do not comment obvious code.
+- Do not repeat what the code already expresses clearly.
+- Write comments only when:
+  - Explaining non-trivial business logic
+  - Clarifying edge cases
+  - Documenting architectural constraints
+  - Providing important context not visible from code
+
+Code must serve as the primary source of truth.
+Well-named identifiers and clean structure should eliminate the need for excessive comments.
+
+---
+
+## Structure & Organization
+
+- Separate business logic from transport logic.
+- Resolver files must only adapt GraphQL input/output to service calls.
+- Database logic must remain in the repository layer.
+- Avoid circular dependencies.
+- Keep packages cohesive and focused.
+- Prefer small packages with clear responsibilities.
+
+---
+
+## Readability & Layout
+
+- Keep vertical spacing clean and intentional.
+- Separate logical blocks with empty lines.
+- Avoid long parameter lists.
+- Keep structs compact and meaningful.
+- Maintain consistent formatting across the codebase.
+
+---
+
+## What To Avoid
+
+- Functions longer than 23 lines.
+- Deep nesting.
+- God objects.
+- Unclear naming.
+- Overuse of global state.
+- Commenting every line.
+- Non-idiomatic Go constructs.
+- Clever but unreadable abstractions.
+
+---
+
+## Final Rule
+
+Always prioritize:
+
+1. Idiomatic Go syntax.
+2. Clarity.
+3. Simplicity.
+4. Clean architecture boundaries.
+5. Maintainability over cleverness.

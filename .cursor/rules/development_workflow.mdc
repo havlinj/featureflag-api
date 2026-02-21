@@ -1,0 +1,96 @@
+---
+alwaysApply: true
+---
+---
+title: Project Milestones & Phased Implementation
+description: Step-by-step phased development plan for the Feature Flag & Experiment Management backend.
+version: 1.0.0
+schema: cursor-mdc-v1
+tags: [milestones, roadmap, phases, go, graphql, postgres]
+cursor:
+  version: 1.0.0
+  features: [project-milestones, phased-development]
+  experimental: false
+---
+
+# Project Milestones & Phased Implementation
+
+This document defines the phased approach to implementing the Feature Flag & Experiment Management backend. Each phase is designed to incrementally deliver functionality while maintaining clean architecture, strong typing, and test coverage.
+
+For better context and full architectural details, consider the master plan of this project: @file ../architecture.mdc
+
+---
+
+## Phase 1: Feature Flags Core
+
+**Objectives:**
+- Implement only the Feature Flags module.
+- Include a functional GraphQL/HTTP API exposing basic flag operations.
+- Include authentication and logging middleware for API requests.
+- Design and implement an initial minimal PostgreSQL schema sufficient for this phase.
+- Implement a tested database layer (repositories).
+- Write a few back-to-back integration tests to verify end-to-end functionality.
+
+**Key Deliverables:**
+- `flags` service layer with create, enable/disable, and simple rollout logic.
+- `transport/graphql` resolvers for feature flags queries and mutations.
+- Authentication middleware (JWT-based) and logging middleware integrated in API.
+- Minimal database schema:
+  - `users`
+  - `feature_flags`
+  - `flag_rules` (if needed for percentage/attribute rollouts)
+- Repository layer tested independently and integrated in API.
+- 2–3 end-to-end integration tests covering API → service → DB.
+
+---
+
+## Phase 2: Experiments Integration
+
+**Objectives:**
+- Add Experiments module across all layers.
+- Integrate with existing feature flags system where applicable.
+- Implement deterministic assignment logic for users and variants.
+- Update GraphQL schema, service layer, and database schema accordingly.
+- Ensure full integration with database and API.
+
+**Key Deliverables:**
+- `experiments` service layer for defining experiments, variants, and user assignments.
+- Updated GraphQL schema (`experiments` types and queries/mutations).
+- Updated resolvers for experiments, fully integrated with service layer.
+- Database schema additions:
+  - `experiments`
+  - `experiment_variants`
+  - `experiment_assignments`
+- Integration tests covering API → service → DB for experiments module.
+- Ensure deterministic rollout and assignment behavior.
+
+---
+
+## Phase 3: Audit Logging
+
+**Objectives:**
+- Implement audit logging for all critical operations.
+- Track who performed each action, when, and what changed.
+- Integrate audit logging across service and transport layers.
+- Persist logs in PostgreSQL for review and analysis.
+
+**Key Deliverables:**
+- Audit logging service and repository.
+- Hooks in service layer to record every mutation or significant operation.
+- Database table `audit_logs` with fields:
+  - `id`
+  - `entity`
+  - `entity_id`
+  - `action`
+  - `actor_id`
+  - `created_at`
+- Integration tests verifying audit log creation and correctness.
+- Ensure audit logging does not interfere with normal operation or performance.
+
+---
+
+## Notes
+
+- Each phase should be fully functional and testable before moving to the next.
+- Phases build incrementally, preserving backward compatibility and clean architecture.
+- Milestones should be used as checkpoints for code review, documentation, and CI validation.
