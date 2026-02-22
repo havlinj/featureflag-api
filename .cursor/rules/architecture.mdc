@@ -1,10 +1,8 @@
----
-alwaysApply: true
----
 
 ---
 title: "Feature Flag & Experiment Backend Architecture"
 description: "High-level architectural guidelines and structure for the Feature Flag & Experiment Management API project in Go with PostgreSQL and GraphQL."
+alwaysApply: true
 version: "1.0.0"
 schema: "cursor-mdc-v1"
 tags: ["architecture", "go", "graphql", "clean-architecture", "postgresql"]
@@ -128,7 +126,6 @@ tests/ # test suites (unit + integration)
 docker-compose.yml # local infra with Postgres
 Makefile / taskfile.yml # developer scripts
 
-
 - The `transport/graphql` package isolates API delivery from core service logic.  
 - The `graph/` folder contains **gqlgen's generated files** and schema definitions.  
 - Service modules (`flags`, `experiments`) are independent from transport logic.
@@ -157,48 +154,6 @@ This enforces:
 - **Docker Compose** – reproducible local infra with Postgres  
 - **GraphQL over HTTPS** – primary transport (HTTPS request/response)  
 </cursor:patterns>
-
-## GraphQL Schema Organization
-
-<cursor:rules>
-- GraphQL schema should be split by **domain areas**:
-  - `graph/schema/flags.graphqls`
-  - `graph/schema/experiments.graphqls`
-  - `graph/schema/audit.graphqls`
-  - `graph/schema/users.graphqls`
-
-- Common types (scalars, enums) can go into `graph/schema/common.graphqls`.
-
-- Use `schema-first` approach with gqlgen:  
-  -> run `go run github.com/99designs/gqlgen generate` from project root.  
-  -> The config (`gqlgen.yml`) should point to schema and the desired output paths.
-</cursor:rules>
-
-### gqlgen Config Example (excerpt)
-
-
-schema:
-
-graph/schema/common.graphqls
-
-graph/schema/flags.graphqls
-
-graph/schema/experiments.graphqls
-
-exec:
-filename: graph/generated.go
-package: graph
-
-model:
-filename: graph/models_gen.go
-package: model
-
-resolver:
-layout: follow-schema
-dir: transport/graphql
-package: graphql
-filename_template: "{name}.resolvers.go"
-
 
 ### Transport Protocol Rules
 

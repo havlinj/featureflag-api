@@ -1,9 +1,10 @@
----
-alwaysApply: true
----
+
 ---
 title: Testing Style & Guidelines
 description: Guidelines for writing unit and integration tests in the Feature Flag & Experiment Management backend.
+globs: 
+- "**/*_test.go"
+always_apply: false
 version: 1.0.0
 schema: cursor-mdc-v1
 tags: [testing, go, integration, unit]
@@ -25,9 +26,13 @@ This document defines rules and best practices for writing tests in Go for this 
 - All business logic should have unit test coverage.
 - Integration tests must verify DB interactions and GraphQL endpoints.
 - Tests should be deterministic and isolated.
+- Try to follow JUnit test structure (1. arrange 2. act 3. assert), 
+  unless you come up with a clearly more reasonable setup. 
+- Prefer self-explanatory tests. Comments are allowed only to clarify 
+  domain intent or non-trivial reasoning, not to explain obvious mechanics. 
 - Prefer table-driven tests for similar scenarios.
 - Test names must clearly describe the scenario being tested.
-- Keep test functions under 23 lines where possible; split complex tests into helper functions.
+- Keep test functions under 50 lines where possible; split complex tests into helper functions.
 - If a developer writes or modifies a test, wait until it is complete and then verify that its 
   structure follows the rules in this file. Notify the developer if it does not.
 
@@ -64,9 +69,9 @@ func TestAssignVariant_Calculation(t *testing.T) {
     }
 }
 
-## ntegration Tests
+## Integration Tests
 
-- Use Dockerized PostgreSQL or testcontainers for DB tests.
+- Use Dockerized PostgreSQL or test containers for DB tests.
 - Test GraphQL queries and mutations through the transport layer.
 - Validate proper role-based access and permissions.
 - Ensure deterministic behavior of feature flag rollout and experiment assignments.

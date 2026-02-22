@@ -1,8 +1,15 @@
----
-alwaysApply: true
+
 ---
 title: Coding Style & Conventions
 description: Coding standards and clean code principles for the Feature Flag & Experiment Management backend.
+globs: 
+- "**/*.go"
+- "!.cursor/**"
+- "!docs/**"
+- "!go.mod"
+- "!go.sum",
+- "!gqlgen.yml"
+alwaysApply: false
 version: 1.0.0
 schema: cursor-mdc-v1
 tags: [coding-style, go, clean-code]
@@ -155,6 +162,7 @@ Well-named identifiers and clean structure should eliminate the need for excessi
 - Commenting every line.
 - Non-idiomatic Go constructs.
 - Clever but unreadable abstractions.
+- Use of mocks within the production code
 
 ---
 

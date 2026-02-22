@@ -1,0 +1,57 @@
+
+---
+title: "GraphQL Schema Organization"
+description: "To be applied to the project implementation of qraphQL API through the gqlgen library"
+globs: 
+- "gqlgen.yml"
+- "graph/**"
+- "transport/graphql/**"
+alwaysApply: false
+version: "1.0.0"
+schema: "cursor-mdc-v1"
+tags: ["architecture", "go", "graphql", "clean-architecture", "postgresql"]
+cursor:
+  version: "1.0.0"
+  features: ["context-aware generation", "architecture guidance"]
+  experimental: false
+---
+
+<cursor:rules>
+- GraphQL schema should be split by **domain areas**:
+  - `graph/schema/flags.graphqls`
+  - `graph/schema/experiments.graphqls`
+  - `graph/schema/audit.graphqls`
+  - `graph/schema/users.graphqls`
+
+- Common types (scalars, enums) can go into `graph/schema/common.graphqls`.
+
+- Use `schema-first` approach with gqlgen:  
+  -> run `go run github.com/99designs/gqlgen generate` from project root.  
+  -> run `go get [package] if the previous command failed on a missing package or a use of one in a wrong version.  
+  -> The config (`gqlgen.yml`) should point to schema and the desired output paths.
+</cursor:rules>
+
+### gqlgen Config Example (excerpt)
+
+
+schema:
+
+graph/schema/common.graphqls
+
+graph/schema/flags.graphqls
+
+graph/schema/experiments.graphqls
+
+exec:
+filename: graph/generated.go
+package: graph
+
+model:
+filename: graph/models_gen.go
+package: model
+
+resolver:
+layout: follow-schema
+dir: transport/graphql
+package: graphql
+filename_template: "{name}.resolvers.go"

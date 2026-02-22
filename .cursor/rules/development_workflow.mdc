@@ -1,9 +1,8 @@
----
-alwaysApply: true
----
+
 ---
 title: Project Milestones & Phased Implementation
 description: Step-by-step phased development plan for the Feature Flag & Experiment Management backend.
+always_apply: true
 version: 1.0.0
 schema: cursor-mdc-v1
 tags: [milestones, roadmap, phases, go, graphql, postgres]
@@ -13,13 +12,187 @@ cursor:
   experimental: false
 ---
 
-# Project Milestones & Phased Implementation
+### Project Milestones & Phased Implementation
 
 This document defines the phased approach to implementing the Feature Flag & Experiment Management backend. Each phase is designed to incrementally deliver functionality while maintaining clean architecture, strong typing, and test coverage.
 
 For better context and full architectural details, consider the master plan of this project: @file ../architecture.mdc
 
 ---
+
+### Development Workflow (A Single Development Cycle)
+
+All non-trivial changes must follow the structured development workflow:
+
+PLAN → APPROVAL → IMPLEMENT → TEST → REVIEW
+
+The depth and strictness of each phase must be proportional to the complexity and risk of the change.
+
+- No significant implementation without an approved plan.
+- Architecture boundaries must always be respected.
+- Tests validate behavior, not implementation details.
+- Review is mandatory before closing any milestone.
+- Documentation and progress tracking must be kept up to date.
+
+## PLAN
+
+Goal: Design the solution before implementation so that coding becomes mostly mechanical.
+Must include:
+
+1. Problem Definition:
+
+- What is being changed?
+- Why is the change needed?
+
+2. Scope
+
+- What is included?
+- What is explicitly out of scope?
+
+3. Proposed Solution
+
+- High-level architectural approach
+- Affected layers or components
+- Data flow description
+- Pseudocode (if relevant)
+
+4. Affected Files
+
+- Files to modify
+- New files to create
+
+5. Edge Cases & Risks
+
+- Error cases
+- Boundary conditions
+- Performance considerations
+- Architectural risks
+
+6. Testing Strategy
+
+- What type of tests will be added?
+- What scenarios must be covered?
+
+Output
+
+- Status must be set to: NEEDS_APPROVAL
+- The proposal must be clear, structured, and reviewable.
+
+## APPROVAL
+
+Goal: Validate that the proposed solution is appropriate before implementation begins.
+
+Approval must verify:
+
+- No architectural violations
+- Scope is appropriate and controlled
+- Risks are acknowledged
+- Testing strategy is sufficient
+- No unnecessary complexity is introduced
+
+Implementation may begin only after explicit approval.
+
+## IMPLEMENT
+
+Goal: Implement exactly what was approved — without scope creep.
+
+Rules: 
+
+- Follow project conventions and standards: @file ../coding_style.mdc 
+- Respect architectural boundaries: @file ../architecture.mdc
+- Do not silently change the design.
+- If a significant design issue arises during implementation:
+  Stop and return to the PLAN phase.
+
+## TEST
+
+Goal: Prove that the implementation behaves as intended and matches the approved plan.
+
+Tests must validate behavior, not internal implementation details.
+
+To apply detailed rules in this area, source from @file ../testing_style.mdc
+
+## REVIEW
+
+Goal: Ensure quality, readability, architectural consistency, and alignment with the approved plan.
+
+Review is mandatory.
+
+REVIEW must check:
+
+1. Architecture
+
+- Layering is respected
+- No business logic leakage
+- No hidden coupling
+
+2. Simplicity
+
+- Can the solution be simpler?
+- Any over-engineering?
+- Unnecessary abstractions?
+
+3. Readability
+
+- Clear naming
+- Clean structure
+- No confusing constructs
+
+4. Test Quality
+
+- Are tests meaningful?
+- Do they reflect real behavior?
+- Are important scenarios covered?
+
+5. Alignment with PLAN
+
+- Does implementation match the approved design?
+- Was scope changed without approval?
+
+---
+
+## After REVIEW
+
+Update docs/progress.md:
+
+- Add a new entry to ## Changelog with the current date
+- Update checkboxes in the current milestone
+- Update progress metrics and status
+- If the milestone is completed → start the next PLAN
+
+Status must be set to: APPROVED
+
+## Small Change Exception
+
+For trivial changes (e.g. typo fixes, formatting, small bug fixes):
+
+- PLAN may be minimal (short description).
+- Formal approval is not required.
+- TEST and REVIEW are still mandatory.
+
+## Purpose of This Workflow
+
+This workflow exists to:
+
+- Prevent impulsive coding.
+- Separate design from implementation.
+- Enforce architectural thinking.
+- Maintain high code quality.
+- Provide structured checkpoints for feedback and correction.
+- Enable controlled, incremental progress.
+
+Review phase always provides an opportunity to:
+
+- Criticize the solution.
+- Request simplification.
+- Reject the implementation.
+- Require architectural adjustments.
+
+No milestone is complete without explicit review approval.
+
+---
+
+### Strategical Project Planning & Implementation Phases
 
 ## Phase 1: Feature Flags Core
 
