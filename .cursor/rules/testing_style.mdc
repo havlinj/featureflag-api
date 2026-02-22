@@ -79,7 +79,9 @@ func TestAssignVariant_Calculation(t *testing.T) {
 ## Naming & Structure
 
 - Unit test files: *_test.go in same package as code under test.
-- Integration test files: integration_*_test.go in tests/ folder.
+- Integration test files: integration_*_test.go in test/integration folder.
+- Integration test files should start with the following directive `//go:build integration` 
+  that allows to run them separately
 - Test functions: Test<Functionality>_<Scenario> pattern.
 - Avoid duplicated setup code by using helper functions.
 
