@@ -5,4 +5,9 @@ package graphql
 // It serves as dependency injection for your app, add any dependencies you require
 // here.
 
-type Resolver struct{}
+import "github.com/jan-havlin-dev/featureflag-api/internal/flags"
+
+// Resolver wires GraphQL resolvers to the flags service layer.
+type Resolver struct {
+	Flags *flags.Service
+}
