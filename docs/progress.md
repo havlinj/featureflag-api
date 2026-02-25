@@ -1,41 +1,48 @@
-
 ---
-This shows a desired template for progress documentation  
+# Progress tracker – Feature Flag & Experiment Management API
+# Aligned with .cursor/rules/development_workflow.mdc
+---
 
-# 🏗️ Progress Tracker - [Project Name]
-**Last updated**: `{{date}}`  
-**Overall progress**: ████████░░ 80% (M3/5 completed)  
-**Status**: IMPLEMENT (Feature: User Dashboard)  
-**Next step**: Review + deploy staging  
-**Blockers**: (None / API rate limit on prod)
+# 🏗️ Progress Tracker – Feature Flag API
 
-## 📋 Milestones (per PRD.md)
-| Milestone | Status | Progress | Deadline | Key Deliverables |
-|-----------|--------|----------|----------|------------------|
-| M1: Setup & Auth | ✅ Done | 100% | 2026-02-10 | Prisma, JWT, Basic API |
-| M2: Core Features | ✅ Done | 100% | 2026-02-20 | User CRUD, Dashboard |
-| M3: Integrations | 🔄 In Progress | 75% | 2026-03-01 | Payments (Stripe), WebSockets |
-| M4: Testing & Perf | ⏳ Planned | 0% | 2026-03-15 | E2E, Load tests |
-| M5: Deploy & Monitor | ⏳ Planned | 0% | 2026-03-30 | CI/CD, Sentry |
+**Last updated**: 2026-02-26  
+**Overall progress**: ████░░░░░░ 40% (Phase 1 in progress)  
+**Status**: APPROVED (Phase 1 – DB & repository done; service logic pending)  
+**Next step**: Implement flags.Service logic (CreateFlag, UpdateFlag, EvaluateFlag) using Store; then auth & logging middleware  
+**Blockers**: None
 
-## 🔧 Current Sprint (M3)
-- [x] Stripe checkout integration
-- [x] WebSocket events (user updates)
-- [ ] Real-time notifications (80% - tests missing)
-- [ ] Error boundaries + retries
+## 📋 Milestones (per development_workflow.mdc)
+
+| Phase | Status | Progress | Key Deliverables |
+|-------|--------|----------|------------------|
+| Phase 1: Feature Flags Core | 🔄 In Progress | ~50% | Flags API, DB, repos, auth/logging middleware, integration tests |
+| Phase 2: Experiments Integration | ⏳ Planned | 0% | Experiments module, schema, resolvers, assignments |
+| Phase 3: Audit Logging | ⏳ Planned | 0% | Audit service, audit_logs table, hooks |
+
+## 🔧 Phase 1 – Current state
+
+- [x] HTTPS server + GraphQL (gqlgen) transport
+- [x] Minimal DB schema: `feature_flags`, `flag_rules` (internal/db, EnsureSchema)
+- [x] DB init test (testcontainers, naked INSERT/SELECT)
+- [x] flags.Store interface; PostgresStore (Create, GetByKeyAndEnvironment, Update, GetRulesByFlagID) with unit tests
+- [x] flags.Service + NewService(store); resolvers call service (store injectable; mock in testutil)
+- [x] Integration test: GraphQL over HTTPS (createFlag, updateFlag, evaluateFlag) with mock store
+- [ ] flags.Service.CreateFlag / UpdateFlag / EvaluateFlag **business logic** (currently panic "unimplemented")
+- [ ] Authentication middleware (JWT)
+- [ ] Logging middleware
+- [ ] 2–3 end-to-end integration tests (API → service → real DB)
 
 ## 📈 Metrics
-- Commits this week: 45
-- Test coverage: 92% (↑2%)
-- Bug rate: 0.08/commit (↓20%)
-- PR review time: 1.2h avg
+
+- Test coverage: unit tests for db (init), flags.PostgresStore (all methods + error cases); integration test for HTTPS+GraphQL with mock.
+- Tests: internal/db (1), internal/flags (9), test/integration (1 with tag).
 
 ## 📝 Changelog
-**2026-02-22**: Completed Stripe webhooks. Resolved #12 (auth race condition). Staging deploy OK.
 
-**2026-02-20**: M2 complete. Added 15 unit tests.
+**2026-02-26**: Phase 1 progress. Database layer: internal/db (Open, EnsureSchema, schema for feature_flags + flag_rules). PostgresStore implemented and tested (Create, GetByKeyAndEnvironment, Update, GetRulesByFlagID; happy path + ErrDuplicateKey, ErrNotFound, invalid UUID). Refactored db_test into arrange/insert/assert helpers; split PostgresStore tests into separate test functions. NewApp(tlsConfig, flagsStore) now accepts Store (production: NewPostgresStore(db.Conn()); tests: MockFlagsStore). Service layer and resolvers wired to Store; business logic in flags.Service still unimplemented (panic). Progress doc updated per development_workflow.mdc.
 
-## 🤝 Discussion / Questions for you
-- Confirm notifications architecture?
+*(Earlier iterations: HTTPS server, GraphQL resolvers, testutil GraphQL client + TLS, flags.Store interface + MockFlagsStore in testutil with queue-of-results pattern.)*
 
----
+## 🤝 Discussion / Questions
+
+- None.
