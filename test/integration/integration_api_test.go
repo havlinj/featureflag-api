@@ -20,7 +20,7 @@ func TestAppAPI_GraphQLOverHTTPS(t *testing.T) {
 		t.Fatalf("create TLS config: %v", err)
 	}
 
-	a := app.NewApp(tlsConfig)
+	a := app.NewApp(tlsConfig, &testutil.MockFlagsStore{})
 	go func() {
 		if err := a.Run(addr); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("server error: %v", err)

@@ -15,8 +15,9 @@ type App struct {
 }
 
 // NewApp builds the application. Pass non-nil tlsConfig to serve over HTTPS.
-func NewApp(tlsConfig *tls.Config) *App {
-	resolver := &graphql.Resolver{Flags: flags.NewService(&flags.PostgresStore{})}
+// flagsStore is the persistence for flags (e.g. flags.NewPostgresStore(db.Conn()) after db.Open and db.EnsureSchema).
+func NewApp(tlsConfig *tls.Config, flagsStore flags.Store) *App {
+	resolver := &graphql.Resolver{Flags: flags.NewService(flagsStore)}
 	schema := graph.NewExecutableSchema(graph.Config{Resolvers: resolver})
 	h := handler.NewDefaultServer(schema)
 	srv := graphql.NewServer(h, tlsConfig)

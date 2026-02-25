@@ -1,5 +1,7 @@
 package flags
 
+import "time"
+
 // Flag is the domain entity for a feature flag (persistence layer).
 type Flag struct {
 	ID          string
@@ -7,7 +9,7 @@ type Flag struct {
 	Description *string
 	Enabled     bool
 	Environment string
-	CreatedAt   interface{} // time.Time when using real DB; leave generic for mock
+	CreatedAt   time.Time
 }
 
 // RuleType is the type of rollout rule (percentage or attribute-based).
