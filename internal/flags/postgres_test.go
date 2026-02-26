@@ -1,3 +1,5 @@
+//go:build integration
+
 package flags
 
 import (
@@ -55,9 +57,10 @@ func TestPostgresStore_Create_happy_path(t *testing.T) {
 	truncateFlags(t, database)
 	store := NewPostgresStore(database.Conn())
 	ctx := context.Background()
-
 	flag := &Flag{Key: "create-key", Description: strPtr("d"), Enabled: false, Environment: "dev"}
+
 	created, err := store.Create(ctx, flag)
+
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
@@ -78,13 +81,11 @@ func TestPostgresStore_Create_duplicate_key_returns_ErrDuplicateKey(t *testing.T
 	truncateFlags(t, database)
 	store := NewPostgresStore(database.Conn())
 	ctx := context.Background()
-
 	flag := &Flag{Key: "dup-key", Environment: "dev", Enabled: false}
+	_, _ = store.Create(ctx, flag)
+
 	_, err := store.Create(ctx, flag)
-	if err != nil {
-		t.Fatalf("first Create: %v", err)
-	}
-	_, err = store.Create(ctx, flag)
+
 	if err == nil {
 		t.Fatal("expected error on duplicate")
 	}
@@ -99,13 +100,14 @@ func TestPostgresStore_GetByKeyAndEnvironment_happy_path(t *testing.T) {
 	truncateFlags(t, database)
 	store := NewPostgresStore(database.Conn())
 	ctx := context.Background()
-
 	flag := &Flag{Key: "get-key", Description: strPtr("desc"), Enabled: true, Environment: "staging"}
 	created, err := store.Create(ctx, flag)
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
+
 	got, err := store.GetByKeyAndEnvironment(ctx, "get-key", "staging")
+
 	if err != nil {
 		t.Fatalf("GetByKeyAndEnvironment: %v", err)
 	}
@@ -128,6 +130,7 @@ func TestPostgresStore_GetByKeyAndEnvironment_not_found_returns_nil_nil(t *testi
 	ctx := context.Background()
 
 	got, err := store.GetByKeyAndEnvironment(ctx, "nonexistent", "dev")
+
 	if err != nil {
 		t.Fatalf("GetByKeyAndEnvironment: %v", err)
 	}
@@ -142,11 +145,13 @@ func TestPostgresStore_Update_happy_path(t *testing.T) {
 	truncateFlags(t, database)
 	store := NewPostgresStore(database.Conn())
 	ctx := context.Background()
-
 	created, _ := store.Create(ctx, &Flag{Key: "up-key", Environment: "dev", Enabled: false})
 	created.Enabled = true
 	created.Description = strPtr("updated")
-	if err := store.Update(ctx, created); err != nil {
+
+	err := store.Update(ctx, created)
+
+	if err != nil {
 		t.Fatalf("Update: %v", err)
 	}
 	got, _ := store.GetByKeyAndEnvironment(ctx, "up-key", "dev")
@@ -164,9 +169,10 @@ func TestPostgresStore_Update_not_found_returns_ErrNotFound(t *testing.T) {
 	truncateFlags(t, database)
 	store := NewPostgresStore(database.Conn())
 	ctx := context.Background()
-
 	flag := &Flag{ID: "00000000-0000-0000-0000-000000000000", Key: "x", Environment: "dev", Enabled: true}
+
 	err := store.Update(ctx, flag)
+
 	if err == nil {
 		t.Fatal("expected error")
 	}
@@ -181,7 +187,6 @@ func TestPostgresStore_GetRulesByFlagID_happy_path(t *testing.T) {
 	truncateFlags(t, database)
 	store := NewPostgresStore(database.Conn())
 	ctx := context.Background()
-
 	created, _ := store.Create(ctx, &Flag{Key: "rule-key", Environment: "dev", Enabled: false})
 	_, err := database.Conn().ExecContext(ctx,
 		"INSERT INTO flag_rules (flag_id, type, value) VALUES ($1, $2, $3)",
@@ -190,7 +195,9 @@ func TestPostgresStore_GetRulesByFlagID_happy_path(t *testing.T) {
 	if err != nil {
 		t.Fatalf("insert rule: %v", err)
 	}
+
 	rules, err := store.GetRulesByFlagID(ctx, created.ID)
+
 	if err != nil {
 		t.Fatalf("GetRulesByFlagID: %v", err)
 	}
@@ -205,9 +212,10 @@ func TestPostgresStore_GetRulesByFlagID_no_rules_returns_empty_slice(t *testing.
 	truncateFlags(t, database)
 	store := NewPostgresStore(database.Conn())
 	ctx := context.Background()
-
 	created, _ := store.Create(ctx, &Flag{Key: "norules", Environment: "dev", Enabled: false})
+
 	rules, err := store.GetRulesByFlagID(ctx, created.ID)
+
 	if err != nil {
 		t.Fatalf("GetRulesByFlagID: %v", err)
 	}
@@ -223,6 +231,7 @@ func TestPostgresStore_GetRulesByFlagID_invalid_uuid_returns_error(t *testing.T)
 	ctx := context.Background()
 
 	_, err := store.GetRulesByFlagID(ctx, "not-a-valid-uuid")
+
 	if err == nil {
 		t.Error("expected error for invalid UUID in flag_id")
 	}

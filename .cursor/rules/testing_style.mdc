@@ -26,8 +26,9 @@ This document defines rules and best practices for writing tests in Go for this 
 - All business logic should have unit test coverage.
 - Integration tests must verify DB interactions and GraphQL endpoints.
 - Tests should be deterministic and isolated.
-- Try to follow JUnit test structure (1. arrange 2. act 3. assert), 
-  unless you come up with a clearly more reasonable setup. 
+- Try to follow the JUnit test structure (1. Arrange, 2. Act, 3. Assert), unless there is 
+  a clearly better alternative. Always separate these three sections with a blank line. 
+  Otherwise, keep the test body concise, with no unnecessary blank lines between statements
 - Prefer self-explanatory tests. Comments are allowed only to clarify 
   domain intent or non-trivial reasoning, not to explain obvious mechanics. 
 - Prefer table-driven tests for similar scenarios.
