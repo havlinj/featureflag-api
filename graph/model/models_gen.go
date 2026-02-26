@@ -8,6 +8,11 @@ type CreateFlagInput struct {
 	Environment string  `json:"environment"`
 }
 
+type CreateUserInput struct {
+	Email string `json:"email"`
+	Role  string `json:"role"`
+}
+
 type FeatureFlag struct {
 	ID          string  `json:"id"`
 	Key         string  `json:"key"`
@@ -25,4 +30,17 @@ type Query struct {
 type UpdateFlagInput struct {
 	Key     string `json:"key"`
 	Enabled bool   `json:"enabled"`
+}
+
+type UpdateUserInput struct {
+	ID    string  `json:"id"`
+	Email *string `json:"email,omitempty"`
+	Role  *string `json:"role,omitempty"`
+}
+
+type User struct {
+	ID        string `json:"id"`
+	Email     string `json:"email"`
+	Role      string `json:"role"`
+	CreatedAt string `json:"createdAt"`
 }

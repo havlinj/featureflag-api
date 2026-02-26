@@ -4,10 +4,11 @@ import (
 	"context"
 	"crypto/tls"
 
+	"github.com/99designs/gqlgen/graphql/handler"
 	"github.com/jan-havlin-dev/featureflag-api/graph"
 	"github.com/jan-havlin-dev/featureflag-api/internal/flags"
+	"github.com/jan-havlin-dev/featureflag-api/internal/users"
 	"github.com/jan-havlin-dev/featureflag-api/transport/graphql"
-	"github.com/99designs/gqlgen/graphql/handler"
 )
 
 type App struct {
@@ -15,9 +16,12 @@ type App struct {
 }
 
 // NewApp builds the application. Pass non-nil tlsConfig to serve over HTTPS.
-// flagsStore is the persistence for flags (e.g. flags.NewPostgresStore(db.Conn()) after db.Open and db.EnsureSchema).
-func NewApp(tlsConfig *tls.Config, flagsStore flags.Store) *App {
-	resolver := &graphql.Resolver{Flags: flags.NewService(flagsStore)}
+// flagsStore and usersStore are persistence layers (e.g. PostgresStore; use mocks in tests).
+func NewApp(tlsConfig *tls.Config, flagsStore flags.Store, usersStore users.Store) *App {
+	resolver := &graphql.Resolver{
+		Flags: flags.NewService(flagsStore),
+		Users: users.NewService(usersStore),
+	}
 	schema := graph.NewExecutableSchema(graph.Config{Resolvers: resolver})
 	h := handler.NewDefaultServer(schema)
 	srv := graphql.NewServer(h, tlsConfig)

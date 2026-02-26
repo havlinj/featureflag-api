@@ -1,0 +1,28 @@
+type User {
+  id: ID!
+  email: String!
+  role: String!
+  createdAt: String!
+}
+
+input CreateUserInput {
+  email: String!
+  role: String!
+}
+
+input UpdateUserInput {
+  id: ID!
+  email: String
+  role: String
+}
+
+extend type Query {
+  user(id: ID!): User
+  userByEmail(email: String!): User
+}
+
+extend type Mutation {
+  createUser(input: CreateUserInput!): User!
+  updateUser(input: UpdateUserInput!): User!
+  deleteUser(id: ID!): Boolean!
+}

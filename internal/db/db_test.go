@@ -54,7 +54,7 @@ func arrangeDBWithSchema(t *testing.T) *DB {
 func truncateTables(t *testing.T, database *DB) {
 	t.Helper()
 	ctx := context.Background()
-	if _, err := database.Conn().ExecContext(ctx, "TRUNCATE flag_rules, feature_flags CASCADE"); err != nil {
+	if _, err := database.Conn().ExecContext(ctx, "TRUNCATE flag_rules, feature_flags, users CASCADE"); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
 }

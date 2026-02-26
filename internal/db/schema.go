@@ -1,8 +1,14 @@
 package db
 
-// schemaSQL defines the initial schema for the flags domain. Order matters:
-// feature_flags first (referenced by flag_rules.flag_id).
+// schemaSQL defines the initial schema. Order matters: users first (no deps),
+// then feature_flags (referenced by flag_rules.flag_id).
 var schemaSQL = []string{
+	`CREATE TABLE IF NOT EXISTS users (
+		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+		email TEXT NOT NULL UNIQUE,
+		role TEXT NOT NULL CHECK (role IN ('admin', 'developer', 'viewer')),
+		created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+	)`,
 	`CREATE TABLE IF NOT EXISTS feature_flags (
 		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 		key TEXT NOT NULL,
