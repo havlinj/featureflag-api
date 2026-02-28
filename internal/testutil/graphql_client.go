@@ -34,6 +34,11 @@ func NewClientForIntegration(baseURL string) *GraphQLClient {
 	return NewClient(baseURL, "")
 }
 
+// SetToken sets the Bearer token for subsequent requests.
+func (c *GraphQLClient) SetToken(token string) {
+	c.AuthToken = token
+}
+
 func defaultHTTPClient() *http.Client {
 	return &http.Client{
 		Transport: &http.Transport{

@@ -10,20 +10,30 @@ import (
 
 	"github.com/jan-havlin-dev/featureflag-api/graph"
 	"github.com/jan-havlin-dev/featureflag-api/graph/model"
+	"github.com/jan-havlin-dev/featureflag-api/internal/auth"
 )
 
 // CreateFlag is the resolver for the createFlag field.
 func (r *mutationResolver) CreateFlag(ctx context.Context, input model.CreateFlagInput) (*model.FeatureFlag, error) {
+	if _, err := auth.RequireRole(ctx, "admin", "developer"); err != nil {
+		return nil, err
+	}
 	return r.Flags.CreateFlag(ctx, input)
 }
 
 // UpdateFlag is the resolver for the updateFlag field.
 func (r *mutationResolver) UpdateFlag(ctx context.Context, input model.UpdateFlagInput) (*model.FeatureFlag, error) {
+	if _, err := auth.RequireRole(ctx, "admin", "developer"); err != nil {
+		return nil, err
+	}
 	return r.Flags.UpdateFlag(ctx, input)
 }
 
 // EvaluateFlag is the resolver for the evaluateFlag field.
 func (r *queryResolver) EvaluateFlag(ctx context.Context, key string, userID string) (bool, error) {
+	if _, err := auth.RequireRole(ctx, "admin", "developer", "viewer"); err != nil {
+		return false, err
+	}
 	return r.Flags.EvaluateFlag(ctx, key, userID)
 }
 

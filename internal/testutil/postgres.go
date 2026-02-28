@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/jan-havlin-dev/featureflag-api/internal/auth"
 	"github.com/jan-havlin-dev/featureflag-api/internal/db"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 )
@@ -52,4 +53,42 @@ func TruncateAll(t *testing.T, database *db.DB) {
 	if _, err := database.Conn().ExecContext(ctx, "TRUNCATE flag_rules, feature_flags, users CASCADE"); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
+}
+
+// SeedAdminAndLogin inserts an admin user with the given email and password into the DB,
+// then calls the login mutation via the client and returns the JWT token.
+// Use this in integration tests to obtain a token for protected operations.
+func SeedAdminAndLogin(t *testing.T, database *db.DB, client *GraphQLClient, email, password string) string {
+	t.Helper()
+	ctx := context.Background()
+	hash, err := auth.HashPassword(password)
+	if err != nil {
+		t.Fatalf("hash password: %v", err)
+	}
+	_, err = database.Conn().ExecContext(ctx,
+		"INSERT INTO users (email, role, password_hash) VALUES ($1, 'admin', $2)",
+		email, hash,
+	)
+	if err != nil {
+		t.Fatalf("seed admin user: %v", err)
+	}
+	resp, err := client.DoRequest(`
+		mutation Login($input: LoginInput!) {
+			login(input: $input) { token }
+		}
+	`, map[string]interface{}{
+		"input": map[string]interface{}{"email": email, "password": password},
+	})
+	if err != nil {
+		t.Fatalf("login request: %v", err)
+	}
+	if resp.Data == nil || resp.Errors != nil && len(resp.Errors) > 0 {
+		t.Fatalf("login: expected data, got data=%v errors=%v", resp.Data, resp.Errors)
+	}
+	loginData, _ := resp.Data["login"].(map[string]interface{})
+	token, _ := loginData["token"].(string)
+	if token == "" {
+		t.Fatal("login: expected non-empty token")
+	}
+	return token
 }

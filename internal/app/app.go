@@ -3,12 +3,15 @@ package app
 import (
 	"context"
 	"crypto/tls"
+	"log/slog"
+	"time"
 
 	"github.com/99designs/gqlgen/graphql/handler"
 	"github.com/jan-havlin-dev/featureflag-api/graph"
 	"github.com/jan-havlin-dev/featureflag-api/internal/flags"
 	"github.com/jan-havlin-dev/featureflag-api/internal/users"
 	"github.com/jan-havlin-dev/featureflag-api/transport/graphql"
+	"github.com/jan-havlin-dev/featureflag-api/transport/graphql/middleware"
 )
 
 type App struct {
@@ -17,14 +20,21 @@ type App struct {
 
 // NewApp builds the application. Pass non-nil tlsConfig to serve over HTTPS.
 // flagsStore and usersStore are persistence layers (e.g. PostgresStore; use mocks in tests).
-func NewApp(tlsConfig *tls.Config, flagsStore flags.Store, usersStore users.Store) *App {
+// jwtSecret is used to sign and verify JWTs; must be non-empty for login and protected routes.
+func NewApp(tlsConfig *tls.Config, flagsStore flags.Store, usersStore users.Store, jwtSecret []byte) *App {
 	resolver := &graphql.Resolver{
-		Flags: flags.NewService(flagsStore),
-		Users: users.NewService(usersStore),
+		Flags:     flags.NewService(flagsStore),
+		Users:     users.NewService(usersStore),
+		JWTSecret: jwtSecret,
+		JWTExpiry: 24 * time.Hour,
 	}
 	schema := graph.NewExecutableSchema(graph.Config{Resolvers: resolver})
-	h := handler.NewDefaultServer(schema)
-	srv := graphql.NewServer(h, tlsConfig)
+	gqlHandler := handler.NewDefaultServer(schema)
+	chain := middleware.Chain(gqlHandler,
+		middleware.Logging(slog.Default()),
+		middleware.Auth(jwtSecret),
+	)
+	srv := graphql.NewServer(chain, tlsConfig)
 	return &App{Server: Server{GraphQLServer: srv}}
 }
 

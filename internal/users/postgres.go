@@ -25,8 +25,8 @@ func (p *PostgresStore) Create(ctx context.Context, user *User) (*User, error) {
 	var id string
 	var createdAt time.Time
 	err := p.conn.QueryRowContext(ctx,
-		`INSERT INTO users (email, role) VALUES ($1, $2) RETURNING id, created_at`,
-		user.Email, user.Role,
+		`INSERT INTO users (email, role, password_hash) VALUES ($1, $2, $3) RETURNING id, created_at`,
+		user.Email, user.Role, nullString(user.PasswordHash),
 	).Scan(&id, &createdAt)
 	if err != nil {
 		var pgErr *pgconn.PgError
@@ -41,43 +41,61 @@ func (p *PostgresStore) Create(ctx context.Context, user *User) (*User, error) {
 	return &out, nil
 }
 
+func nullString(s *string) interface{} {
+	if s == nil {
+		return nil
+	}
+	return *s
+}
+
+func scanNullString(s *sql.NullString) *string {
+	if s != nil && s.Valid {
+		return &s.String
+	}
+	return nil
+}
+
 // GetByID returns the user by ID, or (nil, nil) if not found.
 func (p *PostgresStore) GetByID(ctx context.Context, id string) (*User, error) {
 	var u User
+	var ph sql.NullString
 	err := p.conn.QueryRowContext(ctx,
-		`SELECT id, email, role, created_at FROM users WHERE id = $1`,
+		`SELECT id, email, role, password_hash, created_at FROM users WHERE id = $1`,
 		id,
-	).Scan(&u.ID, &u.Email, &u.Role, &u.CreatedAt)
+	).Scan(&u.ID, &u.Email, &u.Role, &ph, &u.CreatedAt)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
 	if err != nil {
 		return nil, err
 	}
+	u.PasswordHash = scanNullString(&ph)
 	return &u, nil
 }
 
 // GetByEmail returns the user by email, or (nil, nil) if not found.
 func (p *PostgresStore) GetByEmail(ctx context.Context, email string) (*User, error) {
 	var u User
+	var ph sql.NullString
 	err := p.conn.QueryRowContext(ctx,
-		`SELECT id, email, role, created_at FROM users WHERE email = $1`,
+		`SELECT id, email, role, password_hash, created_at FROM users WHERE email = $1`,
 		email,
-	).Scan(&u.ID, &u.Email, &u.Role, &u.CreatedAt)
+	).Scan(&u.ID, &u.Email, &u.Role, &ph, &u.CreatedAt)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
 	if err != nil {
 		return nil, err
 	}
+	u.PasswordHash = scanNullString(&ph)
 	return &u, nil
 }
 
 // Update updates an existing user by ID. Returns ErrNotFound if no row was updated.
 func (p *PostgresStore) Update(ctx context.Context, user *User) error {
 	res, err := p.conn.ExecContext(ctx,
-		`UPDATE users SET email = $1, role = $2 WHERE id = $3`,
-		user.Email, user.Role, user.ID,
+		`UPDATE users SET email = $1, role = $2, password_hash = $4 WHERE id = $3`,
+		user.Email, user.Role, user.ID, nullString(user.PasswordHash),
 	)
 	if err != nil {
 		return err

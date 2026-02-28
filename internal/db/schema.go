@@ -7,6 +7,7 @@ var schemaSQL = []string{
 		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 		email TEXT NOT NULL UNIQUE,
 		role TEXT NOT NULL CHECK (role IN ('admin', 'developer', 'viewer')),
+		password_hash TEXT,
 		created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 	)`,
 	`CREATE TABLE IF NOT EXISTS feature_flags (

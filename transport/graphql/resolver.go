@@ -6,12 +6,16 @@ package graphql
 // here.
 
 import (
+	"time"
+
 	"github.com/jan-havlin-dev/featureflag-api/internal/flags"
 	"github.com/jan-havlin-dev/featureflag-api/internal/users"
 )
 
 // Resolver wires GraphQL resolvers to the service layers.
 type Resolver struct {
-	Flags *flags.Service
-	Users *users.Service
+	Flags     *flags.Service
+	Users     *users.Service
+	JWTSecret []byte
+	JWTExpiry time.Duration
 }

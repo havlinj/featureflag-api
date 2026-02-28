@@ -9,29 +9,45 @@ import (
 	"context"
 
 	"github.com/jan-havlin-dev/featureflag-api/graph/model"
+	"github.com/jan-havlin-dev/featureflag-api/internal/auth"
 )
 
 // CreateUser is the resolver for the createUser field.
 func (r *mutationResolver) CreateUser(ctx context.Context, input model.CreateUserInput) (*model.User, error) {
+	if _, err := auth.RequireRole(ctx, "admin"); err != nil {
+		return nil, err
+	}
 	return r.Users.CreateUser(ctx, input)
 }
 
 // UpdateUser is the resolver for the updateUser field.
 func (r *mutationResolver) UpdateUser(ctx context.Context, input model.UpdateUserInput) (*model.User, error) {
+	if _, err := auth.RequireRole(ctx, "admin"); err != nil {
+		return nil, err
+	}
 	return r.Users.UpdateUser(ctx, input)
 }
 
 // DeleteUser is the resolver for the deleteUser field.
 func (r *mutationResolver) DeleteUser(ctx context.Context, id string) (bool, error) {
+	if _, err := auth.RequireRole(ctx, "admin"); err != nil {
+		return false, err
+	}
 	return r.Users.DeleteUser(ctx, id)
 }
 
 // User is the resolver for the user field.
 func (r *queryResolver) User(ctx context.Context, id string) (*model.User, error) {
+	if _, err := auth.RequireRole(ctx, "admin", "developer", "viewer"); err != nil {
+		return nil, err
+	}
 	return r.Users.GetUser(ctx, id)
 }
 
 // UserByEmail is the resolver for the userByEmail field.
 func (r *queryResolver) UserByEmail(ctx context.Context, email string) (*model.User, error) {
+	if _, err := auth.RequireRole(ctx, "admin", "developer", "viewer"); err != nil {
+		return nil, err
+	}
 	return r.Users.GetUserByEmail(ctx, email)
 }

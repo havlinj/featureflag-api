@@ -29,7 +29,8 @@ func TestFlagsAPI_GraphQLOverHTTPS(t *testing.T) {
 		t.Fatalf("create TLS config: %v", err)
 	}
 
-	a := app.NewApp(tlsConfig, flagsStore, usersStore)
+	jwtSecret := []byte("test-jwt-secret")
+	a := app.NewApp(tlsConfig, flagsStore, usersStore, jwtSecret)
 	go func() {
 		if err := a.Run(addr); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("server error: %v", err)
@@ -47,6 +48,10 @@ func TestFlagsAPI_GraphQLOverHTTPS(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	client := testutil.NewClientForIntegration("https://" + addr)
+
+	// 0) Seed admin and login to get token (createFlag requires admin or developer)
+	adminToken := testutil.SeedAdminAndLogin(t, database, client, "admin@test.com", "adminpass")
+	client.SetToken(adminToken)
 
 	// 1) createFlag mutation
 	createResp, err := client.DoRequest(`
@@ -139,7 +144,8 @@ func TestUsersAPI_GraphQLOverHTTPS(t *testing.T) {
 		t.Fatalf("create TLS config: %v", err)
 	}
 
-	a := app.NewApp(tlsConfig, flagsStore, usersStore)
+	jwtSecret := []byte("test-jwt-secret")
+	a := app.NewApp(tlsConfig, flagsStore, usersStore, jwtSecret)
 	go func() {
 		if err := a.Run(addr); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("server error: %v", err)
@@ -157,6 +163,10 @@ func TestUsersAPI_GraphQLOverHTTPS(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	client := testutil.NewClientForIntegration("https://" + addr)
+
+	// 0) Seed admin and login to get token (required for RBAC)
+	adminToken := testutil.SeedAdminAndLogin(t, database, client, "admin@test.com", "adminpass")
+	client.SetToken(adminToken)
 
 	// 1) createUser
 	createResp, err := client.DoRequest(`

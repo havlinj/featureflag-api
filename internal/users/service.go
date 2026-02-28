@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/jan-havlin-dev/featureflag-api/graph/model"
+	"github.com/jan-havlin-dev/featureflag-api/internal/auth"
 )
 
 // Service holds business logic for users. It depends on Store so it can be mocked in tests.
@@ -56,6 +57,22 @@ func (s *Service) GetUserByEmail(ctx context.Context, email string) (*model.User
 		return nil, nil
 	}
 	return userToModel(u), nil
+}
+
+// Login verifies email and password and returns the user ID and role for token issuance.
+// Returns ErrNotFound if no user, ErrInvalidCredentials if password does not match.
+func (s *Service) Login(ctx context.Context, email, password string) (userID, role string, err error) {
+	u, err := s.Store.GetByEmail(ctx, email)
+	if err != nil {
+		return "", "", fmt.Errorf("login: %w", err)
+	}
+	if u == nil {
+		return "", "", ErrNotFound
+	}
+	if u.PasswordHash == nil || !auth.ComparePassword(*u.PasswordHash, password) {
+		return "", "", ErrInvalidCredentials
+	}
+	return u.ID, string(u.Role), nil
 }
 
 // UpdateUser updates an existing user. Returns ErrNotFound if user does not exist.
