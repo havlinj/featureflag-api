@@ -13,6 +13,10 @@ import (
 
 func stringPtr(s string) *string { return &s }
 
+func evalCtx(userID string) model.EvaluationContextInput {
+	return model.EvaluationContextInput{UserID: userID}
+}
+
 // --- CreateFlag ---
 
 func TestService_CreateFlag_happy_path(t *testing.T) {
@@ -238,7 +242,7 @@ func TestService_EvaluateFlag_empty_userID_returns_ErrInvalidUserID(t *testing.T
 	store := &mock.Store{}
 	svc := flags.NewService(store)
 
-	enabled, err := svc.EvaluateFlag(ctx, "any-key", "")
+	enabled, err := svc.EvaluateFlag(ctx, "any-key", evalCtx(""))
 
 	if enabled {
 		t.Error("expected false when userID is empty")
@@ -259,7 +263,7 @@ func TestService_EvaluateFlag_flag_not_found_returns_false_nil(t *testing.T) {
 	}
 	svc := flags.NewService(store)
 
-	enabled, err := svc.EvaluateFlag(ctx, "missing", "user-1")
+	enabled, err := svc.EvaluateFlag(ctx, "missing", evalCtx("user-1"))
 
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -273,11 +277,11 @@ func TestService_EvaluateFlag_flag_disabled_returns_false_nil(t *testing.T) {
 	ctx := context.Background()
 	store := &mock.Store{}
 	store.GetByKeyAndEnvironmentReturns = []mock.GetByKeyResult{
-		{Flag: &flags.Flag{ID: "f1", Key: "off-flag", Enabled: false, Environment: "dev"}, Err: nil},
+		{Flag: &flags.Flag{ID: "f1", Key: "off-flag", Enabled: false, Environment: "dev", RolloutStrategy: flags.RolloutStrategyNone}, Err: nil},
 	}
 	svc := flags.NewService(store)
 
-	enabled, err := svc.EvaluateFlag(ctx, "off-flag", "user-1")
+	enabled, err := svc.EvaluateFlag(ctx, "off-flag", evalCtx("user-1"))
 
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -294,14 +298,14 @@ func TestService_EvaluateFlag_enabled_no_rules_returns_true_nil(t *testing.T) {
 	ctx := context.Background()
 	store := &mock.Store{}
 	store.GetByKeyAndEnvironmentReturns = []mock.GetByKeyResult{
-		{Flag: &flags.Flag{ID: "f1", Key: "on-flag", Enabled: true, Environment: "dev"}, Err: nil},
+		{Flag: &flags.Flag{ID: "f1", Key: "on-flag", Enabled: true, Environment: "dev", RolloutStrategy: flags.RolloutStrategyNone}, Err: nil},
 	}
 	store.GetRulesByFlagIDReturns = []mock.GetRulesResult{
 		{Rules: nil, Err: nil},
 	}
 	svc := flags.NewService(store)
 
-	enabled, err := svc.EvaluateFlag(ctx, "on-flag", "user-1")
+	enabled, err := svc.EvaluateFlag(ctx, "on-flag", evalCtx("user-1"))
 
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -315,14 +319,14 @@ func TestService_EvaluateFlag_percentage_0_returns_false(t *testing.T) {
 	ctx := context.Background()
 	store := &mock.Store{}
 	store.GetByKeyAndEnvironmentReturns = []mock.GetByKeyResult{
-		{Flag: &flags.Flag{ID: "f1", Key: "pct", Enabled: true, Environment: "dev"}, Err: nil},
+		{Flag: &flags.Flag{ID: "f1", Key: "pct", Enabled: true, Environment: "dev", RolloutStrategy: flags.RolloutStrategyPercentage}, Err: nil},
 	}
 	store.GetRulesByFlagIDReturns = []mock.GetRulesResult{
 		{Rules: []*flags.Rule{{Type: flags.RuleTypePercentage, Value: "0"}}, Err: nil},
 	}
 	svc := flags.NewService(store)
 
-	enabled, err := svc.EvaluateFlag(ctx, "pct", "any-user")
+	enabled, err := svc.EvaluateFlag(ctx, "pct", evalCtx("any-user"))
 
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -336,14 +340,14 @@ func TestService_EvaluateFlag_percentage_100_returns_true(t *testing.T) {
 	ctx := context.Background()
 	store := &mock.Store{}
 	store.GetByKeyAndEnvironmentReturns = []mock.GetByKeyResult{
-		{Flag: &flags.Flag{ID: "f1", Key: "pct", Enabled: true, Environment: "dev"}, Err: nil},
+		{Flag: &flags.Flag{ID: "f1", Key: "pct", Enabled: true, Environment: "dev", RolloutStrategy: flags.RolloutStrategyPercentage}, Err: nil},
 	}
 	store.GetRulesByFlagIDReturns = []mock.GetRulesResult{
 		{Rules: []*flags.Rule{{Type: flags.RuleTypePercentage, Value: "100"}}, Err: nil},
 	}
 	svc := flags.NewService(store)
 
-	enabled, err := svc.EvaluateFlag(ctx, "pct", "any-user")
+	enabled, err := svc.EvaluateFlag(ctx, "pct", evalCtx("any-user"))
 
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -356,7 +360,7 @@ func TestService_EvaluateFlag_percentage_100_returns_true(t *testing.T) {
 func TestService_EvaluateFlag_percentage_deterministic_same_user_same_result(t *testing.T) {
 	ctx := context.Background()
 	store := &mock.Store{}
-	flag := &flags.Flag{ID: "f1", Key: "pct", Enabled: true, Environment: "dev"}
+	flag := &flags.Flag{ID: "f1", Key: "pct", Enabled: true, Environment: "dev", RolloutStrategy: flags.RolloutStrategyPercentage}
 	rules := []*flags.Rule{{Type: flags.RuleTypePercentage, Value: "50"}}
 	store.GetByKeyAndEnvironmentReturns = []mock.GetByKeyResult{
 		{Flag: flag, Err: nil},
@@ -369,8 +373,8 @@ func TestService_EvaluateFlag_percentage_deterministic_same_user_same_result(t *
 	svc := flags.NewService(store)
 	userID := "deterministic-user"
 
-	got1, err1 := svc.EvaluateFlag(ctx, "pct", userID)
-	got2, err2 := svc.EvaluateFlag(ctx, "pct", userID)
+	got1, err1 := svc.EvaluateFlag(ctx, "pct", evalCtx(userID))
+	got2, err2 := svc.EvaluateFlag(ctx, "pct", evalCtx(userID))
 
 	if err1 != nil {
 		t.Fatalf("first call: %v", err1)
@@ -387,14 +391,14 @@ func TestService_EvaluateFlag_percentage_invalid_value_returns_ErrInvalidRule(t 
 	ctx := context.Background()
 	store := &mock.Store{}
 	store.GetByKeyAndEnvironmentReturns = []mock.GetByKeyResult{
-		{Flag: &flags.Flag{ID: "f1", Key: "pct", Enabled: true, Environment: "dev"}, Err: nil},
+		{Flag: &flags.Flag{ID: "f1", Key: "pct", Enabled: true, Environment: "dev", RolloutStrategy: flags.RolloutStrategyPercentage}, Err: nil},
 	}
 	store.GetRulesByFlagIDReturns = []mock.GetRulesResult{
 		{Rules: []*flags.Rule{{Type: flags.RuleTypePercentage, Value: "x"}}, Err: nil},
 	}
 	svc := flags.NewService(store)
 
-	_, err := svc.EvaluateFlag(ctx, "pct", "user-1")
+	_, err := svc.EvaluateFlag(ctx, "pct", evalCtx("user-1"))
 
 	if !errors.Is(err, flags.ErrInvalidRule) {
 		t.Errorf("expected ErrInvalidRule, got %v", err)
@@ -405,38 +409,38 @@ func TestService_EvaluateFlag_percentage_out_of_range_returns_ErrInvalidRule(t *
 	ctx := context.Background()
 	store := &mock.Store{}
 	store.GetByKeyAndEnvironmentReturns = []mock.GetByKeyResult{
-		{Flag: &flags.Flag{ID: "f1", Key: "pct", Enabled: true, Environment: "dev"}, Err: nil},
+		{Flag: &flags.Flag{ID: "f1", Key: "pct", Enabled: true, Environment: "dev", RolloutStrategy: flags.RolloutStrategyPercentage}, Err: nil},
 	}
 	store.GetRulesByFlagIDReturns = []mock.GetRulesResult{
 		{Rules: []*flags.Rule{{Type: flags.RuleTypePercentage, Value: "150"}}, Err: nil},
 	}
 	svc := flags.NewService(store)
 
-	_, err := svc.EvaluateFlag(ctx, "pct", "user-1")
+	_, err := svc.EvaluateFlag(ctx, "pct", evalCtx("user-1"))
 
 	if !errors.Is(err, flags.ErrInvalidRule) {
 		t.Errorf("expected ErrInvalidRule, got %v", err)
 	}
 }
 
-func TestService_EvaluateFlag_attribute_only_fallback_returns_true(t *testing.T) {
+func TestService_EvaluateFlag_attribute_rule_match_returns_true(t *testing.T) {
 	ctx := context.Background()
 	store := &mock.Store{}
 	store.GetByKeyAndEnvironmentReturns = []mock.GetByKeyResult{
-		{Flag: &flags.Flag{ID: "f1", Key: "attr", Enabled: true, Environment: "dev"}, Err: nil},
+		{Flag: &flags.Flag{ID: "f1", Key: "attr", Enabled: true, Environment: "dev", RolloutStrategy: flags.RolloutStrategyAttribute}, Err: nil},
 	}
 	store.GetRulesByFlagIDReturns = []mock.GetRulesResult{
-		{Rules: []*flags.Rule{{Type: flags.RuleTypeAttribute, Value: `{"email":"@x.com"}`}}, Err: nil},
+		{Rules: []*flags.Rule{{Type: flags.RuleTypeAttribute, Value: `{"attribute":"userId","op":"in","values":["user-1"]}`}}, Err: nil},
 	}
 	svc := flags.NewService(store)
 
-	enabled, err := svc.EvaluateFlag(ctx, "attr", "user-1")
+	enabled, err := svc.EvaluateFlag(ctx, "attr", evalCtx("user-1"))
 
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if !enabled {
-		t.Error("expected true when only attribute rules (fallback to enabled)")
+		t.Error("expected true when attribute rule matches userId")
 	}
 }
 
@@ -449,7 +453,7 @@ func TestService_EvaluateFlag_get_flag_error_returns_error(t *testing.T) {
 	}
 	svc := flags.NewService(store)
 
-	enabled, err := svc.EvaluateFlag(ctx, "key", "user-1")
+	enabled, err := svc.EvaluateFlag(ctx, "key", evalCtx("user-1"))
 
 	if enabled {
 		t.Error("expected false on error")
@@ -463,7 +467,7 @@ func TestService_EvaluateFlag_get_rules_error_returns_error(t *testing.T) {
 	ctx := context.Background()
 	store := &mock.Store{}
 	store.GetByKeyAndEnvironmentReturns = []mock.GetByKeyResult{
-		{Flag: &flags.Flag{ID: "f1", Key: "key", Enabled: true, Environment: "dev"}, Err: nil},
+		{Flag: &flags.Flag{ID: "f1", Key: "key", Enabled: true, Environment: "dev", RolloutStrategy: flags.RolloutStrategyPercentage}, Err: nil},
 	}
 	wantErr := errors.New("rules db error")
 	store.GetRulesByFlagIDReturns = []mock.GetRulesResult{
@@ -471,7 +475,7 @@ func TestService_EvaluateFlag_get_rules_error_returns_error(t *testing.T) {
 	}
 	svc := flags.NewService(store)
 
-	enabled, err := svc.EvaluateFlag(ctx, "key", "user-1")
+	enabled, err := svc.EvaluateFlag(ctx, "key", evalCtx("user-1"))
 
 	if enabled {
 		t.Error("expected false on error")
@@ -489,12 +493,139 @@ func TestService_EvaluateFlag_uses_default_environment_dev(t *testing.T) {
 	}
 	svc := flags.NewService(store)
 
-	_, _ = svc.EvaluateFlag(ctx, "key", "user-1")
+	_, _ = svc.EvaluateFlag(ctx, "key", evalCtx("user-1"))
 
 	if len(store.GetByKeyAndEnvironmentCalls) != 1 {
 		t.Fatalf("expected 1 GetByKeyAndEnvironment call, got %d", len(store.GetByKeyAndEnvironmentCalls))
 	}
 	if store.GetByKeyAndEnvironmentCalls[0].Env != "dev" {
 		t.Errorf("EvaluateFlag should use defaultEnvironment dev, got %q", store.GetByKeyAndEnvironmentCalls[0].Env)
+	}
+}
+
+func TestService_CreateFlag_with_rules_sets_strategy_and_replaces_rules(t *testing.T) {
+	ctx := context.Background()
+	store := &mock.Store{}
+	store.GetByKeyAndEnvironmentReturns = []mock.GetByKeyResult{
+		{Flag: nil, Err: nil},
+	}
+	created := &flags.Flag{
+		ID: "id-1", Key: "f", Environment: "dev", RolloutStrategy: flags.RolloutStrategyPercentage,
+		CreatedAt: time.Now(),
+	}
+	store.CreateReturns = []mock.CreateResult{
+		{Flag: created, Err: nil},
+	}
+	store.ReplaceRulesByFlagIDReturns = []error{nil}
+	svc := flags.NewService(store)
+	input := model.CreateFlagInput{
+		Key: "f", Environment: "dev",
+		Rules: []*model.RuleInput{
+			{Type: model.RolloutRuleTypePercentage, Value: "50"},
+		},
+	}
+
+	got, err := svc.CreateFlag(ctx, input)
+
+	if err != nil {
+		t.Fatalf("CreateFlag: %v", err)
+	}
+	if got == nil || got.Key != "f" {
+		t.Errorf("got %+v", got)
+	}
+	if len(store.ReplaceRulesByFlagIDCalls) != 1 || store.ReplaceRulesByFlagIDCalls[0].FlagID != "id-1" {
+		t.Errorf("ReplaceRulesByFlagID calls: %+v", store.ReplaceRulesByFlagIDCalls)
+	}
+}
+
+func TestService_CreateFlag_mixed_rule_types_returns_ErrRulesStrategyMismatch(t *testing.T) {
+	ctx := context.Background()
+	store := &mock.Store{}
+	store.GetByKeyAndEnvironmentReturns = []mock.GetByKeyResult{
+		{Flag: nil, Err: nil},
+	}
+	svc := flags.NewService(store)
+	input := model.CreateFlagInput{
+		Key: "f", Environment: "dev",
+		Rules: []*model.RuleInput{
+			{Type: model.RolloutRuleTypePercentage, Value: "30"},
+			{Type: model.RolloutRuleTypeAttribute, Value: `{"attribute":"userId","op":"in","values":["x"]}`},
+		},
+	}
+
+	got, err := svc.CreateFlag(ctx, input)
+
+	if got != nil {
+		t.Errorf("expected nil, got %+v", got)
+	}
+	if !errors.Is(err, flags.ErrRulesStrategyMismatch) {
+		t.Errorf("expected ErrRulesStrategyMismatch, got %v", err)
+	}
+	if len(store.CreateCalls) != 0 {
+		t.Error("Create should not be called when rules are mixed")
+	}
+}
+
+func TestService_DeleteFlag_found_returns_true(t *testing.T) {
+	ctx := context.Background()
+	store := &mock.Store{}
+	store.GetByKeyAndEnvironmentReturns = []mock.GetByKeyResult{
+		{Flag: &flags.Flag{ID: "f1", Key: "x", Environment: "dev"}, Err: nil},
+	}
+	store.DeleteReturns = []error{nil}
+	svc := flags.NewService(store)
+
+	result, err := svc.DeleteFlag(ctx, "x", "dev")
+
+	if err != nil {
+		t.Fatalf("DeleteFlag: %v", err)
+	}
+	if !result {
+		t.Error("expected true when flag deleted")
+	}
+	if len(store.DeleteCalls) != 1 || store.DeleteCalls[0].ID != "f1" {
+		t.Errorf("Delete calls: %+v", store.DeleteCalls)
+	}
+}
+
+func TestService_DeleteFlag_not_found_returns_false_and_ErrNotFound(t *testing.T) {
+	ctx := context.Background()
+	store := &mock.Store{}
+	store.GetByKeyAndEnvironmentReturns = []mock.GetByKeyResult{
+		{Flag: nil, Err: nil},
+	}
+	svc := flags.NewService(store)
+
+	result, err := svc.DeleteFlag(ctx, "missing", "dev")
+
+	if result {
+		t.Error("expected false when flag not found")
+	}
+	if !errors.Is(err, flags.ErrNotFound) {
+		t.Errorf("expected ErrNotFound, got %v", err)
+	}
+	if len(store.DeleteCalls) != 0 {
+		t.Error("Delete should not be called when flag not found")
+	}
+}
+
+func TestService_EvaluateFlag_attribute_no_match_returns_false(t *testing.T) {
+	ctx := context.Background()
+	store := &mock.Store{}
+	store.GetByKeyAndEnvironmentReturns = []mock.GetByKeyResult{
+		{Flag: &flags.Flag{ID: "f1", Key: "attr", Enabled: true, Environment: "dev", RolloutStrategy: flags.RolloutStrategyAttribute}, Err: nil},
+	}
+	store.GetRulesByFlagIDReturns = []mock.GetRulesResult{
+		{Rules: []*flags.Rule{{Type: flags.RuleTypeAttribute, Value: `{"attribute":"userId","op":"in","values":["other-user"]}`}}, Err: nil},
+	}
+	svc := flags.NewService(store)
+
+	enabled, err := svc.EvaluateFlag(ctx, "attr", evalCtx("user-1"))
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if enabled {
+		t.Error("expected false when attribute rule does not match")
 	}
 }

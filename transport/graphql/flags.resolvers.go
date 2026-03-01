@@ -29,12 +29,20 @@ func (r *mutationResolver) UpdateFlag(ctx context.Context, input model.UpdateFla
 	return r.Flags.UpdateFlag(ctx, input)
 }
 
+// DeleteFlag is the resolver for the deleteFlag field.
+func (r *mutationResolver) DeleteFlag(ctx context.Context, key string, environment string) (bool, error) {
+	if _, err := auth.RequireRole(ctx, "admin", "developer"); err != nil {
+		return false, err
+	}
+	return r.Flags.DeleteFlag(ctx, key, environment)
+}
+
 // EvaluateFlag is the resolver for the evaluateFlag field.
-func (r *queryResolver) EvaluateFlag(ctx context.Context, key string, userID string) (bool, error) {
+func (r *queryResolver) EvaluateFlag(ctx context.Context, key string, evalCtx model.EvaluationContextInput) (bool, error) {
 	if _, err := auth.RequireRole(ctx, "admin", "developer", "viewer"); err != nil {
 		return false, err
 	}
-	return r.Flags.EvaluateFlag(ctx, key, userID)
+	return r.Flags.EvaluateFlag(ctx, key, evalCtx)
 }
 
 // Mutation returns graph.MutationResolver implementation.

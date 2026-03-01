@@ -16,6 +16,7 @@ var schemaSQL = []string{
 		description TEXT,
 		enabled BOOLEAN NOT NULL DEFAULT false,
 		environment TEXT NOT NULL,
+		rollout_strategy TEXT NOT NULL DEFAULT 'none' CHECK (rollout_strategy IN ('none', 'percentage', 'attribute')),
 		created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
 		UNIQUE(key, environment)
 	)`,

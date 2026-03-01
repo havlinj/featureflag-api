@@ -23,9 +23,15 @@ type Store interface {
 	// or nil and no error if not found. Error only for DB failures.
 	GetByKeyAndEnvironment(ctx context.Context, key, environment string) (*Flag, error)
 
-	// Update updates an existing flag by ID (e.g. Enabled, Description).
+	// Update updates an existing flag by ID (e.g. Enabled, Description, RolloutStrategy).
 	Update(ctx context.Context, flag *Flag) error
+
+	// Delete removes a flag by ID. Implementations must rely on DB CASCADE or delete rules.
+	Delete(ctx context.Context, id string) error
 
 	// GetRulesByFlagID returns all rules for the given flag (for rollout evaluation).
 	GetRulesByFlagID(ctx context.Context, flagID string) ([]*Rule, error)
+
+	// ReplaceRulesByFlagID replaces all rules for the flag (delete existing, insert new).
+	ReplaceRulesByFlagID(ctx context.Context, flagID string, rules []*Rule) error
 }

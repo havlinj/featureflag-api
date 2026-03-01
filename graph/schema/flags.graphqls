@@ -1,3 +1,13 @@
+enum RolloutStrategy {
+  NONE
+  PERCENTAGE
+  ATTRIBUTE
+}
+
+enum RolloutRuleType {
+  PERCENTAGE
+  ATTRIBUTE
+}
 
 type FeatureFlag {
   id: ID!
@@ -5,24 +15,39 @@ type FeatureFlag {
   description: String
   enabled: Boolean!
   environment: String!
+  rolloutStrategy: RolloutStrategy!
+}
+
+input RuleInput {
+  type: RolloutRuleType!
+  value: String!
 }
 
 input CreateFlagInput {
   key: String!
   description: String
   environment: String!
+  rolloutStrategy: RolloutStrategy
+  rules: [RuleInput!]
 }
 
 input UpdateFlagInput {
   key: String!
   enabled: Boolean!
+  rules: [RuleInput!]
+}
+
+input EvaluationContextInput {
+  userId: ID!
+  email: String
 }
 
 type Query {
-  evaluateFlag(key: String!, userId: ID!): Boolean!
+  evaluateFlag(key: String!, context: EvaluationContextInput!): Boolean!
 }
 
 type Mutation {
   createFlag(input: CreateFlagInput!): FeatureFlag!
   updateFlag(input: UpdateFlagInput!): FeatureFlag!
+  deleteFlag(key: String!, environment: String!): Boolean!
 }

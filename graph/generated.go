@@ -48,11 +48,12 @@ type DirectiveRoot struct {
 
 type ComplexityRoot struct {
 	FeatureFlag struct {
-		Description func(childComplexity int) int
-		Enabled     func(childComplexity int) int
-		Environment func(childComplexity int) int
-		ID          func(childComplexity int) int
-		Key         func(childComplexity int) int
+		Description     func(childComplexity int) int
+		Enabled         func(childComplexity int) int
+		Environment     func(childComplexity int) int
+		ID              func(childComplexity int) int
+		Key             func(childComplexity int) int
+		RolloutStrategy func(childComplexity int) int
 	}
 
 	LoginPayload struct {
@@ -62,6 +63,7 @@ type ComplexityRoot struct {
 	Mutation struct {
 		CreateFlag func(childComplexity int, input model.CreateFlagInput) int
 		CreateUser func(childComplexity int, input model.CreateUserInput) int
+		DeleteFlag func(childComplexity int, key string, environment string) int
 		DeleteUser func(childComplexity int, id string) int
 		Login      func(childComplexity int, input model.LoginInput) int
 		UpdateFlag func(childComplexity int, input model.UpdateFlagInput) int
@@ -69,7 +71,7 @@ type ComplexityRoot struct {
 	}
 
 	Query struct {
-		EvaluateFlag func(childComplexity int, key string, userID string) int
+		EvaluateFlag func(childComplexity int, key string, context model.EvaluationContextInput) int
 		User         func(childComplexity int, id string) int
 		UserByEmail  func(childComplexity int, email string) int
 	}
@@ -85,13 +87,14 @@ type ComplexityRoot struct {
 type MutationResolver interface {
 	CreateFlag(ctx context.Context, input model.CreateFlagInput) (*model.FeatureFlag, error)
 	UpdateFlag(ctx context.Context, input model.UpdateFlagInput) (*model.FeatureFlag, error)
+	DeleteFlag(ctx context.Context, key string, environment string) (bool, error)
 	Login(ctx context.Context, input model.LoginInput) (*model.LoginPayload, error)
 	CreateUser(ctx context.Context, input model.CreateUserInput) (*model.User, error)
 	UpdateUser(ctx context.Context, input model.UpdateUserInput) (*model.User, error)
 	DeleteUser(ctx context.Context, id string) (bool, error)
 }
 type QueryResolver interface {
-	EvaluateFlag(ctx context.Context, key string, userID string) (bool, error)
+	EvaluateFlag(ctx context.Context, key string, context model.EvaluationContextInput) (bool, error)
 	User(ctx context.Context, id string) (*model.User, error)
 	UserByEmail(ctx context.Context, email string) (*model.User, error)
 }
@@ -145,6 +148,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.complexity.FeatureFlag.Key(childComplexity), true
+	case "FeatureFlag.rolloutStrategy":
+		if e.complexity.FeatureFlag.RolloutStrategy == nil {
+			break
+		}
+
+		return e.complexity.FeatureFlag.RolloutStrategy(childComplexity), true
 
 	case "LoginPayload.token":
 		if e.complexity.LoginPayload.Token == nil {
@@ -175,6 +184,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.complexity.Mutation.CreateUser(childComplexity, args["input"].(model.CreateUserInput)), true
+	case "Mutation.deleteFlag":
+		if e.complexity.Mutation.DeleteFlag == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_deleteFlag_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Mutation.DeleteFlag(childComplexity, args["key"].(string), args["environment"].(string)), true
 	case "Mutation.deleteUser":
 		if e.complexity.Mutation.DeleteUser == nil {
 			break
@@ -230,7 +250,7 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			return 0, false
 		}
 
-		return e.complexity.Query.EvaluateFlag(childComplexity, args["key"].(string), args["userId"].(string)), true
+		return e.complexity.Query.EvaluateFlag(childComplexity, args["key"].(string), args["context"].(model.EvaluationContextInput)), true
 	case "Query.user":
 		if e.complexity.Query.User == nil {
 			break
@@ -289,7 +309,9 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 	inputUnmarshalMap := graphql.BuildUnmarshalerMap(
 		ec.unmarshalInputCreateFlagInput,
 		ec.unmarshalInputCreateUserInput,
+		ec.unmarshalInputEvaluationContextInput,
 		ec.unmarshalInputLoginInput,
+		ec.unmarshalInputRuleInput,
 		ec.unmarshalInputUpdateFlagInput,
 		ec.unmarshalInputUpdateUserInput,
 	)
@@ -432,6 +454,22 @@ func (ec *executionContext) field_Mutation_createUser_args(ctx context.Context, 
 	return args, nil
 }
 
+func (ec *executionContext) field_Mutation_deleteFlag_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "key", ec.unmarshalNString2string)
+	if err != nil {
+		return nil, err
+	}
+	args["key"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "environment", ec.unmarshalNString2string)
+	if err != nil {
+		return nil, err
+	}
+	args["environment"] = arg1
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_deleteUser_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -495,11 +533,11 @@ func (ec *executionContext) field_Query_evaluateFlag_args(ctx context.Context, r
 		return nil, err
 	}
 	args["key"] = arg0
-	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "userId", ec.unmarshalNID2string)
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "context", ec.unmarshalNEvaluationContextInput2githubᚗcomᚋjanᚑhavlinᚑdevᚋfeatureflagᚑapiᚋgraphᚋmodelᚐEvaluationContextInput)
 	if err != nil {
 		return nil, err
 	}
-	args["userId"] = arg1
+	args["context"] = arg1
 	return args, nil
 }
 
@@ -722,6 +760,35 @@ func (ec *executionContext) fieldContext_FeatureFlag_environment(_ context.Conte
 	return fc, nil
 }
 
+func (ec *executionContext) _FeatureFlag_rolloutStrategy(ctx context.Context, field graphql.CollectedField, obj *model.FeatureFlag) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_FeatureFlag_rolloutStrategy,
+		func(ctx context.Context) (any, error) {
+			return obj.RolloutStrategy, nil
+		},
+		nil,
+		ec.marshalNRolloutStrategy2githubᚗcomᚋjanᚑhavlinᚑdevᚋfeatureflagᚑapiᚋgraphᚋmodelᚐRolloutStrategy,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_FeatureFlag_rolloutStrategy(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FeatureFlag",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type RolloutStrategy does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _LoginPayload_token(ctx context.Context, field graphql.CollectedField, obj *model.LoginPayload) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -786,6 +853,8 @@ func (ec *executionContext) fieldContext_Mutation_createFlag(ctx context.Context
 				return ec.fieldContext_FeatureFlag_enabled(ctx, field)
 			case "environment":
 				return ec.fieldContext_FeatureFlag_environment(ctx, field)
+			case "rolloutStrategy":
+				return ec.fieldContext_FeatureFlag_rolloutStrategy(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type FeatureFlag", field.Name)
 		},
@@ -839,6 +908,8 @@ func (ec *executionContext) fieldContext_Mutation_updateFlag(ctx context.Context
 				return ec.fieldContext_FeatureFlag_enabled(ctx, field)
 			case "environment":
 				return ec.fieldContext_FeatureFlag_environment(ctx, field)
+			case "rolloutStrategy":
+				return ec.fieldContext_FeatureFlag_rolloutStrategy(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type FeatureFlag", field.Name)
 		},
@@ -851,6 +922,47 @@ func (ec *executionContext) fieldContext_Mutation_updateFlag(ctx context.Context
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Mutation_updateFlag_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_deleteFlag(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Mutation_deleteFlag,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.resolvers.Mutation().DeleteFlag(ctx, fc.Args["key"].(string), fc.Args["environment"].(string))
+		},
+		nil,
+		ec.marshalNBoolean2bool,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Mutation_deleteFlag(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_deleteFlag_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -1053,7 +1165,7 @@ func (ec *executionContext) _Query_evaluateFlag(ctx context.Context, field graph
 		ec.fieldContext_Query_evaluateFlag,
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.resolvers.Query().EvaluateFlag(ctx, fc.Args["key"].(string), fc.Args["userId"].(string))
+			return ec.resolvers.Query().EvaluateFlag(ctx, fc.Args["key"].(string), fc.Args["context"].(model.EvaluationContextInput))
 		},
 		nil,
 		ec.marshalNBoolean2bool,
@@ -2865,7 +2977,7 @@ func (ec *executionContext) unmarshalInputCreateFlagInput(ctx context.Context, o
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"key", "description", "environment"}
+	fieldsInOrder := [...]string{"key", "description", "environment", "rolloutStrategy", "rules"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -2893,6 +3005,20 @@ func (ec *executionContext) unmarshalInputCreateFlagInput(ctx context.Context, o
 				return it, err
 			}
 			it.Environment = data
+		case "rolloutStrategy":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("rolloutStrategy"))
+			data, err := ec.unmarshalORolloutStrategy2ᚖgithubᚗcomᚋjanᚑhavlinᚑdevᚋfeatureflagᚑapiᚋgraphᚋmodelᚐRolloutStrategy(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.RolloutStrategy = data
+		case "rules":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("rules"))
+			data, err := ec.unmarshalORuleInput2ᚕᚖgithubᚗcomᚋjanᚑhavlinᚑdevᚋfeatureflagᚑapiᚋgraphᚋmodelᚐRuleInputᚄ(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Rules = data
 		}
 	}
 
@@ -2940,6 +3066,40 @@ func (ec *executionContext) unmarshalInputCreateUserInput(ctx context.Context, o
 	return it, nil
 }
 
+func (ec *executionContext) unmarshalInputEvaluationContextInput(ctx context.Context, obj any) (model.EvaluationContextInput, error) {
+	var it model.EvaluationContextInput
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"userId", "email"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "userId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("userId"))
+			data, err := ec.unmarshalNID2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.UserID = data
+		case "email":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("email"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Email = data
+		}
+	}
+
+	return it, nil
+}
+
 func (ec *executionContext) unmarshalInputLoginInput(ctx context.Context, obj any) (model.LoginInput, error) {
 	var it model.LoginInput
 	asMap := map[string]any{}
@@ -2974,6 +3134,40 @@ func (ec *executionContext) unmarshalInputLoginInput(ctx context.Context, obj an
 	return it, nil
 }
 
+func (ec *executionContext) unmarshalInputRuleInput(ctx context.Context, obj any) (model.RuleInput, error) {
+	var it model.RuleInput
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"type", "value"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "type":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("type"))
+			data, err := ec.unmarshalNRolloutRuleType2githubᚗcomᚋjanᚑhavlinᚑdevᚋfeatureflagᚑapiᚋgraphᚋmodelᚐRolloutRuleType(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Type = data
+		case "value":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("value"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Value = data
+		}
+	}
+
+	return it, nil
+}
+
 func (ec *executionContext) unmarshalInputUpdateFlagInput(ctx context.Context, obj any) (model.UpdateFlagInput, error) {
 	var it model.UpdateFlagInput
 	asMap := map[string]any{}
@@ -2981,7 +3175,7 @@ func (ec *executionContext) unmarshalInputUpdateFlagInput(ctx context.Context, o
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"key", "enabled"}
+	fieldsInOrder := [...]string{"key", "enabled", "rules"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -3002,6 +3196,13 @@ func (ec *executionContext) unmarshalInputUpdateFlagInput(ctx context.Context, o
 				return it, err
 			}
 			it.Enabled = data
+		case "rules":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("rules"))
+			data, err := ec.unmarshalORuleInput2ᚕᚖgithubᚗcomᚋjanᚑhavlinᚑdevᚋfeatureflagᚑapiᚋgraphᚋmodelᚐRuleInputᚄ(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Rules = data
 		}
 	}
 
@@ -3097,6 +3298,11 @@ func (ec *executionContext) _FeatureFlag(ctx context.Context, sel ast.SelectionS
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "rolloutStrategy":
+			out.Values[i] = ec._FeatureFlag_rolloutStrategy(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -3188,6 +3394,13 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 		case "updateFlag":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_updateFlag(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "deleteFlag":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_deleteFlag(ctx, field)
 			})
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
@@ -3768,6 +3981,11 @@ func (ec *executionContext) unmarshalNCreateUserInput2githubᚗcomᚋjanᚑhavli
 	return res, graphql.ErrorOnPath(ctx, err)
 }
 
+func (ec *executionContext) unmarshalNEvaluationContextInput2githubᚗcomᚋjanᚑhavlinᚑdevᚋfeatureflagᚑapiᚋgraphᚋmodelᚐEvaluationContextInput(ctx context.Context, v any) (model.EvaluationContextInput, error) {
+	res, err := ec.unmarshalInputEvaluationContextInput(ctx, v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
 func (ec *executionContext) marshalNFeatureFlag2githubᚗcomᚋjanᚑhavlinᚑdevᚋfeatureflagᚑapiᚋgraphᚋmodelᚐFeatureFlag(ctx context.Context, sel ast.SelectionSet, v model.FeatureFlag) graphql.Marshaler {
 	return ec._FeatureFlag(ctx, sel, &v)
 }
@@ -3815,6 +4033,31 @@ func (ec *executionContext) marshalNLoginPayload2ᚖgithubᚗcomᚋjanᚑhavlin�
 		return graphql.Null
 	}
 	return ec._LoginPayload(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalNRolloutRuleType2githubᚗcomᚋjanᚑhavlinᚑdevᚋfeatureflagᚑapiᚋgraphᚋmodelᚐRolloutRuleType(ctx context.Context, v any) (model.RolloutRuleType, error) {
+	var res model.RolloutRuleType
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNRolloutRuleType2githubᚗcomᚋjanᚑhavlinᚑdevᚋfeatureflagᚑapiᚋgraphᚋmodelᚐRolloutRuleType(ctx context.Context, sel ast.SelectionSet, v model.RolloutRuleType) graphql.Marshaler {
+	return v
+}
+
+func (ec *executionContext) unmarshalNRolloutStrategy2githubᚗcomᚋjanᚑhavlinᚑdevᚋfeatureflagᚑapiᚋgraphᚋmodelᚐRolloutStrategy(ctx context.Context, v any) (model.RolloutStrategy, error) {
+	var res model.RolloutStrategy
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNRolloutStrategy2githubᚗcomᚋjanᚑhavlinᚑdevᚋfeatureflagᚑapiᚋgraphᚋmodelᚐRolloutStrategy(ctx context.Context, sel ast.SelectionSet, v model.RolloutStrategy) graphql.Marshaler {
+	return v
+}
+
+func (ec *executionContext) unmarshalNRuleInput2ᚖgithubᚗcomᚋjanᚑhavlinᚑdevᚋfeatureflagᚑapiᚋgraphᚋmodelᚐRuleInput(ctx context.Context, v any) (*model.RuleInput, error) {
+	res, err := ec.unmarshalInputRuleInput(ctx, v)
+	return &res, graphql.ErrorOnPath(ctx, err)
 }
 
 func (ec *executionContext) unmarshalNString2string(ctx context.Context, v any) (string, error) {
@@ -4138,6 +4381,40 @@ func (ec *executionContext) marshalOBoolean2ᚖbool(ctx context.Context, sel ast
 	_ = ctx
 	res := graphql.MarshalBoolean(*v)
 	return res
+}
+
+func (ec *executionContext) unmarshalORolloutStrategy2ᚖgithubᚗcomᚋjanᚑhavlinᚑdevᚋfeatureflagᚑapiᚋgraphᚋmodelᚐRolloutStrategy(ctx context.Context, v any) (*model.RolloutStrategy, error) {
+	if v == nil {
+		return nil, nil
+	}
+	var res = new(model.RolloutStrategy)
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalORolloutStrategy2ᚖgithubᚗcomᚋjanᚑhavlinᚑdevᚋfeatureflagᚑapiᚋgraphᚋmodelᚐRolloutStrategy(ctx context.Context, sel ast.SelectionSet, v *model.RolloutStrategy) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return v
+}
+
+func (ec *executionContext) unmarshalORuleInput2ᚕᚖgithubᚗcomᚋjanᚑhavlinᚑdevᚋfeatureflagᚑapiᚋgraphᚋmodelᚐRuleInputᚄ(ctx context.Context, v any) ([]*model.RuleInput, error) {
+	if v == nil {
+		return nil, nil
+	}
+	var vSlice []any
+	vSlice = graphql.CoerceList(v)
+	var err error
+	res := make([]*model.RuleInput, len(vSlice))
+	for i := range vSlice {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithIndex(i))
+		res[i], err = ec.unmarshalNRuleInput2ᚖgithubᚗcomᚋjanᚑhavlinᚑdevᚋfeatureflagᚑapiᚋgraphᚋmodelᚐRuleInput(ctx, vSlice[i])
+		if err != nil {
+			return nil, err
+		}
+	}
+	return res, nil
 }
 
 func (ec *executionContext) unmarshalOString2ᚖstring(ctx context.Context, v any) (*string, error) {

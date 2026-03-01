@@ -23,8 +23,12 @@ type Store struct {
 	GetByKeyAndEnvironmentReturns []GetByKeyResult
 	UpdateCalls                   []struct{ Ctx context.Context; Flag *flags.Flag }
 	UpdateReturns                 []error
+	DeleteCalls                   []struct{ Ctx context.Context; ID string }
+	DeleteReturns                 []error
 	GetRulesByFlagIDCalls         []struct{ Ctx context.Context; FlagID string }
 	GetRulesByFlagIDReturns       []GetRulesResult
+	ReplaceRulesByFlagIDCalls     []struct{ Ctx context.Context; FlagID string; Rules []*flags.Rule }
+	ReplaceRulesByFlagIDReturns   []error
 }
 
 // CreateResult is a single return for Create.
@@ -91,6 +95,20 @@ func (m *Store) Update(ctx context.Context, flag *flags.Flag) error {
 	return err
 }
 
+func (m *Store) Delete(ctx context.Context, id string) error {
+	m.mu.Lock()
+	m.DeleteCalls = append(m.DeleteCalls, struct{ Ctx context.Context; ID string }{ctx, id})
+	var err error
+	if len(m.DeleteReturns) > 0 {
+		err = m.DeleteReturns[0]
+		m.DeleteReturns = m.DeleteReturns[1:]
+	} else {
+		err = ErrNoMoreReturns
+	}
+	m.mu.Unlock()
+	return err
+}
+
 func (m *Store) GetRulesByFlagID(ctx context.Context, flagID string) ([]*flags.Rule, error) {
 	m.mu.Lock()
 	m.GetRulesByFlagIDCalls = append(m.GetRulesByFlagIDCalls, struct{ Ctx context.Context; FlagID string }{ctx, flagID})
@@ -105,6 +123,20 @@ func (m *Store) GetRulesByFlagID(ctx context.Context, flagID string) ([]*flags.R
 	}
 	m.mu.Unlock()
 	return out, err
+}
+
+func (m *Store) ReplaceRulesByFlagID(ctx context.Context, flagID string, rules []*flags.Rule) error {
+	m.mu.Lock()
+	m.ReplaceRulesByFlagIDCalls = append(m.ReplaceRulesByFlagIDCalls, struct{ Ctx context.Context; FlagID string; Rules []*flags.Rule }{ctx, flagID, rules})
+	var err error
+	if len(m.ReplaceRulesByFlagIDReturns) > 0 {
+		err = m.ReplaceRulesByFlagIDReturns[0]
+		m.ReplaceRulesByFlagIDReturns = m.ReplaceRulesByFlagIDReturns[1:]
+	} else {
+		err = ErrNoMoreReturns
+	}
+	m.mu.Unlock()
+	return err
 }
 
 var _ flags.Store = (*Store)(nil)

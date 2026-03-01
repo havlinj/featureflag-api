@@ -2,10 +2,19 @@
 
 package model
 
+import (
+	"bytes"
+	"fmt"
+	"io"
+	"strconv"
+)
+
 type CreateFlagInput struct {
-	Key         string  `json:"key"`
-	Description *string `json:"description,omitempty"`
-	Environment string  `json:"environment"`
+	Key             string           `json:"key"`
+	Description     *string          `json:"description,omitempty"`
+	Environment     string           `json:"environment"`
+	RolloutStrategy *RolloutStrategy `json:"rolloutStrategy,omitempty"`
+	Rules           []*RuleInput     `json:"rules,omitempty"`
 }
 
 type CreateUserInput struct {
@@ -14,12 +23,18 @@ type CreateUserInput struct {
 	Password *string `json:"password,omitempty"`
 }
 
+type EvaluationContextInput struct {
+	UserID string  `json:"userId"`
+	Email  *string `json:"email,omitempty"`
+}
+
 type FeatureFlag struct {
-	ID          string  `json:"id"`
-	Key         string  `json:"key"`
-	Description *string `json:"description,omitempty"`
-	Enabled     bool    `json:"enabled"`
-	Environment string  `json:"environment"`
+	ID              string          `json:"id"`
+	Key             string          `json:"key"`
+	Description     *string         `json:"description,omitempty"`
+	Enabled         bool            `json:"enabled"`
+	Environment     string          `json:"environment"`
+	RolloutStrategy RolloutStrategy `json:"rolloutStrategy"`
 }
 
 type LoginInput struct {
@@ -37,9 +52,15 @@ type Mutation struct {
 type Query struct {
 }
 
+type RuleInput struct {
+	Type  RolloutRuleType `json:"type"`
+	Value string          `json:"value"`
+}
+
 type UpdateFlagInput struct {
-	Key     string `json:"key"`
-	Enabled bool   `json:"enabled"`
+	Key     string       `json:"key"`
+	Enabled bool         `json:"enabled"`
+	Rules   []*RuleInput `json:"rules,omitempty"`
 }
 
 type UpdateUserInput struct {
@@ -54,4 +75,116 @@ type User struct {
 	Email     string `json:"email"`
 	Role      string `json:"role"`
 	CreatedAt string `json:"createdAt"`
+}
+
+type RolloutRuleType string
+
+const (
+	RolloutRuleTypePercentage RolloutRuleType = "PERCENTAGE"
+	RolloutRuleTypeAttribute  RolloutRuleType = "ATTRIBUTE"
+)
+
+var AllRolloutRuleType = []RolloutRuleType{
+	RolloutRuleTypePercentage,
+	RolloutRuleTypeAttribute,
+}
+
+func (e RolloutRuleType) IsValid() bool {
+	switch e {
+	case RolloutRuleTypePercentage, RolloutRuleTypeAttribute:
+		return true
+	}
+	return false
+}
+
+func (e RolloutRuleType) String() string {
+	return string(e)
+}
+
+func (e *RolloutRuleType) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = RolloutRuleType(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid RolloutRuleType", str)
+	}
+	return nil
+}
+
+func (e RolloutRuleType) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *RolloutRuleType) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e RolloutRuleType) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+type RolloutStrategy string
+
+const (
+	RolloutStrategyNone       RolloutStrategy = "NONE"
+	RolloutStrategyPercentage RolloutStrategy = "PERCENTAGE"
+	RolloutStrategyAttribute  RolloutStrategy = "ATTRIBUTE"
+)
+
+var AllRolloutStrategy = []RolloutStrategy{
+	RolloutStrategyNone,
+	RolloutStrategyPercentage,
+	RolloutStrategyAttribute,
+}
+
+func (e RolloutStrategy) IsValid() bool {
+	switch e {
+	case RolloutStrategyNone, RolloutStrategyPercentage, RolloutStrategyAttribute:
+		return true
+	}
+	return false
+}
+
+func (e RolloutStrategy) String() string {
+	return string(e)
+}
+
+func (e *RolloutStrategy) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = RolloutStrategy(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid RolloutStrategy", str)
+	}
+	return nil
+}
+
+func (e RolloutStrategy) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *RolloutStrategy) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e RolloutStrategy) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
 }
