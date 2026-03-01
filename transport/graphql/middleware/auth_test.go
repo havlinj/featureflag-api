@@ -57,3 +57,18 @@ func TestAuth_bearerWithoutToken_returns401(t *testing.T) {
 		t.Errorf("expected 401, got %d", rec.Code)
 	}
 }
+
+func TestAuth_authorizationNotBearer_returns401(t *testing.T) {
+	handler := Auth([]byte("secret"))(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	req := httptest.NewRequest(http.MethodGet, "/graphql", nil)
+	req.Header.Set("Authorization", "Basic dXNlcjpwYXNz")
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("expected 401 when Authorization is not Bearer, got %d", rec.Code)
+	}
+}

@@ -94,7 +94,7 @@ func TestService_CreateFlag_already_exists_returns_ErrDuplicateKey(t *testing.T)
 func TestService_CreateFlag_get_existing_error_returns_wrapped_error(t *testing.T) {
 	ctx := context.Background()
 	store := &mock.Store{}
-	wantErr := errors.New("db error")
+	wantErr := errors.New("GetByKeyAndEnvironment failed")
 	store.GetByKeyAndEnvironmentReturns = []mock.GetByKeyResult{
 		{Flag: nil, Err: wantErr},
 	}
@@ -120,7 +120,7 @@ func TestService_CreateFlag_create_error_returns_wrapped_error(t *testing.T) {
 	store.GetByKeyAndEnvironmentReturns = []mock.GetByKeyResult{
 		{Flag: nil, Err: nil},
 	}
-	wantErr := errors.New("insert failed")
+	wantErr := errors.New("Create failed")
 	store.CreateReturns = []mock.CreateResult{
 		{Flag: nil, Err: wantErr},
 	}
@@ -197,7 +197,7 @@ func TestService_UpdateFlag_not_found_returns_ErrNotFound(t *testing.T) {
 func TestService_UpdateFlag_get_error_returns_wrapped_error(t *testing.T) {
 	ctx := context.Background()
 	store := &mock.Store{}
-	wantErr := errors.New("db error")
+	wantErr := errors.New("GetByKeyAndEnvironment failed")
 	store.GetByKeyAndEnvironmentReturns = []mock.GetByKeyResult{
 		{Flag: nil, Err: wantErr},
 	}
@@ -220,7 +220,7 @@ func TestService_UpdateFlag_update_error_returns_wrapped_error(t *testing.T) {
 	store.GetByKeyAndEnvironmentReturns = []mock.GetByKeyResult{
 		{Flag: &flags.Flag{ID: "f1", Key: "test-flag", Environment: "dev"}, Err: nil},
 	}
-	wantErr := errors.New("update failed")
+	wantErr := errors.New("Update failed")
 	store.UpdateReturns = []error{wantErr}
 	svc := flags.NewService(store)
 	input := model.UpdateFlagInput{Key: "test-flag", Enabled: true}
@@ -447,7 +447,7 @@ func TestService_EvaluateFlag_attribute_rule_match_returns_true(t *testing.T) {
 func TestService_EvaluateFlag_get_flag_error_returns_error(t *testing.T) {
 	ctx := context.Background()
 	store := &mock.Store{}
-	wantErr := errors.New("db error")
+	wantErr := errors.New("GetByKeyAndEnvironment failed")
 	store.GetByKeyAndEnvironmentReturns = []mock.GetByKeyResult{
 		{Flag: nil, Err: wantErr},
 	}
@@ -469,7 +469,7 @@ func TestService_EvaluateFlag_get_rules_error_returns_error(t *testing.T) {
 	store.GetByKeyAndEnvironmentReturns = []mock.GetByKeyResult{
 		{Flag: &flags.Flag{ID: "f1", Key: "key", Enabled: true, Environment: "dev", RolloutStrategy: flags.RolloutStrategyPercentage}, Err: nil},
 	}
-	wantErr := errors.New("rules db error")
+	wantErr := errors.New("GetRulesByFlagID failed")
 	store.GetRulesByFlagIDReturns = []mock.GetRulesResult{
 		{Rules: nil, Err: wantErr},
 	}
@@ -627,5 +627,157 @@ func TestService_EvaluateFlag_attribute_no_match_returns_false(t *testing.T) {
 	}
 	if enabled {
 		t.Error("expected false when attribute rule does not match")
+	}
+}
+
+func TestService_CreateFlag_rolloutStrategy_mismatch_with_rules_returns_ErrRulesStrategyMismatch(t *testing.T) {
+	ctx := context.Background()
+	store := &mock.Store{}
+	store.GetByKeyAndEnvironmentReturns = []mock.GetByKeyResult{
+		{Flag: nil, Err: nil},
+	}
+	svc := flags.NewService(store)
+	strategy := model.RolloutStrategyAttribute
+	input := model.CreateFlagInput{
+		Key:             "f",
+		Environment:     "dev",
+		RolloutStrategy: &strategy,
+		Rules:           []*model.RuleInput{{Type: model.RolloutRuleTypePercentage, Value: "50"}},
+	}
+
+	got, err := svc.CreateFlag(ctx, input)
+
+	if got != nil {
+		t.Errorf("expected nil, got %+v", got)
+	}
+	if !errors.Is(err, flags.ErrRulesStrategyMismatch) {
+		t.Errorf("expected ErrRulesStrategyMismatch, got %v", err)
+	}
+	if len(store.CreateCalls) != 0 {
+		t.Error("Create should not be called when strategy and rules type mismatch")
+	}
+}
+
+func TestService_CreateFlag_ReplaceRulesByFlagID_error_returns_wrapped_error(t *testing.T) {
+	ctx := context.Background()
+	store := &mock.Store{}
+	store.GetByKeyAndEnvironmentReturns = []mock.GetByKeyResult{
+		{Flag: nil, Err: nil},
+	}
+	created := &flags.Flag{ID: "id-1", Key: "f", Environment: "dev", RolloutStrategy: flags.RolloutStrategyPercentage, CreatedAt: time.Now()}
+	store.CreateReturns = []mock.CreateResult{
+		{Flag: created, Err: nil},
+	}
+	wantErr := errors.New("ReplaceRulesByFlagID failed on CreateFlag")
+	store.ReplaceRulesByFlagIDReturns = []error{wantErr}
+	svc := flags.NewService(store)
+	input := model.CreateFlagInput{
+		Key:         "f",
+		Environment: "dev",
+		Rules:       []*model.RuleInput{{Type: model.RolloutRuleTypePercentage, Value: "50"}},
+	}
+
+	got, err := svc.CreateFlag(ctx, input)
+
+	if got != nil {
+		t.Errorf("expected nil, got %+v", got)
+	}
+	if !errors.Is(err, wantErr) {
+		t.Errorf("expected wrapped %v, got %v", wantErr, err)
+	}
+}
+
+func TestService_UpdateFlag_rules_empty_ReplaceRulesByFlagID_error_returns_wrapped_error(t *testing.T) {
+	ctx := context.Background()
+	store := &mock.Store{}
+	store.GetByKeyAndEnvironmentReturns = []mock.GetByKeyResult{
+		{Flag: &flags.Flag{ID: "f1", Key: "f", Enabled: true, Environment: "dev", RolloutStrategy: flags.RolloutStrategyPercentage}, Err: nil},
+	}
+	wantErr := errors.New("ReplaceRulesByFlagID failed when clearing rules")
+	store.ReplaceRulesByFlagIDReturns = []error{wantErr}
+	store.UpdateReturns = []error{nil}
+	svc := flags.NewService(store)
+	input := model.UpdateFlagInput{Key: "f", Enabled: true, Rules: []*model.RuleInput{}}
+
+	got, err := svc.UpdateFlag(ctx, input)
+
+	if got != nil {
+		t.Errorf("expected nil, got %+v", got)
+	}
+	if !errors.Is(err, wantErr) {
+		t.Errorf("expected wrapped %v, got %v", wantErr, err)
+	}
+}
+
+func TestService_UpdateFlag_rules_strategy_mismatch_returns_ErrRulesStrategyMismatch(t *testing.T) {
+	ctx := context.Background()
+	store := &mock.Store{}
+	store.GetByKeyAndEnvironmentReturns = []mock.GetByKeyResult{
+		{Flag: &flags.Flag{ID: "f1", Key: "f", Enabled: true, Environment: "dev", RolloutStrategy: flags.RolloutStrategyPercentage}, Err: nil},
+	}
+	store.UpdateReturns = []error{nil}
+	svc := flags.NewService(store)
+	input := model.UpdateFlagInput{
+		Key:     "f",
+		Enabled: true,
+		Rules:   []*model.RuleInput{{Type: model.RolloutRuleTypeAttribute, Value: `{"attribute":"userId","op":"in","values":["x"]}`}},
+	}
+
+	got, err := svc.UpdateFlag(ctx, input)
+
+	if got != nil {
+		t.Errorf("expected nil, got %+v", got)
+	}
+	if !errors.Is(err, flags.ErrRulesStrategyMismatch) {
+		t.Errorf("expected ErrRulesStrategyMismatch, got %v", err)
+	}
+	if len(store.ReplaceRulesByFlagIDCalls) != 0 {
+		t.Error("ReplaceRulesByFlagID should not be called when strategy mismatch")
+	}
+}
+
+func TestService_UpdateFlag_ReplaceRulesByFlagID_error_returns_wrapped_error(t *testing.T) {
+	ctx := context.Background()
+	store := &mock.Store{}
+	store.GetByKeyAndEnvironmentReturns = []mock.GetByKeyResult{
+		{Flag: &flags.Flag{ID: "f1", Key: "f", Enabled: true, Environment: "dev", RolloutStrategy: flags.RolloutStrategyPercentage}, Err: nil},
+	}
+	wantErr := errors.New("ReplaceRulesByFlagID failed on UpdateFlag")
+	store.ReplaceRulesByFlagIDReturns = []error{wantErr}
+	store.UpdateReturns = []error{nil}
+	svc := flags.NewService(store)
+	input := model.UpdateFlagInput{
+		Key:     "f",
+		Enabled: true,
+		Rules:   []*model.RuleInput{{Type: model.RolloutRuleTypePercentage, Value: "25"}},
+	}
+
+	got, err := svc.UpdateFlag(ctx, input)
+
+	if got != nil {
+		t.Errorf("expected nil, got %+v", got)
+	}
+	if !errors.Is(err, wantErr) {
+		t.Errorf("expected wrapped %v, got %v", wantErr, err)
+	}
+}
+
+func TestService_DeleteFlag_StoreDelete_error_returns_wrapped_error(t *testing.T) {
+	ctx := context.Background()
+	store := &mock.Store{}
+	store.GetByKeyAndEnvironmentReturns = []mock.GetByKeyResult{
+		{Flag: &flags.Flag{ID: "f1", Key: "x", Environment: "dev"}, Err: nil},
+	}
+	wantErr := errors.New("Store.Delete failed")
+	store.DeleteReturns = []error{wantErr}
+	svc := flags.NewService(store)
+
+	result, err := svc.DeleteFlag(ctx, "x", "dev")
+
+	if result {
+		t.Error("expected false when Delete fails")
+	}
+	if !errors.Is(err, wantErr) {
+		t.Errorf("expected wrapped %v, got %v", wantErr, err)
 	}
 }

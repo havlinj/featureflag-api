@@ -118,6 +118,25 @@ func TestService_GetUser_not_found_returns_nil_nil(t *testing.T) {
 	}
 }
 
+func TestService_GetUser_store_error_returns_wrapped_error(t *testing.T) {
+	ctx := context.Background()
+	store := &mock.Store{}
+	wantErr := errors.New("GetByID failed")
+	store.GetByIDReturns = []mock.GetByIDResult{
+		{User: nil, Err: wantErr},
+	}
+	svc := users.NewService(store)
+
+	got, err := svc.GetUser(ctx, "some-id")
+
+	if got != nil {
+		t.Errorf("expected nil, got %+v", got)
+	}
+	if !errors.Is(err, wantErr) {
+		t.Errorf("expected wrapped %v, got %v", wantErr, err)
+	}
+}
+
 // --- GetUserByEmail ---
 
 func TestService_GetUserByEmail_found_returns_user(t *testing.T) {
@@ -139,6 +158,25 @@ func TestService_GetUserByEmail_found_returns_user(t *testing.T) {
 	}
 }
 
+func TestService_GetUserByEmail_store_error_returns_wrapped_error(t *testing.T) {
+	ctx := context.Background()
+	store := &mock.Store{}
+	wantErr := errors.New("GetByEmail failed")
+	store.GetByEmailReturns = []mock.GetByEmailResult{
+		{User: nil, Err: wantErr},
+	}
+	svc := users.NewService(store)
+
+	got, err := svc.GetUserByEmail(ctx, "x@y.com")
+
+	if got != nil {
+		t.Errorf("expected nil, got %+v", got)
+	}
+	if !errors.Is(err, wantErr) {
+		t.Errorf("expected wrapped %v, got %v", wantErr, err)
+	}
+}
+
 // --- UpdateUser ---
 
 func TestService_UpdateUser_not_found_returns_ErrNotFound(t *testing.T) {
@@ -155,6 +193,51 @@ func TestService_UpdateUser_not_found_returns_ErrNotFound(t *testing.T) {
 
 	if !errors.Is(err, users.ErrNotFound) {
 		t.Errorf("expected ErrNotFound, got %v", err)
+	}
+}
+
+func TestService_UpdateUser_get_error_returns_wrapped_error(t *testing.T) {
+	ctx := context.Background()
+	store := &mock.Store{}
+	wantErr := errors.New("GetByID failed")
+	store.GetByIDReturns = []mock.GetByIDResult{
+		{User: nil, Err: wantErr},
+	}
+	svc := users.NewService(store)
+	input := model.UpdateUserInput{ID: "some-id"}
+
+	got, err := svc.UpdateUser(ctx, input)
+
+	if got != nil {
+		t.Errorf("expected nil, got %+v", got)
+	}
+	if !errors.Is(err, wantErr) {
+		t.Errorf("expected wrapped %v, got %v", wantErr, err)
+	}
+	if len(store.UpdateCalls) != 0 {
+		t.Error("Update should not be called when GetByID fails")
+	}
+}
+
+func TestService_UpdateUser_invalid_role_returns_error(t *testing.T) {
+	ctx := context.Background()
+	store := &mock.Store{}
+	u := &users.User{ID: "u1", Email: "a@b.com", Role: users.RoleViewer}
+	store.GetByIDReturns = []mock.GetByIDResult{{User: u, Err: nil}}
+	svc := users.NewService(store)
+	role := "invalid"
+	input := model.UpdateUserInput{ID: "u1", Role: &role}
+
+	got, err := svc.UpdateUser(ctx, input)
+
+	if got != nil {
+		t.Errorf("expected nil, got %+v", got)
+	}
+	if err == nil {
+		t.Fatal("expected error for invalid role")
+	}
+	if len(store.UpdateCalls) != 0 {
+		t.Error("Update should not be called when role is invalid")
 	}
 }
 
@@ -212,6 +295,23 @@ func TestService_DeleteUser_deleted_returns_true_nil(t *testing.T) {
 	}
 	if !got {
 		t.Error("expected true when user deleted")
+	}
+}
+
+func TestService_DeleteUser_store_error_returns_wrapped_error(t *testing.T) {
+	ctx := context.Background()
+	store := &mock.Store{}
+	wantErr := errors.New("Store.Delete failed")
+	store.DeleteReturns = []error{wantErr}
+	svc := users.NewService(store)
+
+	got, err := svc.DeleteUser(ctx, "some-id")
+
+	if got {
+		t.Error("expected false when Delete fails")
+	}
+	if !errors.Is(err, wantErr) {
+		t.Errorf("expected wrapped %v, got %v", wantErr, err)
 	}
 }
 
