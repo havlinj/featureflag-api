@@ -5,17 +5,17 @@
 
 # 🏗️ Progress Tracker – Feature Flag API
 
-**Last updated**: 2026-02-26  
-**Overall progress**: ██████░░░░ 60% (Phase 1 in progress)  
-**Status**: APPROVED (Phase 1 – Flags + Users core done; integration tests use real Postgres; auth & logging pending)  
-**Next step**: Authentication middleware (JWT), logging middleware  
+**Last updated**: 2026-02-28  
+**Overall progress**: ████████░░ 85% (Phase 1 near complete)  
+**Status**: APPROVED (Phase 1 – Flags + Users + Auth + Logging done; optional password in CreateUser/UpdateUser)  
+**Next step**: Phase 1 review / Phase 2 planning  
 **Blockers**: None
 
 ## 📋 Milestones (per development_workflow.mdc)
 
 | Phase | Status | Progress | Key Deliverables |
 |-------|--------|----------|------------------|
-| Phase 1: Feature Flags & Users Core | 🔄 In Progress | ~60% | Flags + Users API, DB, repos, integration tests (real Postgres); auth/logging middleware pending |
+| Phase 1: Feature Flags & Users Core | 🔄 In Progress | ~85% | Flags + Users API, DB, repos, auth (JWT) + logging middleware, login, optional password in CreateUser/UpdateUser, integration tests |
 | Phase 2: Experiments Integration | ⏳ Planned | 0% | Experiments module, schema, resolvers, assignments |
 | Phase 3: Audit Logging | ⏳ Planned | 0% | Audit service, audit_logs table, hooks |
 
@@ -28,17 +28,20 @@
 - [x] flags.Service + NewService(store); resolvers call service; **single mock per domain**: internal/flags/mock (queue-based Store for unit tests)
 - [x] users.Store interface; PostgresStore (Create, GetByID, GetByEmail, Update, Delete); users.Service (CreateUser, GetUser, GetUserByEmail, UpdateUser, DeleteUser); internal/users/mock for unit tests
 - [x] GraphQL: users schema (users.graphqls), gqlgen generated types, users resolvers; NewApp(tlsConfig, flagsStore, usersStore)
-- [x] Integration tests: GraphQL over HTTPS with **real PostgreSQL** (testutil.PostgresForIntegration, TruncateAll); TestFlagsAPI (createFlag → updateFlag → evaluateFlag) and TestUsersAPI (createUser → get → update → get → delete → get) against PostgresStore
+- [x] Integration tests: GraphQL over HTTPS with **real PostgreSQL** (testutil.PostgresForIntegration, TruncateAll); TestFlagsAPI, TestUsersAPI, TestLogin_returnsToken_and_tokenWorksForProtectedMutation, TestProtectedMutation_withoutAuth_returnsError, TestAdminCreatedUser_canLogin_and_roleEnforced
 - [x] flags.Service.CreateFlag / UpdateFlag / EvaluateFlag **business logic** (uniqueness, Update by key+env, EvaluateFlag with percentage rollout; default env "dev")
-- [ ] Authentication middleware (JWT)
-- [ ] Logging middleware
+- [x] Authentication middleware (JWT); login mutation; users.password_hash; auth.PasswordMatches, IssueToken, ParseAndValidate, RequireRole
+- [x] Logging middleware (request method, path, status, duration); refactored with loggingHandler
+- [x] Optional password in CreateUserInput and UpdateUserInput (admin can set login password when creating/updating users)
 
 ## 📈 Metrics
 
-- Test coverage: unit tests for db (init), flags.Service and users.Service (domain mocks from internal/flags/mock and internal/users/mock), flags.PostgresStore and users.PostgresStore (all methods + error cases, build tag `integration`); integration tests (2) for HTTPS+GraphQL against **real Postgres** (testcontainers).
-- Tests: internal/db (1), internal/flags (service unit + postgres integration), internal/users (service unit + postgres integration), test/integration (2: TestFlagsAPI, TestUsersAPI; tag `integration`). Default `go test ./...` skips integration; run with `-tags=integration` for full E2E.
+- Test coverage: unit tests for db, flags.Service, users.Service (incl. Login, CreateUser/UpdateUser with password), auth (password, JWT, RequireRole), middleware (logging, auth); flags and users PostgresStore (build tag `integration`); integration tests (5) for HTTPS+GraphQL against **real Postgres** (testcontainers).
+- Tests: internal/db, internal/flags, internal/users, internal/auth (auth_test, jwt_test, password_test), transport/graphql/middleware (logging_test, auth_test), test/integration (TestFlagsAPI, TestUsersAPI, TestLogin_returnsToken_..., TestProtectedMutation_withoutAuth_..., TestAdminCreatedUser_...; tag `integration`). Default `go test ./...` skips integration; run with `-tags=integration` for full E2E.
 
 ## 📝 Changelog
+
+**2026-02-28**: Auth and logging completed. JWT auth middleware; login mutation; users table password_hash; auth.PasswordMatches (renamed from ComparePassword), IssueToken, ParseAndValidate, RequireRole. Logging middleware (method, path, status, duration); refactored with loggingHandler. Optional password in CreateUserInput and UpdateUserInput so admin can set login password. Unit tests: auth (password, JWT, RequireRole), users (Login, CreateUser/UpdateUser with password), middleware (logging, auth). Integration tests: login returns token and token works for createFlag; protected mutation without auth returns error; admin-created user (dev/viewer) can login and role enforced via API. Testing style: use `result` for single bool return in tests; keep `ok` for multi-value returns (testing_style.mdc). Progress updated.
 
 **2026-02-26 (session 3)**: User management added. DB schema extended with `users` table. internal/users: entity, errors, store interface, PostgresStore (Create, GetByID, GetByEmail, Update, Delete), service (CreateUser, GetUser, GetUserByEmail, UpdateUser, DeleteUser). GraphQL: users.graphqls, gqlgen generated types, users resolvers; NewApp(tlsConfig, flagsStore, usersStore). **Single mock per domain**: internal/flags/mock and internal/users/mock (queue-based Store for unit tests); removed internal/testutil/flags_mock.go. Unit tests: flags and users service tests use package `*_test` with domain mocks. **Integration tests use real PostgreSQL**: testutil.PostgresForIntegration(t) and TruncateAll(t, db) in internal/testutil/postgres.go; TestFlagsAPI and TestUsersAPI run against PostgresStore and testcontainers Postgres (no mocks in integration). Progress doc updated.
 
