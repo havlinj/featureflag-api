@@ -9,8 +9,9 @@ type CreateFlagInput struct {
 }
 
 type CreateUserInput struct {
-	Email string `json:"email"`
-	Role  string `json:"role"`
+	Email    string  `json:"email"`
+	Role     string  `json:"role"`
+	Password *string `json:"password,omitempty"`
 }
 
 type FeatureFlag struct {
@@ -42,9 +43,10 @@ type UpdateFlagInput struct {
 }
 
 type UpdateUserInput struct {
-	ID    string  `json:"id"`
-	Email *string `json:"email,omitempty"`
-	Role  *string `json:"role,omitempty"`
+	ID       string  `json:"id"`
+	Email    *string `json:"email,omitempty"`
+	Role     *string `json:"role,omitempty"`
+	Password *string `json:"password,omitempty"`
 }
 
 type User struct {

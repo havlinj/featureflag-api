@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/jan-havlin-dev/featureflag-api/graph/model"
+	"github.com/jan-havlin-dev/featureflag-api/internal/auth"
 	"github.com/jan-havlin-dev/featureflag-api/internal/users"
 	"github.com/jan-havlin-dev/featureflag-api/internal/users/mock"
 )
@@ -73,6 +74,30 @@ func TestService_CreateUser_invalid_role_returns_error(t *testing.T) {
 	}
 }
 
+func TestService_CreateUser_withPassword_passesHashToStore(t *testing.T) {
+	ctx := context.Background()
+	store := &mock.Store{}
+	store.GetByEmailReturns = []mock.GetByEmailResult{{User: nil, Err: nil}}
+	store.CreateReturns = []mock.CreateResult{
+		{User: &users.User{ID: "u1", Email: "a@b.com", Role: users.RoleDeveloper}, Err: nil},
+	}
+	svc := users.NewService(store)
+	pass := "secret123"
+	input := model.CreateUserInput{Email: "a@b.com", Role: "developer", Password: &pass}
+
+	_, err := svc.CreateUser(ctx, input)
+
+	if err != nil {
+		t.Fatalf("CreateUser: %v", err)
+	}
+	if len(store.CreateCalls) != 1 {
+		t.Fatalf("Create calls: want 1, got %d", len(store.CreateCalls))
+	}
+	if store.CreateCalls[0].User.PasswordHash == nil {
+		t.Error("expected PasswordHash to be set when password provided")
+	}
+}
+
 // --- GetUser ---
 
 func TestService_GetUser_not_found_returns_nil_nil(t *testing.T) {
@@ -133,6 +158,29 @@ func TestService_UpdateUser_not_found_returns_ErrNotFound(t *testing.T) {
 	}
 }
 
+func TestService_UpdateUser_withPassword_updatesHash(t *testing.T) {
+	ctx := context.Background()
+	store := &mock.Store{}
+	u := &users.User{ID: "u1", Email: "old@x.com", Role: users.RoleViewer}
+	store.GetByIDReturns = []mock.GetByIDResult{{User: u, Err: nil}}
+	store.UpdateReturns = []error{nil}
+	svc := users.NewService(store)
+	pass := "newpass"
+	input := model.UpdateUserInput{ID: "u1", Password: &pass}
+
+	_, err := svc.UpdateUser(ctx, input)
+
+	if err != nil {
+		t.Fatalf("UpdateUser: %v", err)
+	}
+	if len(store.UpdateCalls) != 1 {
+		t.Fatalf("Update calls: want 1, got %d", len(store.UpdateCalls))
+	}
+	if store.UpdateCalls[0].User.PasswordHash == nil {
+		t.Error("expected PasswordHash to be set when password provided")
+	}
+}
+
 // --- DeleteUser ---
 
 func TestService_DeleteUser_not_found_returns_false_nil(t *testing.T) {
@@ -165,4 +213,75 @@ func TestService_DeleteUser_deleted_returns_true_nil(t *testing.T) {
 	if !got {
 		t.Error("expected true when user deleted")
 	}
+}
+
+// --- Login ---
+
+func TestService_Login_happy_path_returns_userID_and_role(t *testing.T) {
+	ctx := context.Background()
+	hash := mustHash(t, "correct")
+	u := &users.User{ID: "u1", Email: "a@b.com", Role: users.RoleAdmin, PasswordHash: &hash}
+	store := &mock.Store{}
+	store.GetByEmailReturns = []mock.GetByEmailResult{{User: u, Err: nil}}
+	svc := users.NewService(store)
+
+	userID, role, err := svc.Login(ctx, "a@b.com", "correct")
+
+	if err != nil {
+		t.Fatalf("Login: %v", err)
+	}
+	if userID != "u1" || role != "admin" {
+		t.Errorf("expected userID=u1 role=admin, got userID=%q role=%q", userID, role)
+	}
+}
+
+func TestService_Login_user_not_found_returns_ErrNotFound(t *testing.T) {
+	ctx := context.Background()
+	store := &mock.Store{}
+	store.GetByEmailReturns = []mock.GetByEmailResult{{User: nil, Err: nil}}
+	svc := users.NewService(store)
+
+	_, _, err := svc.Login(ctx, "missing@test.com", "any")
+
+	if !errors.Is(err, users.ErrNotFound) {
+		t.Errorf("expected ErrNotFound, got %v", err)
+	}
+}
+
+func TestService_Login_nil_password_hash_returns_ErrInvalidCredentials(t *testing.T) {
+	ctx := context.Background()
+	u := &users.User{ID: "u1", Email: "a@b.com", Role: users.RoleViewer, PasswordHash: nil}
+	store := &mock.Store{}
+	store.GetByEmailReturns = []mock.GetByEmailResult{{User: u, Err: nil}}
+	svc := users.NewService(store)
+
+	_, _, err := svc.Login(ctx, "a@b.com", "any")
+
+	if !errors.Is(err, users.ErrInvalidCredentials) {
+		t.Errorf("expected ErrInvalidCredentials, got %v", err)
+	}
+}
+
+func TestService_Login_wrong_password_returns_ErrInvalidCredentials(t *testing.T) {
+	ctx := context.Background()
+	hash := mustHash(t, "correct")
+	u := &users.User{ID: "u1", Email: "a@b.com", Role: users.RoleAdmin, PasswordHash: &hash}
+	store := &mock.Store{}
+	store.GetByEmailReturns = []mock.GetByEmailResult{{User: u, Err: nil}}
+	svc := users.NewService(store)
+
+	_, _, err := svc.Login(ctx, "a@b.com", "wrong")
+
+	if !errors.Is(err, users.ErrInvalidCredentials) {
+		t.Errorf("expected ErrInvalidCredentials, got %v", err)
+	}
+}
+
+func mustHash(t *testing.T, password string) string {
+	t.Helper()
+	hash, err := auth.HashPassword(password)
+	if err != nil {
+		t.Fatalf("HashPassword: %v", err)
+	}
+	return hash
 }

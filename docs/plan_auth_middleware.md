@@ -121,7 +121,7 @@ Implementation: resolvers (or a small auth helper) return **typed errors** (e.g.
 
 - `internal/auth/auth.go` – context keys, Claims type, FromContext.
 - `internal/auth/jwt.go` – ParseAndValidate, IssueToken (or Sign).
-- `internal/auth/password.go` (or under users) – HashPassword, ComparePassword (bcrypt).
+- `internal/auth/password.go` (or under users) – HashPassword, PasswordMatches (bcrypt).
 - `transport/graphql/middleware/chain.go` – handler chain.
 - `transport/graphql/middleware/auth.go` – JWT extraction and context injection; 401 on invalid token.
 - `transport/graphql/middleware/logging.go` – request logging.

@@ -91,6 +91,7 @@ func TestAssignVariant_Calculation(t *testing.T) {
 - Always assert expected results explicitly.
 - Check for errors returned and handle in tests.
 - Prefer descriptive error messages for easier debugging.
+- When a function under test returns **only** a boolean (single return value), name it `result` (not `ok`) so assertions read clearly, e.g. `result := Foo(); if !result { t.Error(...) }`. When the function returns multiple values (e.g. `value, bool`), keep the conventional `ok` for the boolean, e.g. `value, ok := FromContext(ctx)`.
 
 ## Miscellaneous
 

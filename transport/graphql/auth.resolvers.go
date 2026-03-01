@@ -7,7 +7,6 @@ package graphql
 
 import (
 	"context"
-	"time"
 
 	"github.com/jan-havlin-dev/featureflag-api/graph/model"
 	"github.com/jan-havlin-dev/featureflag-api/internal/auth"

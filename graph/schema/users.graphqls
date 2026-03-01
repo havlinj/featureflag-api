@@ -8,12 +8,14 @@ type User {
 input CreateUserInput {
   email: String!
   role: String!
+  password: String
 }
 
 input UpdateUserInput {
   id: ID!
   email: String
   role: String
+  password: String
 }
 
 extend type Query {

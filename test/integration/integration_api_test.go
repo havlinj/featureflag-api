@@ -291,3 +291,254 @@ func TestUsersAPI_GraphQLOverHTTPS(t *testing.T) {
 		t.Errorf("user after delete: expected null, got %v", getData3["user"])
 	}
 }
+
+func TestLogin_returnsToken_and_tokenWorksForProtectedMutation(t *testing.T) {
+	database, cleanup := testutil.PostgresForIntegration(t)
+	defer cleanup()
+	testutil.TruncateAll(t, database)
+
+	flagsStore := flags.NewPostgresStore(database.Conn())
+	usersStore := users.NewPostgresStore(database.Conn())
+	addr := testutil.MakeFreeSocketAddr()
+	tlsConfig, err := testutil.NewTLSConfigForServer()
+	if err != nil {
+		t.Fatalf("create TLS config: %v", err)
+	}
+	jwtSecret := []byte("test-jwt-secret")
+	a := app.NewApp(tlsConfig, flagsStore, usersStore, jwtSecret)
+	go func() {
+		if err := a.Run(addr); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("server error: %v", err)
+		}
+	}()
+	defer func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := a.Shutdown(ctx); err != nil {
+			t.Fatalf("shutdown: %v", err)
+		}
+	}()
+
+	time.Sleep(100 * time.Millisecond)
+	client := testutil.NewClientForIntegration("https://" + addr)
+
+	token := testutil.SeedAdminAndLogin(t, database, client, "admin@test.com", "adminpass")
+
+	if token == "" {
+		t.Fatal("login should return non-empty token")
+	}
+
+	client.SetToken(token)
+	createResp, err := client.DoRequest(`
+		mutation CreateFlag($input: CreateFlagInput!) {
+			createFlag(input: $input) { id key enabled environment }
+		}
+	`, map[string]interface{}{
+		"input": map[string]interface{}{
+			"key":         "post-login-flag",
+			"description": "Created after login",
+			"environment": "dev",
+		},
+	})
+	if err != nil {
+		t.Fatalf("createFlag after login: %v", err)
+	}
+	if createResp.Data == nil || (createResp.Errors != nil && len(createResp.Errors) > 0) {
+		t.Fatalf("createFlag with valid token: expected data, got data=%v errors=%v", createResp.Data, createResp.Errors)
+	}
+}
+
+func TestProtectedMutation_withoutAuth_returnsError(t *testing.T) {
+	database, cleanup := testutil.PostgresForIntegration(t)
+	defer cleanup()
+	testutil.TruncateAll(t, database)
+
+	flagsStore := flags.NewPostgresStore(database.Conn())
+	usersStore := users.NewPostgresStore(database.Conn())
+	addr := testutil.MakeFreeSocketAddr()
+	tlsConfig, err := testutil.NewTLSConfigForServer()
+	if err != nil {
+		t.Fatalf("create TLS config: %v", err)
+	}
+	jwtSecret := []byte("test-jwt-secret")
+	a := app.NewApp(tlsConfig, flagsStore, usersStore, jwtSecret)
+	go func() {
+		if err := a.Run(addr); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("server error: %v", err)
+		}
+	}()
+	defer func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := a.Shutdown(ctx); err != nil {
+			t.Fatalf("shutdown: %v", err)
+		}
+	}()
+
+	time.Sleep(100 * time.Millisecond)
+	client := testutil.NewClientForIntegration("https://" + addr)
+
+	createResp, err := client.DoRequest(`
+		mutation CreateFlag($input: CreateFlagInput!) {
+			createFlag(input: $input) { id key }
+		}
+	`, map[string]interface{}{
+		"input": map[string]interface{}{
+			"key":         "no-auth-flag",
+			"description": "Should fail",
+			"environment": "dev",
+		},
+	})
+	if err != nil {
+		t.Fatalf("request: %v", err)
+	}
+	if createResp.Errors == nil || len(createResp.Errors) == 0 {
+		t.Fatal("createFlag without token should return GraphQL errors (unauthorized)")
+	}
+}
+
+func TestAdminCreatedUser_canLogin_and_roleEnforced(t *testing.T) {
+	database, cleanup := testutil.PostgresForIntegration(t)
+	defer cleanup()
+	testutil.TruncateAll(t, database)
+
+	flagsStore := flags.NewPostgresStore(database.Conn())
+	usersStore := users.NewPostgresStore(database.Conn())
+	addr := testutil.MakeFreeSocketAddr()
+	tlsConfig, err := testutil.NewTLSConfigForServer()
+	if err != nil {
+		t.Fatalf("create TLS config: %v", err)
+	}
+	jwtSecret := []byte("test-jwt-secret")
+	a := app.NewApp(tlsConfig, flagsStore, usersStore, jwtSecret)
+	go func() {
+		if err := a.Run(addr); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("server error: %v", err)
+		}
+	}()
+	defer func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := a.Shutdown(ctx); err != nil {
+			t.Fatalf("shutdown: %v", err)
+		}
+	}()
+
+	time.Sleep(100 * time.Millisecond)
+	client := testutil.NewClientForIntegration("https://" + addr)
+
+	adminToken := testutil.SeedAdminAndLogin(t, database, client, "admin@test.com", "adminpass")
+	client.SetToken(adminToken)
+
+	devPass := "devpass"
+	createUserResp, err := client.DoRequest(`
+		mutation CreateUser($input: CreateUserInput!) {
+			createUser(input: $input) { id email role }
+		}
+	`, map[string]interface{}{
+		"input": map[string]interface{}{
+			"email":    "dev@test.com",
+			"role":     "developer",
+			"password": devPass,
+		},
+	})
+	if err != nil {
+		t.Fatalf("createUser: %v", err)
+	}
+	if createUserResp.Data == nil || (createUserResp.Errors != nil && len(createUserResp.Errors) > 0) {
+		t.Fatalf("createUser: expected data, got data=%v errors=%v", createUserResp.Data, createUserResp.Errors)
+	}
+
+	loginResp, err := client.DoRequest(`
+		mutation Login($input: LoginInput!) {
+			login(input: $input) { token }
+		}
+	`, map[string]interface{}{
+		"input": map[string]interface{}{"email": "dev@test.com", "password": devPass},
+	})
+	if err != nil {
+		t.Fatalf("login as dev: %v", err)
+	}
+	if loginResp.Data == nil || (loginResp.Errors != nil && len(loginResp.Errors) > 0) {
+		t.Fatalf("login as dev: expected data, got data=%v errors=%v", loginResp.Data, loginResp.Errors)
+	}
+	loginData, _ := loginResp.Data["login"].(map[string]interface{})
+	devToken, _ := loginData["token"].(string)
+	if devToken == "" {
+		t.Fatal("dev login should return non-empty token")
+	}
+
+	client.SetToken(devToken)
+	createFlagResp, err := client.DoRequest(`
+		mutation CreateFlag($input: CreateFlagInput!) {
+			createFlag(input: $input) { id key }
+		}
+	`, map[string]interface{}{
+		"input": map[string]interface{}{
+			"key":         "dev-created-flag",
+			"description": "By developer",
+			"environment": "dev",
+		},
+	})
+	if err != nil {
+		t.Fatalf("createFlag as dev: %v", err)
+	}
+	if createFlagResp.Data == nil || (createFlagResp.Errors != nil && len(createFlagResp.Errors) > 0) {
+		t.Fatalf("developer should be allowed to createFlag: data=%v errors=%v", createFlagResp.Data, createFlagResp.Errors)
+	}
+
+	viewerPass := "viewerpass"
+	client.SetToken(adminToken)
+	createViewerResp, err := client.DoRequest(`
+		mutation CreateUser($input: CreateUserInput!) {
+			createUser(input: $input) { id email role }
+		}
+	`, map[string]interface{}{
+		"input": map[string]interface{}{
+			"email":    "viewer@test.com",
+			"role":     "viewer",
+			"password": viewerPass,
+		},
+	})
+	if err != nil {
+		t.Fatalf("createUser viewer: %v", err)
+	}
+	if createViewerResp.Data == nil || (createViewerResp.Errors != nil && len(createViewerResp.Errors) > 0) {
+		t.Fatalf("createUser viewer: expected data, got data=%v errors=%v", createViewerResp.Data, createViewerResp.Errors)
+	}
+
+	viewerLoginResp, err := client.DoRequest(`
+		mutation Login($input: LoginInput!) {
+			login(input: $input) { token }
+		}
+	`, map[string]interface{}{
+		"input": map[string]interface{}{"email": "viewer@test.com", "password": viewerPass},
+	})
+	if err != nil {
+		t.Fatalf("login as viewer: %v", err)
+	}
+	if viewerLoginResp.Data == nil || (viewerLoginResp.Errors != nil && len(viewerLoginResp.Errors) > 0) {
+		t.Fatalf("login as viewer: expected data, got data=%v errors=%v", viewerLoginResp.Data, viewerLoginResp.Errors)
+	}
+	viewerLoginData, _ := viewerLoginResp.Data["login"].(map[string]interface{})
+	viewerToken, _ := viewerLoginData["token"].(string)
+	client.SetToken(viewerToken)
+
+	viewerCreateFlagResp, err := client.DoRequest(`
+		mutation CreateFlag($input: CreateFlagInput!) {
+			createFlag(input: $input) { id key }
+		}
+	`, map[string]interface{}{
+		"input": map[string]interface{}{
+			"key":         "viewer-cannot-create",
+			"description": "Should fail",
+			"environment": "dev",
+		},
+	})
+	if err != nil {
+		t.Fatalf("createFlag as viewer request: %v", err)
+	}
+	if viewerCreateFlagResp.Errors == nil || len(viewerCreateFlagResp.Errors) == 0 {
+		t.Fatal("viewer must not be allowed to createFlag (expect GraphQL errors)")
+	}
+}

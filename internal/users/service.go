@@ -28,6 +28,13 @@ func (s *Service) CreateUser(ctx context.Context, input model.CreateUserInput) (
 		return nil, err
 	}
 	user := &User{Email: input.Email, Role: role}
+	if input.Password != nil && *input.Password != "" {
+		hash, err := auth.HashPassword(*input.Password)
+		if err != nil {
+			return nil, fmt.Errorf("hash password: %w", err)
+		}
+		user.PasswordHash = &hash
+	}
 	created, err := s.Store.Create(ctx, user)
 	if err != nil {
 		return nil, fmt.Errorf("create user: %w", err)
@@ -69,7 +76,7 @@ func (s *Service) Login(ctx context.Context, email, password string) (userID, ro
 	if u == nil {
 		return "", "", ErrNotFound
 	}
-	if u.PasswordHash == nil || !auth.ComparePassword(*u.PasswordHash, password) {
+	if u.PasswordHash == nil || !auth.PasswordMatches(*u.PasswordHash, password) {
 		return "", "", ErrInvalidCredentials
 	}
 	return u.ID, string(u.Role), nil
@@ -93,6 +100,13 @@ func (s *Service) UpdateUser(ctx context.Context, input model.UpdateUserInput) (
 			return nil, err
 		}
 		u.Role = role
+	}
+	if input.Password != nil && *input.Password != "" {
+		hash, err := auth.HashPassword(*input.Password)
+		if err != nil {
+			return nil, fmt.Errorf("hash password: %w", err)
+		}
+		u.PasswordHash = &hash
 	}
 	if err := s.Store.Update(ctx, u); err != nil {
 		return nil, fmt.Errorf("update user: %w", err)
