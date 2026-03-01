@@ -82,7 +82,7 @@ Avoid:
 
 - Always write idiomatic Go.
 - Follow official Go conventions and formatting.
-- Run `gofmt -w .` regularly.
+- **Before finishing a task** that involved creating or editing `.go` files, run `gofmt -w .` once (or `gofmt -w <paths>` for the directories you changed) so the code is formatted. One run per task is enough; no need to run after every single edit. If any files were reformatted, mention it briefly.
 - Prefer composition over inheritance.
 - Keep interfaces small and focused.
 - Return errors explicitly; never hide them.

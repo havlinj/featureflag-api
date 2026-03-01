@@ -41,11 +41,11 @@ func (s *Service) CreateFlag(ctx context.Context, input model.CreateFlagInput) (
 	}
 
 	flag := &Flag{
-		Key:              input.Key,
-		Description:      input.Description,
-		Enabled:          false,
-		Environment:      input.Environment,
-		RolloutStrategy:  strategy,
+		Key:             input.Key,
+		Description:     input.Description,
+		Enabled:         false,
+		Environment:     input.Environment,
+		RolloutStrategy: strategy,
 	}
 
 	created, err := s.Store.Create(ctx, flag)

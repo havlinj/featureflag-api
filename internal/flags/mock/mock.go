@@ -17,18 +17,37 @@ var ErrNoMoreReturns = errors.New("flags/mock: no more return values enqueued")
 type Store struct {
 	mu sync.Mutex
 
-	CreateCalls                   []struct{ Ctx context.Context; Flag *flags.Flag }
-	CreateReturns                 []CreateResult
-	GetByKeyAndEnvironmentCalls   []struct{ Ctx context.Context; Key, Env string }
+	CreateCalls []struct {
+		Ctx  context.Context
+		Flag *flags.Flag
+	}
+	CreateReturns               []CreateResult
+	GetByKeyAndEnvironmentCalls []struct {
+		Ctx      context.Context
+		Key, Env string
+	}
 	GetByKeyAndEnvironmentReturns []GetByKeyResult
-	UpdateCalls                   []struct{ Ctx context.Context; Flag *flags.Flag }
-	UpdateReturns                 []error
-	DeleteCalls                   []struct{ Ctx context.Context; ID string }
-	DeleteReturns                 []error
-	GetRulesByFlagIDCalls         []struct{ Ctx context.Context; FlagID string }
-	GetRulesByFlagIDReturns       []GetRulesResult
-	ReplaceRulesByFlagIDCalls     []struct{ Ctx context.Context; FlagID string; Rules []*flags.Rule }
-	ReplaceRulesByFlagIDReturns   []error
+	UpdateCalls                   []struct {
+		Ctx  context.Context
+		Flag *flags.Flag
+	}
+	UpdateReturns []error
+	DeleteCalls   []struct {
+		Ctx context.Context
+		ID  string
+	}
+	DeleteReturns         []error
+	GetRulesByFlagIDCalls []struct {
+		Ctx    context.Context
+		FlagID string
+	}
+	GetRulesByFlagIDReturns   []GetRulesResult
+	ReplaceRulesByFlagIDCalls []struct {
+		Ctx    context.Context
+		FlagID string
+		Rules  []*flags.Rule
+	}
+	ReplaceRulesByFlagIDReturns []error
 }
 
 // CreateResult is a single return for Create.
@@ -51,7 +70,10 @@ type GetRulesResult struct {
 
 func (m *Store) Create(ctx context.Context, flag *flags.Flag) (*flags.Flag, error) {
 	m.mu.Lock()
-	m.CreateCalls = append(m.CreateCalls, struct{ Ctx context.Context; Flag *flags.Flag }{ctx, flag})
+	m.CreateCalls = append(m.CreateCalls, struct {
+		Ctx  context.Context
+		Flag *flags.Flag
+	}{ctx, flag})
 	var out *flags.Flag
 	var err error
 	if len(m.CreateReturns) > 0 {
@@ -67,7 +89,10 @@ func (m *Store) Create(ctx context.Context, flag *flags.Flag) (*flags.Flag, erro
 
 func (m *Store) GetByKeyAndEnvironment(ctx context.Context, key, environment string) (*flags.Flag, error) {
 	m.mu.Lock()
-	m.GetByKeyAndEnvironmentCalls = append(m.GetByKeyAndEnvironmentCalls, struct{ Ctx context.Context; Key, Env string }{ctx, key, environment})
+	m.GetByKeyAndEnvironmentCalls = append(m.GetByKeyAndEnvironmentCalls, struct {
+		Ctx      context.Context
+		Key, Env string
+	}{ctx, key, environment})
 	var out *flags.Flag
 	var err error
 	if len(m.GetByKeyAndEnvironmentReturns) > 0 {
@@ -83,7 +108,10 @@ func (m *Store) GetByKeyAndEnvironment(ctx context.Context, key, environment str
 
 func (m *Store) Update(ctx context.Context, flag *flags.Flag) error {
 	m.mu.Lock()
-	m.UpdateCalls = append(m.UpdateCalls, struct{ Ctx context.Context; Flag *flags.Flag }{ctx, flag})
+	m.UpdateCalls = append(m.UpdateCalls, struct {
+		Ctx  context.Context
+		Flag *flags.Flag
+	}{ctx, flag})
 	var err error
 	if len(m.UpdateReturns) > 0 {
 		err = m.UpdateReturns[0]
@@ -97,7 +125,10 @@ func (m *Store) Update(ctx context.Context, flag *flags.Flag) error {
 
 func (m *Store) Delete(ctx context.Context, id string) error {
 	m.mu.Lock()
-	m.DeleteCalls = append(m.DeleteCalls, struct{ Ctx context.Context; ID string }{ctx, id})
+	m.DeleteCalls = append(m.DeleteCalls, struct {
+		Ctx context.Context
+		ID  string
+	}{ctx, id})
 	var err error
 	if len(m.DeleteReturns) > 0 {
 		err = m.DeleteReturns[0]
@@ -111,7 +142,10 @@ func (m *Store) Delete(ctx context.Context, id string) error {
 
 func (m *Store) GetRulesByFlagID(ctx context.Context, flagID string) ([]*flags.Rule, error) {
 	m.mu.Lock()
-	m.GetRulesByFlagIDCalls = append(m.GetRulesByFlagIDCalls, struct{ Ctx context.Context; FlagID string }{ctx, flagID})
+	m.GetRulesByFlagIDCalls = append(m.GetRulesByFlagIDCalls, struct {
+		Ctx    context.Context
+		FlagID string
+	}{ctx, flagID})
 	var out []*flags.Rule
 	var err error
 	if len(m.GetRulesByFlagIDReturns) > 0 {
@@ -127,7 +161,11 @@ func (m *Store) GetRulesByFlagID(ctx context.Context, flagID string) ([]*flags.R
 
 func (m *Store) ReplaceRulesByFlagID(ctx context.Context, flagID string, rules []*flags.Rule) error {
 	m.mu.Lock()
-	m.ReplaceRulesByFlagIDCalls = append(m.ReplaceRulesByFlagIDCalls, struct{ Ctx context.Context; FlagID string; Rules []*flags.Rule }{ctx, flagID, rules})
+	m.ReplaceRulesByFlagIDCalls = append(m.ReplaceRulesByFlagIDCalls, struct {
+		Ctx    context.Context
+		FlagID string
+		Rules  []*flags.Rule
+	}{ctx, flagID, rules})
 	var err error
 	if len(m.ReplaceRulesByFlagIDReturns) > 0 {
 		err = m.ReplaceRulesByFlagIDReturns[0]

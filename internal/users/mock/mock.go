@@ -17,16 +17,31 @@ var ErrNoMoreReturns = errors.New("users/mock: no more return values enqueued")
 type Store struct {
 	mu sync.Mutex
 
-	CreateCalls            []struct{ Ctx context.Context; User *users.User }
-	CreateReturns          []CreateResult
-	GetByIDCalls           []struct{ Ctx context.Context; ID string }
-	GetByIDReturns         []GetByIDResult
-	GetByEmailCalls        []struct{ Ctx context.Context; Email string }
-	GetByEmailReturns      []GetByEmailResult
-	UpdateCalls            []struct{ Ctx context.Context; User *users.User }
-	UpdateReturns          []error
-	DeleteCalls            []struct{ Ctx context.Context; ID string }
-	DeleteReturns          []error
+	CreateCalls []struct {
+		Ctx  context.Context
+		User *users.User
+	}
+	CreateReturns []CreateResult
+	GetByIDCalls  []struct {
+		Ctx context.Context
+		ID  string
+	}
+	GetByIDReturns  []GetByIDResult
+	GetByEmailCalls []struct {
+		Ctx   context.Context
+		Email string
+	}
+	GetByEmailReturns []GetByEmailResult
+	UpdateCalls       []struct {
+		Ctx  context.Context
+		User *users.User
+	}
+	UpdateReturns []error
+	DeleteCalls   []struct {
+		Ctx context.Context
+		ID  string
+	}
+	DeleteReturns []error
 }
 
 // CreateResult is a single return for Create.
@@ -49,7 +64,10 @@ type GetByEmailResult struct {
 
 func (m *Store) Create(ctx context.Context, user *users.User) (*users.User, error) {
 	m.mu.Lock()
-	m.CreateCalls = append(m.CreateCalls, struct{ Ctx context.Context; User *users.User }{ctx, user})
+	m.CreateCalls = append(m.CreateCalls, struct {
+		Ctx  context.Context
+		User *users.User
+	}{ctx, user})
 	var out *users.User
 	var err error
 	if len(m.CreateReturns) > 0 {
@@ -65,7 +83,10 @@ func (m *Store) Create(ctx context.Context, user *users.User) (*users.User, erro
 
 func (m *Store) GetByID(ctx context.Context, id string) (*users.User, error) {
 	m.mu.Lock()
-	m.GetByIDCalls = append(m.GetByIDCalls, struct{ Ctx context.Context; ID string }{ctx, id})
+	m.GetByIDCalls = append(m.GetByIDCalls, struct {
+		Ctx context.Context
+		ID  string
+	}{ctx, id})
 	var out *users.User
 	var err error
 	if len(m.GetByIDReturns) > 0 {
@@ -81,7 +102,10 @@ func (m *Store) GetByID(ctx context.Context, id string) (*users.User, error) {
 
 func (m *Store) GetByEmail(ctx context.Context, email string) (*users.User, error) {
 	m.mu.Lock()
-	m.GetByEmailCalls = append(m.GetByEmailCalls, struct{ Ctx context.Context; Email string }{ctx, email})
+	m.GetByEmailCalls = append(m.GetByEmailCalls, struct {
+		Ctx   context.Context
+		Email string
+	}{ctx, email})
 	var out *users.User
 	var err error
 	if len(m.GetByEmailReturns) > 0 {
@@ -97,7 +121,10 @@ func (m *Store) GetByEmail(ctx context.Context, email string) (*users.User, erro
 
 func (m *Store) Update(ctx context.Context, user *users.User) error {
 	m.mu.Lock()
-	m.UpdateCalls = append(m.UpdateCalls, struct{ Ctx context.Context; User *users.User }{ctx, user})
+	m.UpdateCalls = append(m.UpdateCalls, struct {
+		Ctx  context.Context
+		User *users.User
+	}{ctx, user})
 	var err error
 	if len(m.UpdateReturns) > 0 {
 		err = m.UpdateReturns[0]
@@ -111,7 +138,10 @@ func (m *Store) Update(ctx context.Context, user *users.User) error {
 
 func (m *Store) Delete(ctx context.Context, id string) error {
 	m.mu.Lock()
-	m.DeleteCalls = append(m.DeleteCalls, struct{ Ctx context.Context; ID string }{ctx, id})
+	m.DeleteCalls = append(m.DeleteCalls, struct {
+		Ctx context.Context
+		ID  string
+	}{ctx, id})
 	var err error
 	if len(m.DeleteReturns) > 0 {
 		err = m.DeleteReturns[0]
