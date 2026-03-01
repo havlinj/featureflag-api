@@ -204,14 +204,21 @@ No milestone is complete without explicit review approval.
 - Implement a tested database layer (repositories).
 - Write a few back-to-back integration tests to verify end-to-end functionality.
 
+**Rollout strategies (both supported in Phase 1; mutually exclusive per flag):**
+- Each flag has **exactly one** strategy: either percentage **or** attribute (or none). No mixing: if percentage is chosen, only percentage rules apply; if attribute, only attribute rules apply.
+- **Percentage-based rollout:** Deterministic assignment by user ID (e.g. 30% of users). Same user always gets the same result. Hash user ID to a bucket 0–99; if bucket < percentage, flag is on.
+- **Attribute-based rollout:** Enable/disable by user attributes (e.g. userId allowlist, email domain such as `@company.com`). Rules reference attributes (userId, email, etc.) and a condition; evaluation uses context (user ID and any provided attributes) to decide.
+
 **Key Deliverables:**
-- `flags` service layer with create, enable/disable, and simple rollout logic.
+- `flags` service layer with create, enable/disable, and **both** rollout strategies:
+  - Percentage-based rollout (deterministic, by user ID).
+  - Attribute-based rollout (e.g. userId, email domain; conditions evaluated from evaluation context).
 - `transport/graphql` resolvers for feature flags queries and mutations.
 - Authentication middleware (JWT-based) and logging middleware integrated in API.
 - Minimal database schema:
   - `users`
   - `feature_flags`
-  - `flag_rules` (if needed for percentage/attribute rollouts)
+  - `flag_rules` (type: percentage | attribute; value: e.g. "30" or JSON for attribute conditions).
 - Repository layer tested independently and integrated in API.
 - 2–3 end-to-end integration tests covering API → service → DB.
 
