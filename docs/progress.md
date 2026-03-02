@@ -5,10 +5,10 @@
 
 # 🏗️ Progress Tracker – Feature Flag API
 
-**Last updated**: 2026-03-01  
-**Overall progress**: █████████░ 90% (Phase 1 complete)  
-**Status**: Phase 1 complete – Flags (incl. rollout strategies, rules, evaluation, delete), Users, Auth, Logging  
-**Next step**: Phase 1 review / Phase 2 planning  
+**Last updated**: 2026-03-02  
+**Overall progress**: █████░░░░░ 50% (Phase 1 of 4 complete)  
+**Status**: Phase 1 **reviewed and complete** – Flags (incl. rollout strategies, rules, evaluation, delete), Users, Auth, Logging; Phase 2 planned (local test scripts + binary smoke)  
+**Next step**: Phase 2 – Local test scripts & binary smoke test  
 **Blockers**: None
 
 ## 📋 Milestones (per development_workflow.mdc)
@@ -16,8 +16,9 @@
 | Phase | Status | Progress | Key Deliverables |
 |-------|--------|----------|------------------|
 | Phase 1: Feature Flags & Users Core | ✅ Complete | 100% | Flags + Users API, rollout strategies (percentage + attribute, one per flag), rules CRUD, EvaluateFlag with context, DeleteFlag, DB, auth (JWT), logging, integration tests |
-| Phase 2: Experiments Integration | ⏳ Planned | 0% | Experiments module, schema, resolvers, assignments |
-| Phase 3: Audit Logging | ⏳ Planned | 0% | Audit service, audit_logs table, hooks |
+| Phase 2: Local Test Scripts & Binary Smoke Test | ⏳ Planned | 0% | Bash scripts (check, unit, integration, build, test_all, test_binary_smoke); one smoke test against real binary |
+| Phase 3: Experiments Integration | ⏳ Planned | 0% | Experiments module, schema, resolvers, assignments |
+| Phase 4: Audit Logging | ⏳ Planned | 0% | Audit service, audit_logs table, hooks |
 
 ## 🔧 Phase 1 – Current state
 
@@ -43,6 +44,8 @@
 - Code style: gofmt run before task completion (see .cursor/rules/coding_style.mdc).
 
 ## 📝 Changelog
+
+**2026-03-02 (session 5)**: Phase 1 declared **complete** after final review. development_workflow.mdc updated: new Phase 2 (Local Test Scripts & Binary Smoke Test) with Bash scripts and one binary smoke test; former Phase 2/3 renumbered to Phase 3/4. progress.md updated: milestones table aligned (Phase 2 = local scripts, Phase 3 = Experiments, Phase 4 = Audit); status set to “Phase 1 reviewed and complete”; next step Phase 2. docs/session_5.md created.
 
 **2026-03-01 (session 4)**: Phase 1 completed. Rollout strategies: feature_flags.rollout_strategy (none/percentage/attribute), one strategy per flag; CreateFlag/UpdateFlag with rules and validation (ErrRulesStrategyMismatch); EvaluateFlag(key, context: { userId, email }); attribute rules (internal/flags/attribute.go: suffix, in, eq); DeleteFlag(key, environment); Store.Delete, ReplaceRulesByFlagID. Unit test coverage: all return paths in flags.Service, users.Service, middleware auth; mock error messages made descriptive. progress.md updated; gofmt verified.
 
