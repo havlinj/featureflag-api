@@ -91,27 +91,34 @@ func (s *Service) UpdateUser(ctx context.Context, input model.UpdateUserInput) (
 	if u == nil {
 		return nil, ErrNotFound
 	}
+	if err := applyUpdateFieldsToUser(u, input); err != nil {
+		return nil, err
+	}
+	if err := s.Store.Update(ctx, u); err != nil {
+		return nil, fmt.Errorf("update user: %w", err)
+	}
+	return userToModel(u), nil
+}
+
+func applyUpdateFieldsToUser(u *User, input model.UpdateUserInput) error {
 	if input.Email != nil {
 		u.Email = *input.Email
 	}
 	if input.Role != nil {
 		role, err := parseRole(*input.Role)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		u.Role = role
 	}
 	if input.Password != nil && *input.Password != "" {
 		hash, err := auth.HashPassword(*input.Password)
 		if err != nil {
-			return nil, fmt.Errorf("hash password: %w", err)
+			return fmt.Errorf("hash password: %w", err)
 		}
 		u.PasswordHash = &hash
 	}
-	if err := s.Store.Update(ctx, u); err != nil {
-		return nil, fmt.Errorf("update user: %w", err)
-	}
-	return userToModel(u), nil
+	return nil
 }
 
 // DeleteUser removes a user by ID. Returns ErrNotFound if user does not exist.

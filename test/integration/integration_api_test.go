@@ -10,25 +10,23 @@ import (
 	"time"
 
 	"github.com/jan-havlin-dev/featureflag-api/internal/app"
+	"github.com/jan-havlin-dev/featureflag-api/internal/db"
 	"github.com/jan-havlin-dev/featureflag-api/internal/flags"
 	"github.com/jan-havlin-dev/featureflag-api/internal/testutil"
 	"github.com/jan-havlin-dev/featureflag-api/internal/users"
 )
 
-func TestFlagsAPI_GraphQLOverHTTPS(t *testing.T) {
-	database, cleanup := testutil.PostgresForIntegration(t)
-	defer cleanup()
-	testutil.TruncateAll(t, database)
-
+// startAppWithDB starts the app with the given database, runs the server in a goroutine,
+// and returns the app, a GraphQL client, and a shutdown function. Caller must call defer shutdown().
+func startAppWithDB(t *testing.T, database *db.DB) (*app.App, *testutil.GraphQLClient, func()) {
+	t.Helper()
 	flagsStore := flags.NewPostgresStore(database.Conn())
 	usersStore := users.NewPostgresStore(database.Conn())
-
 	addr := testutil.MakeFreeSocketAddr()
 	tlsConfig, err := testutil.NewTLSConfigForServer()
 	if err != nil {
 		t.Fatalf("create TLS config: %v", err)
 	}
-
 	jwtSecret := []byte("test-jwt-secret")
 	a := app.NewApp(tlsConfig, flagsStore, usersStore, jwtSecret)
 	go func() {
@@ -36,20 +34,23 @@ func TestFlagsAPI_GraphQLOverHTTPS(t *testing.T) {
 			log.Fatalf("server error: %v", err)
 		}
 	}()
-
-	defer func() {
+	time.Sleep(100 * time.Millisecond)
+	client := testutil.NewClientForIntegration("https://" + addr)
+	shutdown := func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		if err := a.Shutdown(ctx); err != nil {
-			t.Fatalf("shutdown: %v", err)
-		}
-	}()
+		_ = a.Shutdown(ctx)
+	}
+	return a, client, shutdown
+}
 
-	time.Sleep(100 * time.Millisecond)
+func TestFlagsAPI_GraphQLOverHTTPS(t *testing.T) {
+	database, cleanup := testutil.PostgresForIntegration(t)
+	defer cleanup()
+	testutil.TruncateAll(t, database)
+	_, client, shutdown := startAppWithDB(t, database)
+	defer shutdown()
 
-	client := testutil.NewClientForIntegration("https://" + addr)
-
-	// 0) Seed admin and login to get token (createFlag requires admin or developer)
 	adminToken := testutil.SeedAdminAndLogin(t, database, client, "admin@test.com", "adminpass")
 	client.SetToken(adminToken)
 
@@ -136,37 +137,9 @@ func TestUsersAPI_GraphQLOverHTTPS(t *testing.T) {
 	database, cleanup := testutil.PostgresForIntegration(t)
 	defer cleanup()
 	testutil.TruncateAll(t, database)
+	_, client, shutdown := startAppWithDB(t, database)
+	defer shutdown()
 
-	flagsStore := flags.NewPostgresStore(database.Conn())
-	usersStore := users.NewPostgresStore(database.Conn())
-
-	addr := testutil.MakeFreeSocketAddr()
-	tlsConfig, err := testutil.NewTLSConfigForServer()
-	if err != nil {
-		t.Fatalf("create TLS config: %v", err)
-	}
-
-	jwtSecret := []byte("test-jwt-secret")
-	a := app.NewApp(tlsConfig, flagsStore, usersStore, jwtSecret)
-	go func() {
-		if err := a.Run(addr); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("server error: %v", err)
-		}
-	}()
-
-	defer func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		if err := a.Shutdown(ctx); err != nil {
-			t.Fatalf("shutdown: %v", err)
-		}
-	}()
-
-	time.Sleep(100 * time.Millisecond)
-
-	client := testutil.NewClientForIntegration("https://" + addr)
-
-	// 0) Seed admin and login to get token (required for RBAC)
 	adminToken := testutil.SeedAdminAndLogin(t, database, client, "admin@test.com", "adminpass")
 	client.SetToken(adminToken)
 
@@ -298,31 +271,8 @@ func TestLogin_returnsToken_and_tokenWorksForProtectedMutation(t *testing.T) {
 	database, cleanup := testutil.PostgresForIntegration(t)
 	defer cleanup()
 	testutil.TruncateAll(t, database)
-
-	flagsStore := flags.NewPostgresStore(database.Conn())
-	usersStore := users.NewPostgresStore(database.Conn())
-	addr := testutil.MakeFreeSocketAddr()
-	tlsConfig, err := testutil.NewTLSConfigForServer()
-	if err != nil {
-		t.Fatalf("create TLS config: %v", err)
-	}
-	jwtSecret := []byte("test-jwt-secret")
-	a := app.NewApp(tlsConfig, flagsStore, usersStore, jwtSecret)
-	go func() {
-		if err := a.Run(addr); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("server error: %v", err)
-		}
-	}()
-	defer func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		if err := a.Shutdown(ctx); err != nil {
-			t.Fatalf("shutdown: %v", err)
-		}
-	}()
-
-	time.Sleep(100 * time.Millisecond)
-	client := testutil.NewClientForIntegration("https://" + addr)
+	_, client, shutdown := startAppWithDB(t, database)
+	defer shutdown()
 
 	token := testutil.SeedAdminAndLogin(t, database, client, "admin@test.com", "adminpass")
 
@@ -354,31 +304,8 @@ func TestProtectedMutation_withoutAuth_returnsError(t *testing.T) {
 	database, cleanup := testutil.PostgresForIntegration(t)
 	defer cleanup()
 	testutil.TruncateAll(t, database)
-
-	flagsStore := flags.NewPostgresStore(database.Conn())
-	usersStore := users.NewPostgresStore(database.Conn())
-	addr := testutil.MakeFreeSocketAddr()
-	tlsConfig, err := testutil.NewTLSConfigForServer()
-	if err != nil {
-		t.Fatalf("create TLS config: %v", err)
-	}
-	jwtSecret := []byte("test-jwt-secret")
-	a := app.NewApp(tlsConfig, flagsStore, usersStore, jwtSecret)
-	go func() {
-		if err := a.Run(addr); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("server error: %v", err)
-		}
-	}()
-	defer func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		if err := a.Shutdown(ctx); err != nil {
-			t.Fatalf("shutdown: %v", err)
-		}
-	}()
-
-	time.Sleep(100 * time.Millisecond)
-	client := testutil.NewClientForIntegration("https://" + addr)
+	_, client, shutdown := startAppWithDB(t, database)
+	defer shutdown()
 
 	createResp, err := client.DoRequest(`
 		mutation CreateFlag($input: CreateFlagInput!) {
@@ -403,31 +330,8 @@ func TestAdminCreatedUser_canLogin_and_roleEnforced(t *testing.T) {
 	database, cleanup := testutil.PostgresForIntegration(t)
 	defer cleanup()
 	testutil.TruncateAll(t, database)
-
-	flagsStore := flags.NewPostgresStore(database.Conn())
-	usersStore := users.NewPostgresStore(database.Conn())
-	addr := testutil.MakeFreeSocketAddr()
-	tlsConfig, err := testutil.NewTLSConfigForServer()
-	if err != nil {
-		t.Fatalf("create TLS config: %v", err)
-	}
-	jwtSecret := []byte("test-jwt-secret")
-	a := app.NewApp(tlsConfig, flagsStore, usersStore, jwtSecret)
-	go func() {
-		if err := a.Run(addr); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("server error: %v", err)
-		}
-	}()
-	defer func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		if err := a.Shutdown(ctx); err != nil {
-			t.Fatalf("shutdown: %v", err)
-		}
-	}()
-
-	time.Sleep(100 * time.Millisecond)
-	client := testutil.NewClientForIntegration("https://" + addr)
+	_, client, shutdown := startAppWithDB(t, database)
+	defer shutdown()
 
 	adminToken := testutil.SeedAdminAndLogin(t, database, client, "admin@test.com", "adminpass")
 	client.SetToken(adminToken)

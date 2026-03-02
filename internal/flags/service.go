@@ -9,7 +9,7 @@ import (
 	"github.com/jan-havlin-dev/featureflag-api/graph/model"
 )
 
-const defaultEnvironment = "dev"
+const defaultEnvironment = DeploymentStageDev
 
 // Service holds core business logic for feature flags. It depends on Store for
 // persistence so that the latter can be mocked in unit tests.
@@ -24,84 +24,106 @@ func NewService(store Store) *Service {
 
 // CreateFlag creates a new feature flag. Optional rules set rollout strategy; all rules must be same type.
 func (s *Service) CreateFlag(ctx context.Context, input model.CreateFlagInput) (*model.FeatureFlag, error) {
-	if err := s.ensureUniqueFlag(ctx, input.Key, input.Environment); err != nil {
+	env := DeploymentStage(input.Environment)
+	if err := s.ensureUniqueFlag(ctx, input.Key, env); err != nil {
 		return nil, err
 	}
-
-	strategy := rolloutStrategyFromModel(input.RolloutStrategy)
-	if len(input.Rules) > 0 {
-		ruleType, err := validateRulesSameType(input.Rules)
-		if err != nil {
-			return nil, err
-		}
-		if strategy != RolloutStrategyNone && strategy != ruleTypeToStrategy(ruleType) {
-			return nil, fmt.Errorf("%w: all rules must use the same strategy: percentage or attribute", ErrRulesStrategyMismatch)
-		}
-		strategy = ruleTypeToStrategy(ruleType)
+	strategy, err := resolveStrategyForCreate(input)
+	if err != nil {
+		return nil, err
 	}
-
 	flag := &Flag{
 		Key:             input.Key,
 		Description:     input.Description,
 		Enabled:         false,
-		Environment:     input.Environment,
+		Environment:     env,
 		RolloutStrategy: strategy,
 	}
-
 	created, err := s.Store.Create(ctx, flag)
 	if err != nil {
 		return nil, fmt.Errorf("create flag: %w", err)
 	}
-
-	if len(input.Rules) > 0 {
-		rules := ruleInputsToRules(created.ID, input.Rules)
-		if err := s.Store.ReplaceRulesByFlagID(ctx, created.ID, rules); err != nil {
-			return nil, fmt.Errorf("create flag rules: %w", err)
-		}
+	if err := persistRulesForNewFlag(ctx, s.Store, created.ID, input.Rules); err != nil {
+		return nil, err
 	}
-
 	return flagToModel(created), nil
+}
+
+func resolveStrategyForCreate(input model.CreateFlagInput) (RolloutStrategy, error) {
+	strategy := rolloutStrategyFromModel(input.RolloutStrategy)
+	if len(input.Rules) == 0 {
+		return strategy, nil
+	}
+	ruleType, err := validateRulesSameType(input.Rules)
+	if err != nil {
+		return "", err
+	}
+	if strategy != RolloutStrategyNone && strategy != ruleTypeToStrategy(ruleType) {
+		return "", fmt.Errorf("%w: all rules must use the same strategy: percentage or attribute", ErrRulesStrategyMismatch)
+	}
+	return ruleTypeToStrategy(ruleType), nil
+}
+
+func persistRulesForNewFlag(ctx context.Context, store Store, flagID string, rules []*model.RuleInput) error {
+	if len(rules) == 0 {
+		return nil
+	}
+	if err := store.ReplaceRulesByFlagID(ctx, flagID, ruleInputsToRules(flagID, rules)); err != nil {
+		return fmt.Errorf("create flag rules: %w", err)
+	}
+	return nil
 }
 
 // UpdateFlag updates an existing feature flag. If Rules is present, replaces all rules and updates strategy.
 func (s *Service) UpdateFlag(ctx context.Context, input model.UpdateFlagInput) (*model.FeatureFlag, error) {
-	flag, err := s.Store.GetByKeyAndEnvironment(ctx, input.Key, defaultEnvironment)
+	flag, err := s.getFlagOrErr(ctx, input.Key, defaultEnvironment)
+	if err != nil {
+		return nil, err
+	}
+	flag.Enabled = input.Enabled
+	if err := s.applyRulesUpdate(ctx, flag, input.Rules); err != nil {
+		return nil, err
+	}
+	if err := s.Store.Update(ctx, flag); err != nil {
+		return nil, fmt.Errorf("update flag: %w", err)
+	}
+	return flagToModel(flag), nil
+}
+
+func (s *Service) getFlagOrErr(ctx context.Context, key string, env DeploymentStage) (*Flag, error) {
+	flag, err := s.Store.GetByKeyAndEnvironment(ctx, key, env)
 	if err != nil {
 		return nil, fmt.Errorf("get flag: %w", err)
 	}
 	if flag == nil {
 		return nil, ErrNotFound
 	}
+	return flag, nil
+}
 
-	flag.Enabled = input.Enabled
-
-	if input.Rules != nil {
-		if len(input.Rules) == 0 {
-			flag.RolloutStrategy = RolloutStrategyNone
-			if err := s.Store.ReplaceRulesByFlagID(ctx, flag.ID, nil); err != nil {
-				return nil, fmt.Errorf("update flag rules: %w", err)
-			}
-		} else {
-			ruleType, err := validateRulesSameType(input.Rules)
-			if err != nil {
-				return nil, err
-			}
-			if flag.RolloutStrategy != RolloutStrategyNone && flag.RolloutStrategy != ruleTypeToStrategy(ruleType) {
-				return nil, strategyMismatchError(flag.RolloutStrategy)
-			}
-			flag.RolloutStrategy = ruleTypeToStrategy(ruleType)
-			rules := ruleInputsToRules(flag.ID, input.Rules)
-			if err := s.Store.ReplaceRulesByFlagID(ctx, flag.ID, rules); err != nil {
-				return nil, fmt.Errorf("update flag rules: %w", err)
-			}
+func (s *Service) applyRulesUpdate(ctx context.Context, flag *Flag, rules []*model.RuleInput) error {
+	if rules == nil {
+		return nil
+	}
+	if len(rules) == 0 {
+		flag.RolloutStrategy = RolloutStrategyNone
+		if err := s.Store.ReplaceRulesByFlagID(ctx, flag.ID, nil); err != nil {
+			return fmt.Errorf("update flag rules: %w", err)
 		}
+		return nil
 	}
-
-	if err := s.Store.Update(ctx, flag); err != nil {
-		return nil, fmt.Errorf("update flag: %w", err)
+	ruleType, err := validateRulesSameType(rules)
+	if err != nil {
+		return err
 	}
-
-	return flagToModel(flag), nil
+	if flag.RolloutStrategy != RolloutStrategyNone && flag.RolloutStrategy != ruleTypeToStrategy(ruleType) {
+		return strategyMismatchError(flag.RolloutStrategy)
+	}
+	flag.RolloutStrategy = ruleTypeToStrategy(ruleType)
+	if err := s.Store.ReplaceRulesByFlagID(ctx, flag.ID, ruleInputsToRules(flag.ID, rules)); err != nil {
+		return fmt.Errorf("update flag rules: %w", err)
+	}
+	return nil
 }
 
 // EvaluateFlag returns whether the flag is enabled for the given evaluation context.
@@ -129,14 +151,11 @@ func (s *Service) EvaluateFlag(ctx context.Context, key string, evalCtx model.Ev
 	return evaluateRulesByStrategy(flag.RolloutStrategy, evalCtx.UserID, evalCtx.Email, rules)
 }
 
-// DeleteFlag removes a flag by key and environment. Rules are removed by DB CASCADE.
-func (s *Service) DeleteFlag(ctx context.Context, key, environment string) (bool, error) {
-	flag, err := s.Store.GetByKeyAndEnvironment(ctx, key, environment)
+// DeleteFlag removes a flag by key and deployment stage. Rules are removed by DB CASCADE.
+func (s *Service) DeleteFlag(ctx context.Context, key string, env DeploymentStage) (bool, error) {
+	flag, err := s.getFlagOrErr(ctx, key, env)
 	if err != nil {
-		return false, fmt.Errorf("get flag: %w", err)
-	}
-	if flag == nil {
-		return false, ErrNotFound
+		return false, err
 	}
 	if err := s.Store.Delete(ctx, flag.ID); err != nil {
 		return false, fmt.Errorf("delete flag: %w", err)
@@ -144,8 +163,8 @@ func (s *Service) DeleteFlag(ctx context.Context, key, environment string) (bool
 	return true, nil
 }
 
-func (s *Service) ensureUniqueFlag(ctx context.Context, key, environment string) error {
-	existing, err := s.Store.GetByKeyAndEnvironment(ctx, key, environment)
+func (s *Service) ensureUniqueFlag(ctx context.Context, key string, env DeploymentStage) error {
+	existing, err := s.Store.GetByKeyAndEnvironment(ctx, key, env)
 	if err != nil {
 		return fmt.Errorf("check existing flag: %w", err)
 	}
@@ -164,7 +183,7 @@ func flagToModel(flag *Flag) *model.FeatureFlag {
 		Key:             flag.Key,
 		Description:     flag.Description,
 		Enabled:         flag.Enabled,
-		Environment:     flag.Environment,
+		Environment:     string(flag.Environment),
 		RolloutStrategy: rolloutStrategyToModel(flag.RolloutStrategy),
 	}
 }
@@ -254,34 +273,42 @@ func strategyMismatchError(current RolloutStrategy) error {
 
 func evaluateRulesByStrategy(strategy RolloutStrategy, userID string, email *string, rules []*Rule) (bool, error) {
 	if strategy == RolloutStrategyPercentage {
-		for _, rule := range rules {
-			if rule.Type != RuleTypePercentage {
-				continue
-			}
-			enabled, err := evaluatePercentageRule(userID, rule.Value)
-			if err != nil {
-				return false, err
-			}
-			return enabled, nil
-		}
-		return true, nil
+		return evaluatePercentageRules(userID, rules)
 	}
 	if strategy == RolloutStrategyAttribute {
-		for _, rule := range rules {
-			if rule.Type != RuleTypeAttribute {
-				continue
-			}
-			enabled, err := evaluateAttributeRule(userID, email, rule.Value)
-			if err != nil {
-				return false, err
-			}
-			if enabled {
-				return true, nil
-			}
-		}
-		return false, nil
+		return evaluateAttributeRules(userID, email, rules)
 	}
 	return true, nil
+}
+
+func evaluatePercentageRules(userID string, rules []*Rule) (bool, error) {
+	for _, rule := range rules {
+		if rule.Type != RuleTypePercentage {
+			continue
+		}
+		enabled, err := evaluatePercentageRule(userID, rule.Value)
+		if err != nil {
+			return false, err
+		}
+		return enabled, nil
+	}
+	return true, nil
+}
+
+func evaluateAttributeRules(userID string, email *string, rules []*Rule) (bool, error) {
+	for _, rule := range rules {
+		if rule.Type != RuleTypeAttribute {
+			continue
+		}
+		enabled, err := evaluateAttributeRule(userID, email, rule.Value)
+		if err != nil {
+			return false, err
+		}
+		if enabled {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 func evaluatePercentageRule(userID, value string) (bool, error) {

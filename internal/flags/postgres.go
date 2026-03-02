@@ -44,16 +44,16 @@ func (p *PostgresStore) Create(ctx context.Context, flag *Flag) (*Flag, error) {
 	return &out, nil
 }
 
-// GetByKeyAndEnvironment returns the flag for the given key and environment,
+// GetByKeyAndEnvironment returns the flag for the given key and deployment stage,
 // or (nil, nil) if not found. Returns an error only on DB failure.
-func (p *PostgresStore) GetByKeyAndEnvironment(ctx context.Context, key, environment string) (*Flag, error) {
+func (p *PostgresStore) GetByKeyAndEnvironment(ctx context.Context, key string, env DeploymentStage) (*Flag, error) {
 	var f Flag
 	var desc sql.NullString
 	var strategy string
 	err := p.conn.QueryRowContext(ctx,
 		`SELECT id, key, description, enabled, environment, rollout_strategy, created_at
 		 FROM feature_flags WHERE key = $1 AND environment = $2`,
-		key, environment,
+		key, env,
 	).Scan(&f.ID, &f.Key, &desc, &f.Enabled, &f.Environment, &strategy, &f.CreatedAt)
 	if err == sql.ErrNoRows {
 		return nil, nil

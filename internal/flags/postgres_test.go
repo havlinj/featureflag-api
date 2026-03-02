@@ -57,7 +57,7 @@ func TestPostgresStore_Create_happy_path(t *testing.T) {
 	truncateFlags(t, database)
 	store := NewPostgresStore(database.Conn())
 	ctx := context.Background()
-	flag := &Flag{Key: "create-key", Description: strPtr("d"), Enabled: false, Environment: "dev"}
+	flag := &Flag{Key: "create-key", Description: strPtr("d"), Enabled: false, Environment: DeploymentStageDev, RolloutStrategy: RolloutStrategyNone}
 
 	created, err := store.Create(ctx, flag)
 
@@ -70,7 +70,7 @@ func TestPostgresStore_Create_happy_path(t *testing.T) {
 	if created.CreatedAt.IsZero() {
 		t.Error("expected CreatedAt to be set")
 	}
-	if created.Key != "create-key" || created.Environment != "dev" || created.Enabled {
+	if created.Key != "create-key" || created.Environment != DeploymentStageDev || created.Enabled {
 		t.Errorf("unexpected flag: %+v", created)
 	}
 }
@@ -81,7 +81,7 @@ func TestPostgresStore_Create_duplicate_key_returns_ErrDuplicateKey(t *testing.T
 	truncateFlags(t, database)
 	store := NewPostgresStore(database.Conn())
 	ctx := context.Background()
-	flag := &Flag{Key: "dup-key", Environment: "dev", Enabled: false}
+	flag := &Flag{Key: "dup-key", Environment: DeploymentStageDev, Enabled: false, RolloutStrategy: RolloutStrategyNone}
 	_, _ = store.Create(ctx, flag)
 
 	_, err := store.Create(ctx, flag)
@@ -100,13 +100,13 @@ func TestPostgresStore_GetByKeyAndEnvironment_happy_path(t *testing.T) {
 	truncateFlags(t, database)
 	store := NewPostgresStore(database.Conn())
 	ctx := context.Background()
-	flag := &Flag{Key: "get-key", Description: strPtr("desc"), Enabled: true, Environment: "staging"}
+	flag := &Flag{Key: "get-key", Description: strPtr("desc"), Enabled: true, Environment: DeploymentStageStaging, RolloutStrategy: RolloutStrategyNone}
 	created, err := store.Create(ctx, flag)
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
 
-	got, err := store.GetByKeyAndEnvironment(ctx, "get-key", "staging")
+	got, err := store.GetByKeyAndEnvironment(ctx, "get-key", DeploymentStageStaging)
 
 	if err != nil {
 		t.Fatalf("GetByKeyAndEnvironment: %v", err)
@@ -129,7 +129,7 @@ func TestPostgresStore_GetByKeyAndEnvironment_not_found_returns_nil_nil(t *testi
 	store := NewPostgresStore(database.Conn())
 	ctx := context.Background()
 
-	got, err := store.GetByKeyAndEnvironment(ctx, "nonexistent", "dev")
+	got, err := store.GetByKeyAndEnvironment(ctx, "nonexistent", DeploymentStageDev)
 
 	if err != nil {
 		t.Fatalf("GetByKeyAndEnvironment: %v", err)
@@ -145,7 +145,7 @@ func TestPostgresStore_Update_happy_path(t *testing.T) {
 	truncateFlags(t, database)
 	store := NewPostgresStore(database.Conn())
 	ctx := context.Background()
-	created, _ := store.Create(ctx, &Flag{Key: "up-key", Environment: "dev", Enabled: false})
+	created, _ := store.Create(ctx, &Flag{Key: "up-key", Environment: DeploymentStageDev, Enabled: false, RolloutStrategy: RolloutStrategyNone})
 	created.Enabled = true
 	created.Description = strPtr("updated")
 
@@ -154,7 +154,7 @@ func TestPostgresStore_Update_happy_path(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Update: %v", err)
 	}
-	got, _ := store.GetByKeyAndEnvironment(ctx, "up-key", "dev")
+	got, _ := store.GetByKeyAndEnvironment(ctx, "up-key", DeploymentStageDev)
 	if got == nil || !got.Enabled {
 		t.Errorf("expected enabled after update: %+v", got)
 	}
@@ -169,7 +169,7 @@ func TestPostgresStore_Update_not_found_returns_ErrNotFound(t *testing.T) {
 	truncateFlags(t, database)
 	store := NewPostgresStore(database.Conn())
 	ctx := context.Background()
-	flag := &Flag{ID: "00000000-0000-0000-0000-000000000000", Key: "x", Environment: "dev", Enabled: true}
+	flag := &Flag{ID: "00000000-0000-0000-0000-000000000000", Key: "x", Environment: DeploymentStageDev, Enabled: true, RolloutStrategy: RolloutStrategyNone}
 
 	err := store.Update(ctx, flag)
 
@@ -187,7 +187,7 @@ func TestPostgresStore_GetRulesByFlagID_happy_path(t *testing.T) {
 	truncateFlags(t, database)
 	store := NewPostgresStore(database.Conn())
 	ctx := context.Background()
-	created, _ := store.Create(ctx, &Flag{Key: "rule-key", Environment: "dev", Enabled: false})
+	created, _ := store.Create(ctx, &Flag{Key: "rule-key", Environment: DeploymentStageDev, Enabled: false, RolloutStrategy: RolloutStrategyNone})
 	_, err := database.Conn().ExecContext(ctx,
 		"INSERT INTO flag_rules (flag_id, type, value) VALUES ($1, $2, $3)",
 		created.ID, "percentage", "30",
@@ -212,7 +212,7 @@ func TestPostgresStore_GetRulesByFlagID_no_rules_returns_empty_slice(t *testing.
 	truncateFlags(t, database)
 	store := NewPostgresStore(database.Conn())
 	ctx := context.Background()
-	created, _ := store.Create(ctx, &Flag{Key: "norules", Environment: "dev", Enabled: false})
+	created, _ := store.Create(ctx, &Flag{Key: "norules", Environment: DeploymentStageDev, Enabled: false, RolloutStrategy: RolloutStrategyNone})
 
 	rules, err := store.GetRulesByFlagID(ctx, created.ID)
 

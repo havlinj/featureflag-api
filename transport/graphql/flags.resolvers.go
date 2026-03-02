@@ -11,6 +11,7 @@ import (
 	"github.com/jan-havlin-dev/featureflag-api/graph"
 	"github.com/jan-havlin-dev/featureflag-api/graph/model"
 	"github.com/jan-havlin-dev/featureflag-api/internal/auth"
+	"github.com/jan-havlin-dev/featureflag-api/internal/flags"
 )
 
 // CreateFlag is the resolver for the createFlag field.
@@ -34,7 +35,7 @@ func (r *mutationResolver) DeleteFlag(ctx context.Context, key string, environme
 	if _, err := auth.RequireRole(ctx, "admin", "developer"); err != nil {
 		return false, err
 	}
-	return r.Flags.DeleteFlag(ctx, key, environment)
+	return r.Flags.DeleteFlag(ctx, key, flags.DeploymentStage(environment))
 }
 
 // EvaluateFlag is the resolver for the evaluateFlag field.

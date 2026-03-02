@@ -23,8 +23,9 @@ type Store struct {
 	}
 	CreateReturns               []CreateResult
 	GetByKeyAndEnvironmentCalls []struct {
-		Ctx      context.Context
-		Key, Env string
+		Ctx context.Context
+		Key string
+		Env flags.DeploymentStage
 	}
 	GetByKeyAndEnvironmentReturns []GetByKeyResult
 	UpdateCalls                   []struct {
@@ -87,12 +88,13 @@ func (m *Store) Create(ctx context.Context, flag *flags.Flag) (*flags.Flag, erro
 	return out, err
 }
 
-func (m *Store) GetByKeyAndEnvironment(ctx context.Context, key, environment string) (*flags.Flag, error) {
+func (m *Store) GetByKeyAndEnvironment(ctx context.Context, key string, env flags.DeploymentStage) (*flags.Flag, error) {
 	m.mu.Lock()
 	m.GetByKeyAndEnvironmentCalls = append(m.GetByKeyAndEnvironmentCalls, struct {
-		Ctx      context.Context
-		Key, Env string
-	}{ctx, key, environment})
+		Ctx context.Context
+		Key string
+		Env flags.DeploymentStage
+	}{ctx, key, env})
 	var out *flags.Flag
 	var err error
 	if len(m.GetByKeyAndEnvironmentReturns) > 0 {

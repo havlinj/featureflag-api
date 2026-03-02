@@ -30,7 +30,7 @@ func TestService_CreateFlag_happy_path(t *testing.T) {
 		Key:         "test-flag",
 		Description: stringPtr("desc"),
 		Enabled:     false,
-		Environment: "dev",
+		Environment: flags.DeploymentStageDev,
 		CreatedAt:   time.Now(),
 	}
 	store.CreateReturns = []mock.CreateResult{
@@ -51,7 +51,7 @@ func TestService_CreateFlag_happy_path(t *testing.T) {
 	if got == nil {
 		t.Fatal("expected non-nil FeatureFlag")
 	}
-	if got.ID != "id-1" || got.Key != "test-flag" || got.Enabled != false || got.Environment != "dev" {
+	if got.ID != "id-1" || got.Key != "test-flag" || got.Enabled != false || got.Environment != string(flags.DeploymentStageDev) {
 		t.Errorf("got %+v", got)
 	}
 	if len(store.GetByKeyAndEnvironmentCalls) != 1 {
@@ -71,7 +71,7 @@ func TestService_CreateFlag_happy_path(t *testing.T) {
 func TestService_CreateFlag_already_exists_returns_ErrDuplicateKey(t *testing.T) {
 	ctx := context.Background()
 	store := &mock.Store{}
-	existing := &flags.Flag{ID: "existing", Key: "test-flag", Environment: "dev"}
+	existing := &flags.Flag{ID: "existing", Key: "test-flag", Environment: flags.DeploymentStageDev}
 	store.GetByKeyAndEnvironmentReturns = []mock.GetByKeyResult{
 		{Flag: existing, Err: nil},
 	}
@@ -142,7 +142,7 @@ func TestService_CreateFlag_create_error_returns_wrapped_error(t *testing.T) {
 func TestService_UpdateFlag_happy_path(t *testing.T) {
 	ctx := context.Background()
 	store := &mock.Store{}
-	flag := &flags.Flag{ID: "f1", Key: "test-flag", Enabled: false, Environment: "dev"}
+	flag := &flags.Flag{ID: "f1", Key: "test-flag", Enabled: false, Environment: flags.DeploymentStageDev}
 	store.GetByKeyAndEnvironmentReturns = []mock.GetByKeyResult{
 		{Flag: flag, Err: nil},
 	}
@@ -164,7 +164,7 @@ func TestService_UpdateFlag_happy_path(t *testing.T) {
 	if len(store.GetByKeyAndEnvironmentCalls) != 1 {
 		t.Errorf("GetByKeyAndEnvironment calls: want 1, got %d", len(store.GetByKeyAndEnvironmentCalls))
 	}
-	if store.GetByKeyAndEnvironmentCalls[0].Env != "dev" {
+	if store.GetByKeyAndEnvironmentCalls[0].Env != flags.DeploymentStageDev {
 		t.Errorf("UpdateFlag should use defaultEnvironment dev, got %q", store.GetByKeyAndEnvironmentCalls[0].Env)
 	}
 	if len(store.UpdateCalls) != 1 {
@@ -218,7 +218,7 @@ func TestService_UpdateFlag_update_error_returns_wrapped_error(t *testing.T) {
 	ctx := context.Background()
 	store := &mock.Store{}
 	store.GetByKeyAndEnvironmentReturns = []mock.GetByKeyResult{
-		{Flag: &flags.Flag{ID: "f1", Key: "test-flag", Environment: "dev"}, Err: nil},
+		{Flag: &flags.Flag{ID: "f1", Key: "test-flag", Environment: flags.DeploymentStageDev}, Err: nil},
 	}
 	wantErr := errors.New("Update failed")
 	store.UpdateReturns = []error{wantErr}
@@ -277,7 +277,7 @@ func TestService_EvaluateFlag_flag_disabled_returns_false_nil(t *testing.T) {
 	ctx := context.Background()
 	store := &mock.Store{}
 	store.GetByKeyAndEnvironmentReturns = []mock.GetByKeyResult{
-		{Flag: &flags.Flag{ID: "f1", Key: "off-flag", Enabled: false, Environment: "dev", RolloutStrategy: flags.RolloutStrategyNone}, Err: nil},
+		{Flag: &flags.Flag{ID: "f1", Key: "off-flag", Enabled: false, Environment: flags.DeploymentStageDev, RolloutStrategy: flags.RolloutStrategyNone}, Err: nil},
 	}
 	svc := flags.NewService(store)
 
@@ -298,7 +298,7 @@ func TestService_EvaluateFlag_enabled_no_rules_returns_true_nil(t *testing.T) {
 	ctx := context.Background()
 	store := &mock.Store{}
 	store.GetByKeyAndEnvironmentReturns = []mock.GetByKeyResult{
-		{Flag: &flags.Flag{ID: "f1", Key: "on-flag", Enabled: true, Environment: "dev", RolloutStrategy: flags.RolloutStrategyNone}, Err: nil},
+		{Flag: &flags.Flag{ID: "f1", Key: "on-flag", Enabled: true, Environment: flags.DeploymentStageDev, RolloutStrategy: flags.RolloutStrategyNone}, Err: nil},
 	}
 	store.GetRulesByFlagIDReturns = []mock.GetRulesResult{
 		{Rules: nil, Err: nil},
@@ -319,7 +319,7 @@ func TestService_EvaluateFlag_percentage_0_returns_false(t *testing.T) {
 	ctx := context.Background()
 	store := &mock.Store{}
 	store.GetByKeyAndEnvironmentReturns = []mock.GetByKeyResult{
-		{Flag: &flags.Flag{ID: "f1", Key: "pct", Enabled: true, Environment: "dev", RolloutStrategy: flags.RolloutStrategyPercentage}, Err: nil},
+		{Flag: &flags.Flag{ID: "f1", Key: "pct", Enabled: true, Environment: flags.DeploymentStageDev, RolloutStrategy: flags.RolloutStrategyPercentage}, Err: nil},
 	}
 	store.GetRulesByFlagIDReturns = []mock.GetRulesResult{
 		{Rules: []*flags.Rule{{Type: flags.RuleTypePercentage, Value: "0"}}, Err: nil},
@@ -340,7 +340,7 @@ func TestService_EvaluateFlag_percentage_100_returns_true(t *testing.T) {
 	ctx := context.Background()
 	store := &mock.Store{}
 	store.GetByKeyAndEnvironmentReturns = []mock.GetByKeyResult{
-		{Flag: &flags.Flag{ID: "f1", Key: "pct", Enabled: true, Environment: "dev", RolloutStrategy: flags.RolloutStrategyPercentage}, Err: nil},
+		{Flag: &flags.Flag{ID: "f1", Key: "pct", Enabled: true, Environment: flags.DeploymentStageDev, RolloutStrategy: flags.RolloutStrategyPercentage}, Err: nil},
 	}
 	store.GetRulesByFlagIDReturns = []mock.GetRulesResult{
 		{Rules: []*flags.Rule{{Type: flags.RuleTypePercentage, Value: "100"}}, Err: nil},
@@ -360,7 +360,7 @@ func TestService_EvaluateFlag_percentage_100_returns_true(t *testing.T) {
 func TestService_EvaluateFlag_percentage_deterministic_same_user_same_result(t *testing.T) {
 	ctx := context.Background()
 	store := &mock.Store{}
-	flag := &flags.Flag{ID: "f1", Key: "pct", Enabled: true, Environment: "dev", RolloutStrategy: flags.RolloutStrategyPercentage}
+	flag := &flags.Flag{ID: "f1", Key: "pct", Enabled: true, Environment: flags.DeploymentStageDev, RolloutStrategy: flags.RolloutStrategyPercentage}
 	rules := []*flags.Rule{{Type: flags.RuleTypePercentage, Value: "50"}}
 	store.GetByKeyAndEnvironmentReturns = []mock.GetByKeyResult{
 		{Flag: flag, Err: nil},
@@ -391,7 +391,7 @@ func TestService_EvaluateFlag_percentage_invalid_value_returns_ErrInvalidRule(t 
 	ctx := context.Background()
 	store := &mock.Store{}
 	store.GetByKeyAndEnvironmentReturns = []mock.GetByKeyResult{
-		{Flag: &flags.Flag{ID: "f1", Key: "pct", Enabled: true, Environment: "dev", RolloutStrategy: flags.RolloutStrategyPercentage}, Err: nil},
+		{Flag: &flags.Flag{ID: "f1", Key: "pct", Enabled: true, Environment: flags.DeploymentStageDev, RolloutStrategy: flags.RolloutStrategyPercentage}, Err: nil},
 	}
 	store.GetRulesByFlagIDReturns = []mock.GetRulesResult{
 		{Rules: []*flags.Rule{{Type: flags.RuleTypePercentage, Value: "x"}}, Err: nil},
@@ -409,7 +409,7 @@ func TestService_EvaluateFlag_percentage_out_of_range_returns_ErrInvalidRule(t *
 	ctx := context.Background()
 	store := &mock.Store{}
 	store.GetByKeyAndEnvironmentReturns = []mock.GetByKeyResult{
-		{Flag: &flags.Flag{ID: "f1", Key: "pct", Enabled: true, Environment: "dev", RolloutStrategy: flags.RolloutStrategyPercentage}, Err: nil},
+		{Flag: &flags.Flag{ID: "f1", Key: "pct", Enabled: true, Environment: flags.DeploymentStageDev, RolloutStrategy: flags.RolloutStrategyPercentage}, Err: nil},
 	}
 	store.GetRulesByFlagIDReturns = []mock.GetRulesResult{
 		{Rules: []*flags.Rule{{Type: flags.RuleTypePercentage, Value: "150"}}, Err: nil},
@@ -427,7 +427,7 @@ func TestService_EvaluateFlag_attribute_rule_match_returns_true(t *testing.T) {
 	ctx := context.Background()
 	store := &mock.Store{}
 	store.GetByKeyAndEnvironmentReturns = []mock.GetByKeyResult{
-		{Flag: &flags.Flag{ID: "f1", Key: "attr", Enabled: true, Environment: "dev", RolloutStrategy: flags.RolloutStrategyAttribute}, Err: nil},
+		{Flag: &flags.Flag{ID: "f1", Key: "attr", Enabled: true, Environment: flags.DeploymentStageDev, RolloutStrategy: flags.RolloutStrategyAttribute}, Err: nil},
 	}
 	store.GetRulesByFlagIDReturns = []mock.GetRulesResult{
 		{Rules: []*flags.Rule{{Type: flags.RuleTypeAttribute, Value: `{"attribute":"userId","op":"in","values":["user-1"]}`}}, Err: nil},
@@ -467,7 +467,7 @@ func TestService_EvaluateFlag_get_rules_error_returns_error(t *testing.T) {
 	ctx := context.Background()
 	store := &mock.Store{}
 	store.GetByKeyAndEnvironmentReturns = []mock.GetByKeyResult{
-		{Flag: &flags.Flag{ID: "f1", Key: "key", Enabled: true, Environment: "dev", RolloutStrategy: flags.RolloutStrategyPercentage}, Err: nil},
+		{Flag: &flags.Flag{ID: "f1", Key: "key", Enabled: true, Environment: flags.DeploymentStageDev, RolloutStrategy: flags.RolloutStrategyPercentage}, Err: nil},
 	}
 	wantErr := errors.New("GetRulesByFlagID failed")
 	store.GetRulesByFlagIDReturns = []mock.GetRulesResult{
@@ -498,7 +498,7 @@ func TestService_EvaluateFlag_uses_default_environment_dev(t *testing.T) {
 	if len(store.GetByKeyAndEnvironmentCalls) != 1 {
 		t.Fatalf("expected 1 GetByKeyAndEnvironment call, got %d", len(store.GetByKeyAndEnvironmentCalls))
 	}
-	if store.GetByKeyAndEnvironmentCalls[0].Env != "dev" {
+	if store.GetByKeyAndEnvironmentCalls[0].Env != flags.DeploymentStageDev {
 		t.Errorf("EvaluateFlag should use defaultEnvironment dev, got %q", store.GetByKeyAndEnvironmentCalls[0].Env)
 	}
 }
@@ -510,7 +510,7 @@ func TestService_CreateFlag_with_rules_sets_strategy_and_replaces_rules(t *testi
 		{Flag: nil, Err: nil},
 	}
 	created := &flags.Flag{
-		ID: "id-1", Key: "f", Environment: "dev", RolloutStrategy: flags.RolloutStrategyPercentage,
+		ID: "id-1", Key: "f", Environment: flags.DeploymentStageDev, RolloutStrategy: flags.RolloutStrategyPercentage,
 		CreatedAt: time.Now(),
 	}
 	store.CreateReturns = []mock.CreateResult{
@@ -570,7 +570,7 @@ func TestService_DeleteFlag_found_returns_true(t *testing.T) {
 	ctx := context.Background()
 	store := &mock.Store{}
 	store.GetByKeyAndEnvironmentReturns = []mock.GetByKeyResult{
-		{Flag: &flags.Flag{ID: "f1", Key: "x", Environment: "dev"}, Err: nil},
+		{Flag: &flags.Flag{ID: "f1", Key: "x", Environment: flags.DeploymentStageDev}, Err: nil},
 	}
 	store.DeleteReturns = []error{nil}
 	svc := flags.NewService(store)
@@ -613,7 +613,7 @@ func TestService_EvaluateFlag_attribute_no_match_returns_false(t *testing.T) {
 	ctx := context.Background()
 	store := &mock.Store{}
 	store.GetByKeyAndEnvironmentReturns = []mock.GetByKeyResult{
-		{Flag: &flags.Flag{ID: "f1", Key: "attr", Enabled: true, Environment: "dev", RolloutStrategy: flags.RolloutStrategyAttribute}, Err: nil},
+		{Flag: &flags.Flag{ID: "f1", Key: "attr", Enabled: true, Environment: flags.DeploymentStageDev, RolloutStrategy: flags.RolloutStrategyAttribute}, Err: nil},
 	}
 	store.GetRulesByFlagIDReturns = []mock.GetRulesResult{
 		{Rules: []*flags.Rule{{Type: flags.RuleTypeAttribute, Value: `{"attribute":"userId","op":"in","values":["other-user"]}`}}, Err: nil},
@@ -664,7 +664,7 @@ func TestService_CreateFlag_ReplaceRulesByFlagID_error_returns_wrapped_error(t *
 	store.GetByKeyAndEnvironmentReturns = []mock.GetByKeyResult{
 		{Flag: nil, Err: nil},
 	}
-	created := &flags.Flag{ID: "id-1", Key: "f", Environment: "dev", RolloutStrategy: flags.RolloutStrategyPercentage, CreatedAt: time.Now()}
+	created := &flags.Flag{ID: "id-1", Key: "f", Environment: flags.DeploymentStageDev, RolloutStrategy: flags.RolloutStrategyPercentage, CreatedAt: time.Now()}
 	store.CreateReturns = []mock.CreateResult{
 		{Flag: created, Err: nil},
 	}
@@ -691,7 +691,7 @@ func TestService_UpdateFlag_rules_empty_ReplaceRulesByFlagID_error_returns_wrapp
 	ctx := context.Background()
 	store := &mock.Store{}
 	store.GetByKeyAndEnvironmentReturns = []mock.GetByKeyResult{
-		{Flag: &flags.Flag{ID: "f1", Key: "f", Enabled: true, Environment: "dev", RolloutStrategy: flags.RolloutStrategyPercentage}, Err: nil},
+		{Flag: &flags.Flag{ID: "f1", Key: "f", Enabled: true, Environment: flags.DeploymentStageDev, RolloutStrategy: flags.RolloutStrategyPercentage}, Err: nil},
 	}
 	wantErr := errors.New("ReplaceRulesByFlagID failed when clearing rules")
 	store.ReplaceRulesByFlagIDReturns = []error{wantErr}
@@ -713,7 +713,7 @@ func TestService_UpdateFlag_rules_strategy_mismatch_returns_ErrRulesStrategyMism
 	ctx := context.Background()
 	store := &mock.Store{}
 	store.GetByKeyAndEnvironmentReturns = []mock.GetByKeyResult{
-		{Flag: &flags.Flag{ID: "f1", Key: "f", Enabled: true, Environment: "dev", RolloutStrategy: flags.RolloutStrategyPercentage}, Err: nil},
+		{Flag: &flags.Flag{ID: "f1", Key: "f", Enabled: true, Environment: flags.DeploymentStageDev, RolloutStrategy: flags.RolloutStrategyPercentage}, Err: nil},
 	}
 	store.UpdateReturns = []error{nil}
 	svc := flags.NewService(store)
@@ -740,7 +740,7 @@ func TestService_UpdateFlag_ReplaceRulesByFlagID_error_returns_wrapped_error(t *
 	ctx := context.Background()
 	store := &mock.Store{}
 	store.GetByKeyAndEnvironmentReturns = []mock.GetByKeyResult{
-		{Flag: &flags.Flag{ID: "f1", Key: "f", Enabled: true, Environment: "dev", RolloutStrategy: flags.RolloutStrategyPercentage}, Err: nil},
+		{Flag: &flags.Flag{ID: "f1", Key: "f", Enabled: true, Environment: flags.DeploymentStageDev, RolloutStrategy: flags.RolloutStrategyPercentage}, Err: nil},
 	}
 	wantErr := errors.New("ReplaceRulesByFlagID failed on UpdateFlag")
 	store.ReplaceRulesByFlagIDReturns = []error{wantErr}
@@ -766,7 +766,7 @@ func TestService_DeleteFlag_StoreDelete_error_returns_wrapped_error(t *testing.T
 	ctx := context.Background()
 	store := &mock.Store{}
 	store.GetByKeyAndEnvironmentReturns = []mock.GetByKeyResult{
-		{Flag: &flags.Flag{ID: "f1", Key: "x", Environment: "dev"}, Err: nil},
+		{Flag: &flags.Flag{ID: "f1", Key: "x", Environment: flags.DeploymentStageDev}, Err: nil},
 	}
 	wantErr := errors.New("Store.Delete failed")
 	store.DeleteReturns = []error{wantErr}

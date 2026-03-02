@@ -19,9 +19,9 @@ type Store interface {
 	// ID and CreatedAt are typically set by the implementation.
 	Create(ctx context.Context, flag *Flag) (*Flag, error)
 
-	// GetByKeyAndEnvironment returns the flag for the given key and environment,
+	// GetByKeyAndEnvironment returns the flag for the given key and deployment stage,
 	// or nil and no error if not found. Error only for DB failures.
-	GetByKeyAndEnvironment(ctx context.Context, key, environment string) (*Flag, error)
+	GetByKeyAndEnvironment(ctx context.Context, key string, env DeploymentStage) (*Flag, error)
 
 	// Update updates an existing flag by ID (e.g. Enabled, Description, RolloutStrategy).
 	Update(ctx context.Context, flag *Flag) error
