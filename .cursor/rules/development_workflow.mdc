@@ -224,7 +224,26 @@ No milestone is complete without explicit review approval.
 
 ---
 
-## Phase 2: Experiments Integration
+## Phase 2: Local Test Scripts & Binary Smoke Test
+
+**Objectives:**
+- Add **local** Bash scripts in `scripts/` to run checks and tests from one place (no CI/CD or GitHub integration).
+- Optionally one **central script** that runs the full test suite (check + unit + integration) for quick local validation.
+- Add **one script** that runs a test against the **real application binary**: build the binary, start it, call the API (e.g. GraphQL over HTTP via `curl`), assert response, then tear down — so it is clear that the detailed integration tests match what is actually inside the built binary.
+- Use **Bash** for all scripts.
+
+**Key Deliverables:**
+- **Scripts (Bash)** in `scripts/`:
+  - `check.sh` — lint/format/vet (e.g. `gofmt -l`, `go vet ./...`).
+  - `test_unit.sh` — run unit tests (e.g. `go test ./internal/... ./transport/...`).
+  - `test_integration.sh` — run existing integration tests (`go test -tags=integration ./test/integration/...`); assumes DB available (e.g. local Postgres or Docker).
+  - `build.sh` — build the application binary (e.g. into `./bin/...`).
+  - **One central script** (e.g. `test_all.sh`) that runs check + unit + integration in sequence; optional but recommended for “run everything locally”.
+  - **One binary smoke script** (e.g. `test_binary_smoke.sh`): build binary, start DB if needed, start the binary, run **one** shell-based smoke scenario (e.g. create user → create flag → evaluate) over HTTP, assert results, then tear down.
+
+---
+
+## Phase 3: Experiments Integration
 
 **Objectives:**
 - Add Experiments module across all layers.
@@ -246,7 +265,7 @@ No milestone is complete without explicit review approval.
 
 ---
 
-## Phase 3: Audit Logging
+## Phase 4: Audit Logging
 
 **Objectives:**
 - Implement audit logging for all critical operations.
