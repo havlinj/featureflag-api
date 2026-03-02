@@ -112,12 +112,12 @@ func TestFlagsAPI_GraphQLOverHTTPS(t *testing.T) {
 
 	// 3) evaluateFlag query – flag is enabled, no rules → true
 	evalResp, err := client.DoRequest(`
-		query EvaluateFlag($key: String!, $context: EvaluationContextInput!) {
-			evaluateFlag(key: $key, context: $context)
+		query EvaluateFlag($key: String!, $evaluationContext: EvaluationContextInput!) {
+			evaluateFlag(key: $key, evaluationContext: $evaluationContext)
 		}
 	`, map[string]interface{}{
 		"key": "test-flag",
-		"context": map[string]interface{}{
+		"evaluationContext": map[string]interface{}{
 			"userId": "user-1",
 		},
 	})

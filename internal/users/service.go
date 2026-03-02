@@ -23,17 +23,9 @@ func (s *Service) CreateUser(ctx context.Context, input model.CreateUserInput) (
 	if err := s.ensureUniqueEmail(ctx, input.Email); err != nil {
 		return nil, err
 	}
-	role, err := parseRole(input.Role)
-	if err != nil {
+	user := &User{Email: input.Email, Role: roleFromModel(input.Role)}
+	if err := setPasswordIfProvided(user, input.Password); err != nil {
 		return nil, err
-	}
-	user := &User{Email: input.Email, Role: role}
-	if input.Password != nil && *input.Password != "" {
-		hash, err := auth.HashPassword(*input.Password)
-		if err != nil {
-			return nil, fmt.Errorf("hash password: %w", err)
-		}
-		user.PasswordHash = &hash
 	}
 	created, err := s.Store.Create(ctx, user)
 	if err != nil {
@@ -105,19 +97,24 @@ func applyUpdateFieldsToUser(u *User, input model.UpdateUserInput) error {
 		u.Email = *input.Email
 	}
 	if input.Role != nil {
-		role, err := parseRole(*input.Role)
-		if err != nil {
-			return err
-		}
-		u.Role = role
+		u.Role = roleFromModel(*input.Role)
 	}
-	if input.Password != nil && *input.Password != "" {
-		hash, err := auth.HashPassword(*input.Password)
-		if err != nil {
-			return fmt.Errorf("hash password: %w", err)
-		}
-		u.PasswordHash = &hash
+	if err := setPasswordIfProvided(u, input.Password); err != nil {
+		return err
 	}
+	return nil
+}
+
+// setPasswordIfProvided hashes password and sets u.PasswordHash when password is non-nil and non-empty.
+func setPasswordIfProvided(u *User, password *string) error {
+	if password == nil || *password == "" {
+		return nil
+	}
+	hash, err := auth.HashPassword(*password)
+	if err != nil {
+		return fmt.Errorf("hash password: %w", err)
+	}
+	u.PasswordHash = &hash
 	return nil
 }
 
@@ -143,17 +140,14 @@ func (s *Service) ensureUniqueEmail(ctx context.Context, email string) error {
 	return nil
 }
 
-func parseRole(s string) (Role, error) {
-	switch s {
-	case "admin":
-		return RoleAdmin, nil
-	case "developer":
-		return RoleDeveloper, nil
-	case "viewer":
-		return RoleViewer, nil
-	default:
-		return "", fmt.Errorf("users: invalid role %q", s)
-	}
+// roleFromModel maps GraphQL enum to domain Role. Values match (admin, developer, viewer).
+func roleFromModel(m model.Role) Role {
+	return Role(m)
+}
+
+// roleToModel maps domain Role to GraphQL enum for API responses.
+func roleToModel(r Role) model.Role {
+	return model.Role(r)
 }
 
 func userToModel(u *User) *model.User {
@@ -163,7 +157,7 @@ func userToModel(u *User) *model.User {
 	return &model.User{
 		ID:        u.ID,
 		Email:     u.Email,
-		Role:      string(u.Role),
+		Role:      roleToModel(u.Role),
 		CreatedAt: u.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
 	}
 }

@@ -43,7 +43,7 @@ input EvaluationContextInput {
 }
 
 type Query {
-  evaluateFlag(key: String!, context: EvaluationContextInput!): Boolean!
+  evaluateFlag(key: String!, evaluationContext: EvaluationContextInput!): Boolean!
 }
 
 type Mutation {

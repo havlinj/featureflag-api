@@ -1,20 +1,26 @@
+enum Role {
+  admin
+  developer
+  viewer
+}
+
 type User {
   id: ID!
   email: String!
-  role: String!
+  role: Role!
   createdAt: String!
 }
 
 input CreateUserInput {
   email: String!
-  role: String!
+  role: Role!
   password: String
 }
 
 input UpdateUserInput {
   id: ID!
   email: String
-  role: String
+  role: Role
   password: String
 }
 

@@ -24,14 +24,14 @@ func TestService_CreateUser_happy_path(t *testing.T) {
 		{User: created, Err: nil},
 	}
 	svc := users.NewService(store)
-	input := model.CreateUserInput{Email: "a@b.com", Role: "admin"}
+	input := model.CreateUserInput{Email: "a@b.com", Role: model.RoleAdmin}
 
 	got, err := svc.CreateUser(ctx, input)
 
 	if err != nil {
 		t.Fatalf("CreateUser: %v", err)
 	}
-	if got == nil || got.Email != "a@b.com" || got.Role != "admin" {
+	if got == nil || got.Email != "a@b.com" || got.Role != model.RoleAdmin {
 		t.Errorf("got %+v", got)
 	}
 	if len(store.CreateCalls) != 1 {
@@ -46,7 +46,7 @@ func TestService_CreateUser_duplicate_email_returns_ErrDuplicateEmail(t *testing
 		{User: &users.User{ID: "u1", Email: "a@b.com"}, Err: nil},
 	}
 	svc := users.NewService(store)
-	input := model.CreateUserInput{Email: "a@b.com", Role: "viewer"}
+	input := model.CreateUserInput{Email: "a@b.com", Role: model.RoleViewer}
 
 	_, err := svc.CreateUser(ctx, input)
 
@@ -55,22 +55,6 @@ func TestService_CreateUser_duplicate_email_returns_ErrDuplicateEmail(t *testing
 	}
 	if len(store.CreateCalls) != 0 {
 		t.Errorf("Create should not be called, got %d calls", len(store.CreateCalls))
-	}
-}
-
-func TestService_CreateUser_invalid_role_returns_error(t *testing.T) {
-	ctx := context.Background()
-	store := &mock.Store{}
-	store.GetByEmailReturns = []mock.GetByEmailResult{
-		{User: nil, Err: nil},
-	}
-	svc := users.NewService(store)
-	input := model.CreateUserInput{Email: "a@b.com", Role: "invalid"}
-
-	_, err := svc.CreateUser(ctx, input)
-
-	if err == nil {
-		t.Fatal("expected error for invalid role")
 	}
 }
 
@@ -83,7 +67,7 @@ func TestService_CreateUser_withPassword_passesHashToStore(t *testing.T) {
 	}
 	svc := users.NewService(store)
 	pass := "secret123"
-	input := model.CreateUserInput{Email: "a@b.com", Role: "developer", Password: &pass}
+	input := model.CreateUserInput{Email: "a@b.com", Role: model.RoleDeveloper, Password: &pass}
 
 	_, err := svc.CreateUser(ctx, input)
 
@@ -216,28 +200,6 @@ func TestService_UpdateUser_get_error_returns_wrapped_error(t *testing.T) {
 	}
 	if len(store.UpdateCalls) != 0 {
 		t.Error("Update should not be called when GetByID fails")
-	}
-}
-
-func TestService_UpdateUser_invalid_role_returns_error(t *testing.T) {
-	ctx := context.Background()
-	store := &mock.Store{}
-	u := &users.User{ID: "u1", Email: "a@b.com", Role: users.RoleViewer}
-	store.GetByIDReturns = []mock.GetByIDResult{{User: u, Err: nil}}
-	svc := users.NewService(store)
-	role := "invalid"
-	input := model.UpdateUserInput{ID: "u1", Role: &role}
-
-	got, err := svc.UpdateUser(ctx, input)
-
-	if got != nil {
-		t.Errorf("expected nil, got %+v", got)
-	}
-	if err == nil {
-		t.Fatal("expected error for invalid role")
-	}
-	if len(store.UpdateCalls) != 0 {
-		t.Error("Update should not be called when role is invalid")
 	}
 }
 

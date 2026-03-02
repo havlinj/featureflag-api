@@ -71,7 +71,7 @@ type ComplexityRoot struct {
 	}
 
 	Query struct {
-		EvaluateFlag func(childComplexity int, key string, context model.EvaluationContextInput) int
+		EvaluateFlag func(childComplexity int, key string, evaluationContext model.EvaluationContextInput) int
 		User         func(childComplexity int, id string) int
 		UserByEmail  func(childComplexity int, email string) int
 	}
@@ -94,7 +94,7 @@ type MutationResolver interface {
 	DeleteUser(ctx context.Context, id string) (bool, error)
 }
 type QueryResolver interface {
-	EvaluateFlag(ctx context.Context, key string, context model.EvaluationContextInput) (bool, error)
+	EvaluateFlag(ctx context.Context, key string, evaluationContext model.EvaluationContextInput) (bool, error)
 	User(ctx context.Context, id string) (*model.User, error)
 	UserByEmail(ctx context.Context, email string) (*model.User, error)
 }
@@ -250,7 +250,7 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			return 0, false
 		}
 
-		return e.complexity.Query.EvaluateFlag(childComplexity, args["key"].(string), args["context"].(model.EvaluationContextInput)), true
+		return e.complexity.Query.EvaluateFlag(childComplexity, args["key"].(string), args["evaluationContext"].(model.EvaluationContextInput)), true
 	case "Query.user":
 		if e.complexity.Query.User == nil {
 			break
@@ -533,11 +533,11 @@ func (ec *executionContext) field_Query_evaluateFlag_args(ctx context.Context, r
 		return nil, err
 	}
 	args["key"] = arg0
-	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "context", ec.unmarshalNEvaluationContextInput2githubᚗcomᚋjanᚑhavlinᚑdevᚋfeatureflagᚑapiᚋgraphᚋmodelᚐEvaluationContextInput)
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "evaluationContext", ec.unmarshalNEvaluationContextInput2githubᚗcomᚋjanᚑhavlinᚑdevᚋfeatureflagᚑapiᚋgraphᚋmodelᚐEvaluationContextInput)
 	if err != nil {
 		return nil, err
 	}
-	args["context"] = arg1
+	args["evaluationContext"] = arg1
 	return args, nil
 }
 
@@ -1165,7 +1165,7 @@ func (ec *executionContext) _Query_evaluateFlag(ctx context.Context, field graph
 		ec.fieldContext_Query_evaluateFlag,
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.resolvers.Query().EvaluateFlag(ctx, fc.Args["key"].(string), fc.Args["context"].(model.EvaluationContextInput))
+			return ec.resolvers.Query().EvaluateFlag(ctx, fc.Args["key"].(string), fc.Args["evaluationContext"].(model.EvaluationContextInput))
 		},
 		nil,
 		ec.marshalNBoolean2bool,
@@ -1476,7 +1476,7 @@ func (ec *executionContext) _User_role(ctx context.Context, field graphql.Collec
 			return obj.Role, nil
 		},
 		nil,
-		ec.marshalNString2string,
+		ec.marshalNRole2githubᚗcomᚋjanᚑhavlinᚑdevᚋfeatureflagᚑapiᚋgraphᚋmodelᚐRole,
 		true,
 		true,
 	)
@@ -1489,7 +1489,7 @@ func (ec *executionContext) fieldContext_User_role(_ context.Context, field grap
 		IsMethod:   false,
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type String does not have child fields")
+			return nil, errors.New("field of type Role does not have child fields")
 		},
 	}
 	return fc, nil
@@ -3048,7 +3048,7 @@ func (ec *executionContext) unmarshalInputCreateUserInput(ctx context.Context, o
 			it.Email = data
 		case "role":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("role"))
-			data, err := ec.unmarshalNString2string(ctx, v)
+			data, err := ec.unmarshalNRole2githubᚗcomᚋjanᚑhavlinᚑdevᚋfeatureflagᚑapiᚋgraphᚋmodelᚐRole(ctx, v)
 			if err != nil {
 				return it, err
 			}
@@ -3239,7 +3239,7 @@ func (ec *executionContext) unmarshalInputUpdateUserInput(ctx context.Context, o
 			it.Email = data
 		case "role":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("role"))
-			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			data, err := ec.unmarshalORole2ᚖgithubᚗcomᚋjanᚑhavlinᚑdevᚋfeatureflagᚑapiᚋgraphᚋmodelᚐRole(ctx, v)
 			if err != nil {
 				return it, err
 			}
@@ -4035,6 +4035,16 @@ func (ec *executionContext) marshalNLoginPayload2ᚖgithubᚗcomᚋjanᚑhavlin�
 	return ec._LoginPayload(ctx, sel, v)
 }
 
+func (ec *executionContext) unmarshalNRole2githubᚗcomᚋjanᚑhavlinᚑdevᚋfeatureflagᚑapiᚋgraphᚋmodelᚐRole(ctx context.Context, v any) (model.Role, error) {
+	var res model.Role
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNRole2githubᚗcomᚋjanᚑhavlinᚑdevᚋfeatureflagᚑapiᚋgraphᚋmodelᚐRole(ctx context.Context, sel ast.SelectionSet, v model.Role) graphql.Marshaler {
+	return v
+}
+
 func (ec *executionContext) unmarshalNRolloutRuleType2githubᚗcomᚋjanᚑhavlinᚑdevᚋfeatureflagᚑapiᚋgraphᚋmodelᚐRolloutRuleType(ctx context.Context, v any) (model.RolloutRuleType, error) {
 	var res model.RolloutRuleType
 	err := res.UnmarshalGQL(v)
@@ -4381,6 +4391,22 @@ func (ec *executionContext) marshalOBoolean2ᚖbool(ctx context.Context, sel ast
 	_ = ctx
 	res := graphql.MarshalBoolean(*v)
 	return res
+}
+
+func (ec *executionContext) unmarshalORole2ᚖgithubᚗcomᚋjanᚑhavlinᚑdevᚋfeatureflagᚑapiᚋgraphᚋmodelᚐRole(ctx context.Context, v any) (*model.Role, error) {
+	if v == nil {
+		return nil, nil
+	}
+	var res = new(model.Role)
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalORole2ᚖgithubᚗcomᚋjanᚑhavlinᚑdevᚋfeatureflagᚑapiᚋgraphᚋmodelᚐRole(ctx context.Context, sel ast.SelectionSet, v *model.Role) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return v
 }
 
 func (ec *executionContext) unmarshalORolloutStrategy2ᚖgithubᚗcomᚋjanᚑhavlinᚑdevᚋfeatureflagᚑapiᚋgraphᚋmodelᚐRolloutStrategy(ctx context.Context, v any) (*model.RolloutStrategy, error) {
