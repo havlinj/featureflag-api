@@ -1,10 +1,8 @@
 # Feature Flag & Experiment Management API
 
-A Go backend service for managing feature flags and A/B experiments, built with clean architecture, GraphQL (gqlgen), PostgreSQL, and JWT-based authentication.
+A Go-based backend service for managing feature flags and A/B experiments, featuring role-based access control, audit logging, and rollout strategies. Built with clean architecture principles, GraphQL (gqlgen), PostgreSQL, and JWT-based authentication.
 
----
-
-## Author’s note
+## Motivation
 
 This project marks my first deliberate adoption of an agentic AI workflow, implemented using the Cursor IDE. It was created primarily as a structured learning exercise, focused on evaluating how modern AI-assisted development can be integrated into a disciplined engineering process.
 
@@ -43,8 +41,6 @@ For this reason, the project incorporates GraphQL. The objective was not trend a
 My earlier experience was centered primarily on SQLite. While suitable for many use cases, it does not fully represent the operational realities of client–server or distributed environments.
 
 This project therefore uses PostgreSQL, selected for its maturity, feature depth, and suitability for production-grade systems. The goal was to gain hands-on experience with a database system designed for concurrency, scaling considerations, and more complex deployment topologies.
-
----
 
 ## Application overview
 
@@ -123,8 +119,6 @@ The API is served over **HTTPS**; GraphQL queries and mutations use the standard
 - **PostgreSQL** – primary store for users, flags, rules, experiments, variants, assignments, and audit logs.
 - **JWT + RBAC** – authentication and authorization.
 - **Docker Compose** – local PostgreSQL and development environment.
-
----
 
 ## Testing
 
