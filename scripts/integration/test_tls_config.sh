@@ -23,6 +23,7 @@ openssl req -x509 -newkey rsa:2048 -keyout "$CERT_DIR/key.pem" -out "$CERT_DIR/c
 
 docker rm -f "$CONTAINER_NAME" 2>/dev/null || true
 docker run -d --name "$CONTAINER_NAME" \
+  -p 5432:5432 \
   -e POSTGRES_USER=test -e POSTGRES_PASSWORD=test -e POSTGRES_DB=testdb \
   postgres:16-alpine
 sleep 2
