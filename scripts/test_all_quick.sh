@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Runs the full local validation: check, unit tests, integration tests.
-# Exits on first failure.
+# Quick local validation: check, unit tests, Go integration tests only (no build/smoke).
+# For full suite as in CI, use test_all_full.sh.
 set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -15,4 +15,4 @@ echo ""
 echo "=== 3/3 integration tests"
 "$SCRIPT_DIR/test_integration.sh"
 echo ""
-echo "=== All passed."
+echo "=== Quick validation passed."

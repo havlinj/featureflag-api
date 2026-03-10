@@ -1,4 +1,4 @@
-module github.com/jan-havlin-dev/featureflag-api
+module github.com/havlinj/featureflag-api
 
 go 1.24.0
 
@@ -79,4 +79,5 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
-replace github.com/jan-havlin-dev/featureflag-api => ../featureflag_api
+// Resolve this module from the current directory (works in CI and when run from repo root).
+replace github.com/havlinj/featureflag-api => .

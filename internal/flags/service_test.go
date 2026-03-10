@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jan-havlin-dev/featureflag-api/graph/model"
-	"github.com/jan-havlin-dev/featureflag-api/internal/flags"
-	"github.com/jan-havlin-dev/featureflag-api/internal/flags/mock"
+	"github.com/havlinj/featureflag-api/graph/model"
+	"github.com/havlinj/featureflag-api/internal/flags"
+	"github.com/havlinj/featureflag-api/internal/flags/mock"
 )
 
 func stringPtr(s string) *string { return &s }

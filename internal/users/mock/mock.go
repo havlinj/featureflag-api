@@ -6,7 +6,7 @@ import (
 	"errors"
 	"sync"
 
-	"github.com/jan-havlin-dev/featureflag-api/internal/users"
+	"github.com/havlinj/featureflag-api/internal/users"
 )
 
 // ErrNoMoreReturns is returned when a method is called but its return queue is empty.

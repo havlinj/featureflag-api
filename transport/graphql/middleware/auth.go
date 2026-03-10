@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/jan-havlin-dev/featureflag-api/internal/auth"
+	"github.com/havlinj/featureflag-api/internal/auth"
 )
 
 // Auth returns middleware that reads Authorization: Bearer <token>, validates the JWT,

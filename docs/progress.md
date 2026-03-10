@@ -5,10 +5,10 @@
 
 # 🏗️ Progress Tracker – Feature Flag API
 
-**Last updated**: 2026-03-02  
-**Overall progress**: █████░░░░░ 50% (Phase 1 of 4 complete)  
-**Status**: Phase 1 **reviewed and complete** – Flags (incl. rollout strategies, rules, evaluation, delete), Users, Auth, Logging; Phase 2 planned (local test scripts + binary smoke)  
-**Next step**: Phase 2 – Local test scripts & binary smoke test  
+**Last updated**: 2026-03-10  
+**Overall progress**: ███████░░░ 62% (Phase 1–2 of 4 complete)  
+**Status**: Phase 1 and Phase 2 **complete and reviewed (APPROVED)** – Local Bash scripts, binary smoke, config refactor, bash integration tests, GitHub Actions CI  
+**Next step**: Phase 3 – Experiments integration (work on feature branch, then merge to master)  
 **Blockers**: None
 
 ## 📋 Milestones (per development_workflow.mdc)
@@ -16,7 +16,7 @@
 | Phase | Status | Progress | Key Deliverables |
 |-------|--------|----------|------------------|
 | Phase 1: Feature Flags & Users Core | ✅ Complete | 100% | Flags + Users API, rollout strategies (percentage + attribute, one per flag), rules CRUD, EvaluateFlag with context, DeleteFlag, DB, auth (JWT), logging, integration tests |
-| Phase 2: Local Test Scripts & Binary Smoke Test | ⏳ Planned | 0% | Bash scripts (check, unit, integration, build, test_all, test_binary_smoke); one smoke test against real binary |
+| Phase 2: Local Test Scripts, Binary Smoke & CI | ✅ Complete (reviewed) | 100% | Bash scripts (check, unit, integration, build, test_all_quick, test_all_full, test_binary_smoke); scripts/integration/; internal/config; GitHub Actions CI (push/PR to master) |
 | Phase 3: Experiments Integration | ⏳ Planned | 0% | Experiments module, schema, resolvers, assignments |
 | Phase 4: Audit Logging | ⏳ Planned | 0% | Audit service, audit_logs table, hooks |
 
@@ -37,6 +37,41 @@
 - [x] Optional password in CreateUserInput and UpdateUserInput (admin can set login password when creating/updating users)
 - [x] Unit tests: all return paths covered in flags.Service, users.Service, middleware auth; descriptive mock error messages in tests; gofmt enforced before task completion (coding_style.mdc)
 
+## 🔧 Phase 2 – Current state
+
+- [x] scripts/check.sh — gofmt -l + go vet
+- [x] scripts/test_unit.sh — unit tests (internal + transport)
+- [x] scripts/test_integration.sh — integration tests (-tags=integration)
+- [x] scripts/build.sh — binary to ./bin/featureflag-api
+- [x] scripts/test_all_quick.sh — check + unit + Go integration (quick local validation; no binary smoke)
+- [x] scripts/test_all_full.sh — full suite as in CI (check, unit, Go integration, build, binary smoke, bash integration tests)
+- [x] scripts/test_binary_smoke.sh — build, Postgres, binary, login → createFlag → evaluateFlag, tear down
+- [x] cmd/main.go runs from env (DATABASE_DSN / PG*, JWT_SECRET, LISTEN_ADDR, optional TLS_CERT_FILE/TLS_KEY_FILE)
+- [x] internal/config: GetDSN, GetListenAddr, GetJWTSecret, LoadTLSConfig (unit tested, GUNIT form)
+- [x] scripts/integration/: test_missing_jwt_secret, test_invalid_dsn, test_default_listen_addr, test_tls_config (each config function covered by at least one bash integration test)
+- [x] .github/workflows/ci.yml — on push to master and PR to master: check, unit, Go integration, build, binary smoke, bash integration tests (runner: ubuntu-latest, Go + Docker)
+
+## Phase 2 – REVIEW (final)
+
+**Status: APPROVED**
+
+1. **Architecture**  
+   Layering is respected: `cmd/main.go` only wires config, db, app; config logic lives in `internal/config` with injectable getenv/loader. No business logic in transport; bash scripts only orchestrate. No hidden coupling.
+
+2. **Simplicity**  
+   Scripts are straightforward (check, unit, integration, build, smoke, bash integration). Config package is minimal (GetDSN, GetListenAddr, GetJWTSecret, LoadTLSConfig). No over-engineering; `tools/tools.go` is a documented, standard workaround for tool deps.
+
+3. **Readability**  
+   Clear naming (`test_all_quick.sh` vs `test_all_full.sh`, config function names). Scripts and CI steps are self-explanatory. Comments where needed (e.g. `tools/tools.go`, script headers).
+
+4. **Test quality**  
+   Unit tests for `internal/config` cover every branch (GUNIT form). Bash integration tests each cover one config function in the real binary (missing JWT, invalid DSN, default listen addr, TLS). Smoke test covers happy path. Go integration tests unchanged and still in place.
+
+5. **Alignment with plan**  
+   All Phase 2 deliverables from `development_workflow.mdc` are present: check.sh, test_unit.sh, test_integration.sh, build.sh, test_all_quick.sh, test_all_full.sh, test_binary_smoke.sh, scripts/integration/*, GitHub Actions on push/PR to master. Module rename to `github.com/havlinj/featureflag-api` and `replace => .` are consistent; doc and script renames (test_all_quick / test_all_full) are reflected.
+
+**Conclusion:** Phase 2 implementation matches the approved design. No scope creep. Ready to close; next step is Phase 3 (Experiments) or feature-branch workflow as planned.
+
 ## 📈 Metrics
 
 - Test coverage: unit tests for db, flags.Service (incl. all return paths: CreateFlag/UpdateFlag/DeleteFlag/EvaluateFlag errors, strategy mismatch, ReplaceRulesByFlagID), users.Service (incl. all return paths: GetUser, GetUserByEmail, UpdateUser, DeleteUser store errors and invalid role), auth (password, JWT, RequireRole), middleware (logging, auth; incl. Authorization not Bearer → 401); flags and users PostgresStore (build tag `integration`); integration tests for HTTPS+GraphQL against **real Postgres** (testcontainers). Mock errors in tests use descriptive labels (e.g. GetByKeyAndEnvironment failed, ReplaceRulesByFlagID failed on CreateFlag).
@@ -44,6 +79,8 @@
 - Code style: gofmt run before task completion (see .cursor/rules/coding_style.mdc).
 
 ## 📝 Changelog
+
+**2026-03-10**: Phase 2 closed after final REVIEW (APPROVED). Review checklist: architecture, simplicity, readability, test quality, alignment with plan — all satisfied. progress.md updated with Phase 2 – REVIEW section and status APPROVED; next step Phase 3. (Earlier same day: Phase 2 extended with CI.) GitHub Actions workflow (`.github/workflows/ci.yml`) runs on push to master and on pull_request to master: check, unit tests, Go integration tests (testcontainers), build, binary smoke test, and all bash integration tests (scripts/integration/*). Added `scripts/test_all_full.sh` for full suite (same as CI) and `scripts/test_all_quick.sh` for quick local validation only. development_workflow.mdc Phase 2 rewritten to include CI from the start; progress.md updated. Planned workflow for next phases: work on feature branch, then merge to master (CI runs on both).
 
 **2026-03-02 (session 5)**: Phase 1 declared **complete** after final review. development_workflow.mdc updated: new Phase 2 (Local Test Scripts & Binary Smoke Test) with Bash scripts and one binary smoke test; former Phase 2/3 renumbered to Phase 3/4. progress.md updated: milestones table aligned (Phase 2 = local scripts, Phase 3 = Experiments, Phase 4 = Audit); status set to “Phase 1 reviewed and complete”; next step Phase 2. docs/session_5.md created.
 

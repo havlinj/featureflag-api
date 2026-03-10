@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# Full test suite (same as CI): check, unit, Go integration, build, binary smoke, bash integration tests.
+# For quick local validation without Docker/smoke, use test_all_quick.sh.
+set -e
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+cd "$ROOT_DIR"
+
+echo "=== 1/6 check"
+"$SCRIPT_DIR/check.sh"
+echo ""
+echo "=== 2/6 unit tests"
+"$SCRIPT_DIR/test_unit.sh"
+echo ""
+echo "=== 3/6 integration tests (Go)"
+"$SCRIPT_DIR/test_integration.sh"
+echo ""
+echo "=== 4/6 build"
+"$SCRIPT_DIR/build.sh"
+echo ""
+echo "=== 5/6 binary smoke test"
+"$SCRIPT_DIR/test_binary_smoke.sh"
+echo ""
+echo "=== 6/6 integration tests (bash)"
+"$SCRIPT_DIR/integration/test_missing_jwt_secret.sh"
+"$SCRIPT_DIR/integration/test_invalid_dsn.sh"
+"$SCRIPT_DIR/integration/test_default_listen_addr.sh"
+"$SCRIPT_DIR/integration/test_tls_config.sh"
+echo ""
+echo "=== All tests passed."

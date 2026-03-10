@@ -224,22 +224,26 @@ No milestone is complete without explicit review approval.
 
 ---
 
-## Phase 2: Local Test Scripts & Binary Smoke Test
+## Phase 2: Local Test Scripts, Binary Smoke Test & GitHub Actions CI
 
 **Objectives:**
-- Add **local** Bash scripts in `scripts/` to run checks and tests from one place (no CI/CD or GitHub integration).
-- Optionally one **central script** that runs the full test suite (check + unit + integration) for quick local validation.
+- Add **local** Bash scripts in `scripts/` to run checks and tests from one place.
+- One **quick script** (`test_all_quick.sh`) that runs check + unit + Go integration tests for **quick local validation** (no build, no binary smoke or bash integration tests).
+- A **full suite script** (`test_all_full.sh`) that runs everything CI runs: check, unit, Go integration, build, binary smoke, and bash integration tests — for local “simulate CI” runs.
 - Add **one script** that runs a test against the **real application binary**: build the binary, start it, call the API (e.g. GraphQL over HTTP via `curl`), assert response, then tear down — so it is clear that the detailed integration tests match what is actually inside the built binary.
-- Use **Bash** for all scripts.
+- Add a **GitHub Actions workflow** so that every **push to master** (and every pull request targeting master) runs the full test suite in CI, including Go integration tests (testcontainers) and all bash-based tests (smoke + config/sad-path integration tests). Use **Bash** for all scripts.
 
 **Key Deliverables:**
 - **Scripts (Bash)** in `scripts/`:
   - `check.sh` — lint/format/vet (e.g. `gofmt -l`, `go vet ./...`).
   - `test_unit.sh` — run unit tests (e.g. `go test ./internal/... ./transport/...`).
-  - `test_integration.sh` — run existing integration tests (`go test -tags=integration ./test/integration/...`); assumes DB available (e.g. local Postgres or Docker).
+  - `test_integration.sh` — run existing integration tests (`go test -tags=integration ./test/integration/...`); uses testcontainers (Docker).
   - `build.sh` — build the application binary (e.g. into `./bin/...`).
-  - **One central script** (e.g. `test_all.sh`) that runs check + unit + integration in sequence; optional but recommended for “run everything locally”.
-  - **One binary smoke script** (e.g. `test_binary_smoke.sh`): build binary, start DB if needed, start the binary, run **one** shell-based smoke scenario (e.g. create user → create flag → evaluate) over HTTP, assert results, then tear down.
+  - **Quick script** `test_all_quick.sh`: check + unit + Go integration only (fast, for quick local validation).
+  - **Full suite script** `test_all_full.sh`: same as CI (check, unit, Go integration, build, binary smoke, bash integration tests).
+  - **Binary smoke script** `test_binary_smoke.sh`: build binary, start DB (Docker), start the binary, run one shell-based smoke scenario (e.g. login → create flag → evaluate) over HTTP, assert results, tear down.
+  - Optional bash integration tests in `scripts/integration/` (e.g. missing JWT, invalid DSN, default listen addr, TLS config); each proves a config function is used in the real binary.
+- **GitHub Actions** (e.g. `.github/workflows/ci.yml`): trigger on `push` to `master` and `pull_request` to `master`; run check, unit tests, Go integration tests, build, binary smoke test, and all bash integration tests. Runner must provide Go and Docker (e.g. `ubuntu-latest`).
 
 ---
 

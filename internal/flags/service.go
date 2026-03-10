@@ -6,7 +6,7 @@ import (
 	"hash/fnv"
 	"strconv"
 
-	"github.com/jan-havlin-dev/featureflag-api/graph/model"
+	"github.com/havlinj/featureflag-api/graph/model"
 )
 
 const defaultEnvironment = DeploymentStageDev

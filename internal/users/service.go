@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/jan-havlin-dev/featureflag-api/graph/model"
-	"github.com/jan-havlin-dev/featureflag-api/internal/auth"
+	"github.com/havlinj/featureflag-api/graph/model"
+	"github.com/havlinj/featureflag-api/internal/auth"
 )
 
 // Service holds business logic for users. It depends on Store so it can be mocked in tests.

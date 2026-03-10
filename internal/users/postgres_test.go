@@ -6,7 +6,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/jan-havlin-dev/featureflag-api/internal/db"
+	"github.com/havlinj/featureflag-api/internal/db"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 )
 

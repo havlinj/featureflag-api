@@ -7,7 +7,7 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/jan-havlin-dev/featureflag-api/transport/graphql"
+	"github.com/havlinj/featureflag-api/transport/graphql"
 )
 
 // GraphQLClient sends GraphQL requests over HTTP(S). For HTTPS with self-signed certs

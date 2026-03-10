@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/jan-havlin-dev/featureflag-api/internal/auth"
+	"github.com/havlinj/featureflag-api/internal/auth"
 )
 
 func main() {

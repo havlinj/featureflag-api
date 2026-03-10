@@ -8,8 +8,8 @@ package graphql
 import (
 	"time"
 
-	"github.com/jan-havlin-dev/featureflag-api/internal/flags"
-	"github.com/jan-havlin-dev/featureflag-api/internal/users"
+	"github.com/havlinj/featureflag-api/internal/flags"
+	"github.com/havlinj/featureflag-api/internal/users"
 )
 
 // Resolver wires GraphQL resolvers to the service layers.

@@ -1,0 +1,44 @@
+# CI: runs on every push to master and on pull requests targeting master.
+# Runs check, unit tests, Go integration tests (testcontainers), build, binary smoke test,
+# and bash integration tests (config/sad path). Requires Docker for testcontainers and smoke/integration scripts.
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Check (gofmt, go vet)
+        run: bash scripts/check.sh
+
+      - name: Unit tests
+        run: bash scripts/test_unit.sh
+
+      - name: Integration tests (Go, testcontainers)
+        run: bash scripts/test_integration.sh
+
+      - name: Build binary
+        run: bash scripts/build.sh
+
+      - name: Binary smoke test
+        run: bash scripts/test_binary_smoke.sh
+
+      - name: Integration tests (bash, config / sad path)
+        run: |
+          bash scripts/integration/test_missing_jwt_secret.sh
+          bash scripts/integration/test_invalid_dsn.sh
+          bash scripts/integration/test_default_listen_addr.sh
+          bash scripts/integration/test_tls_config.sh

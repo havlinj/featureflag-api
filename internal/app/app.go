@@ -7,11 +7,11 @@ import (
 	"time"
 
 	"github.com/99designs/gqlgen/graphql/handler"
-	"github.com/jan-havlin-dev/featureflag-api/graph"
-	"github.com/jan-havlin-dev/featureflag-api/internal/flags"
-	"github.com/jan-havlin-dev/featureflag-api/internal/users"
-	"github.com/jan-havlin-dev/featureflag-api/transport/graphql"
-	"github.com/jan-havlin-dev/featureflag-api/transport/graphql/middleware"
+	"github.com/havlinj/featureflag-api/graph"
+	"github.com/havlinj/featureflag-api/internal/flags"
+	"github.com/havlinj/featureflag-api/internal/users"
+	"github.com/havlinj/featureflag-api/transport/graphql"
+	"github.com/havlinj/featureflag-api/transport/graphql/middleware"
 )
 
 type App struct {

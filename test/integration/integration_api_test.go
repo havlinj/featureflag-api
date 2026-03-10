@@ -9,11 +9,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jan-havlin-dev/featureflag-api/internal/app"
-	"github.com/jan-havlin-dev/featureflag-api/internal/db"
-	"github.com/jan-havlin-dev/featureflag-api/internal/flags"
-	"github.com/jan-havlin-dev/featureflag-api/internal/testutil"
-	"github.com/jan-havlin-dev/featureflag-api/internal/users"
+	"github.com/havlinj/featureflag-api/internal/app"
+	"github.com/havlinj/featureflag-api/internal/db"
+	"github.com/havlinj/featureflag-api/internal/flags"
+	"github.com/havlinj/featureflag-api/internal/testutil"
+	"github.com/havlinj/featureflag-api/internal/users"
 )
 
 // startAppWithDB starts the app with the given database, runs the server in a goroutine,

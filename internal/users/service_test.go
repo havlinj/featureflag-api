@@ -5,10 +5,10 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/jan-havlin-dev/featureflag-api/graph/model"
-	"github.com/jan-havlin-dev/featureflag-api/internal/auth"
-	"github.com/jan-havlin-dev/featureflag-api/internal/users"
-	"github.com/jan-havlin-dev/featureflag-api/internal/users/mock"
+	"github.com/havlinj/featureflag-api/graph/model"
+	"github.com/havlinj/featureflag-api/internal/auth"
+	"github.com/havlinj/featureflag-api/internal/users"
+	"github.com/havlinj/featureflag-api/internal/users/mock"
 )
 
 // --- CreateUser ---

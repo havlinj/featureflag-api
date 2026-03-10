@@ -8,10 +8,10 @@ package graphql
 import (
 	"context"
 
-	"github.com/jan-havlin-dev/featureflag-api/graph"
-	"github.com/jan-havlin-dev/featureflag-api/graph/model"
-	"github.com/jan-havlin-dev/featureflag-api/internal/auth"
-	"github.com/jan-havlin-dev/featureflag-api/internal/flags"
+	"github.com/havlinj/featureflag-api/graph"
+	"github.com/havlinj/featureflag-api/graph/model"
+	"github.com/havlinj/featureflag-api/internal/auth"
+	"github.com/havlinj/featureflag-api/internal/flags"
 )
 
 // CreateFlag is the resolver for the createFlag field.
