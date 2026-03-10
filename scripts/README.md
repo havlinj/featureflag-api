@@ -4,7 +4,7 @@
 
 - **Quick local validation**: `./scripts/test_all_quick.sh` — check, unit tests, Go integration tests (no binary smoke).
 - **Full suite (same as CI)**: `./scripts/test_all_full.sh` — check, unit, Go integration, build, binary smoke, bash integration tests. Requires Docker.
-- **CI**: GitHub Actions (`.github/workflows/ci.yml`) runs the full suite on every push to `master` and on pull requests targeting `master`.
+- **CI**: GitHub Actions (`.github/workflows/ci.yml`) runs the full suite on every push to `master` and on pull requests targeting `master`. Scripts are executable (execute bit in repo + `chmod +x` step in CI on Linux).
 
 See `scripts/integration/README.md` for the list of bash integration tests.
 
