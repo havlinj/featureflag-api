@@ -18,13 +18,17 @@ import (
 	"github.com/havlinj/featureflag-api/transport/graphql"
 )
 
+// storesFromDB creates all domain stores from the same DB connection (mirrors production wiring).
+func storesFromDB(database *db.DB) (flags.Store, users.Store, experiments.Store) {
+	conn := database.Conn()
+	return flags.NewPostgresStore(conn), users.NewPostgresStore(conn), experiments.NewPostgresStore(conn)
+}
+
 // startAppWithDB starts the app with the given database, runs the server in a goroutine,
 // and returns the app, a GraphQL client, and a shutdown function. Caller must call defer shutdown().
 func startAppWithDB(t *testing.T, database *db.DB) (*app.App, *testutil.GraphQLClient, func()) {
 	t.Helper()
-	flagsStore := flags.NewPostgresStore(database.Conn())
-	usersStore := users.NewPostgresStore(database.Conn())
-	experimentsStore := experiments.NewPostgresStore(database.Conn())
+	flagsStore, usersStore, experimentsStore := storesFromDB(database)
 	addr := testutil.MakeFreeSocketAddr()
 	tlsConfig, err := testutil.NewTLSConfigForServer()
 	if err != nil {

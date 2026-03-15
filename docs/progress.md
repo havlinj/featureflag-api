@@ -5,10 +5,10 @@
 
 # 🏗️ Progress Tracker – Feature Flag API
 
-**Last updated**: 2026-03-10  
-**Overall progress**: ███████░░░ 62% (Phase 1–2 of 4 complete)  
-**Status**: Phase 1 and Phase 2 **complete and reviewed (APPROVED)** – Local Bash scripts, binary smoke, config refactor, bash integration tests, GitHub Actions CI  
-**Next step**: Phase 3 – Experiments integration (work on feature branch, then merge to master)  
+**Last updated**: 2026-03-15  
+**Overall progress**: █████████░ 75% (Phase 1–3 of 4 complete)  
+**Status**: Phase 1 and Phase 2 **complete and reviewed (APPROVED)**; Phase 3 **complete and reviewed (APPROVED)** – Experiments module, GraphQL API, deterministic assignment, integration + resolver unit tests  
+**Next step**: Phase 4 – Audit logging  
 **Blockers**: None
 
 ## 📋 Milestones (per development_workflow.mdc)
@@ -17,7 +17,7 @@
 |-------|--------|----------|------------------|
 | Phase 1: Feature Flags & Users Core | ✅ Complete | 100% | Flags + Users API, rollout strategies (percentage + attribute, one per flag), rules CRUD, EvaluateFlag with context, DeleteFlag, DB, auth (JWT), logging, integration tests |
 | Phase 2: Local Test Scripts, Binary Smoke & CI | ✅ Complete (reviewed) | 100% | Bash scripts (check, unit, integration, build, test_all_quick, test_all_full, test_binary_smoke); scripts/integration/; internal/config; GitHub Actions CI (push/PR to master) |
-| Phase 3: Experiments Integration | ⏳ Planned | 0% | Experiments module, schema, resolvers, assignments |
+| Phase 3: Experiments Integration | ✅ Complete (reviewed) | 100% | Experiments service, GraphQL schema + resolvers (createExperiment, experiment, getAssignment), DB (experiments, experiment_variants, experiment_assignments), deterministic assignment, integration + resolver unit tests |
 | Phase 4: Audit Logging | ⏳ Planned | 0% | Audit service, audit_logs table, hooks |
 
 ## 🔧 Phase 1 – Current state
@@ -72,13 +72,48 @@
 
 **Conclusion:** Phase 2 implementation matches the approved design. No scope creep. Ready to close; next step is Phase 3 (Experiments) or feature-branch workflow as planned.
 
+## 🔧 Phase 3 – Current state
+
+- [x] internal/experiments: Store interface, PostgresStore (CreateExperiment, GetExperimentByKeyAndEnvironment, GetExperimentByID, CreateVariant, GetVariantsByExperimentID, GetAssignment, UpsertAssignment)
+- [x] internal/experiments: Service (CreateExperiment, GetExperiment, GetAssignment), deterministic assignment (hash userID+experimentID → bucket, weights sum 100), structured errors (InvalidWeightsError, ExperimentNotFoundError, DuplicateExperimentError, VariantNotFoundError, InvalidUserIDError)
+- [x] internal/experiments/mock: queue-based Store for unit tests
+- [x] DB schema: experiments, experiment_variants, experiment_assignments (migrations; TruncateAll in testutil includes them)
+- [x] GraphQL schema: experiments.graphqls (Experiment, ExperimentVariant, CreateExperimentInput, ExperimentVariantInput); Query (experiment, getAssignment), Mutation (createExperiment)
+- [x] Resolvers: CreateExperiment (auth admin/developer, nil guard), Experiment (auth admin/developer/viewer, ExperimentNotFoundError → null), GetAssignment (auth, nil guard); ExperimentsService interface for DI and tests
+- [x] Wiring: NewApp(..., experimentsStore), cmd/main.go and test/integration/util.go create experiments PostgresStore and pass to app
+- [x] Integration tests: test/integration/integration_experiments_test.go (createExperiment, experiment query found/not found, getAssignment + determinism, userByEmail for userID)
+- [x] Unit tests: experiments service (all paths), experiments PostgresStore (integration tag), experiments resolvers (auth, nil service, not-found→null, delegation, service errors)
+
+## Phase 3 – REVIEW (final)
+
+**Status: APPROVED**
+
+1. **Architecture**  
+   Layering is respected: transport/graphql resolvers only call auth.RequireRole and ExperimentsService; no business logic in resolvers. internal/experiments has no dependency on transport or graph. App and main only wire stores and construct services. ExperimentsService interface keeps resolver testable without concrete *experiments.Service.
+
+2. **Simplicity**  
+   Resolvers are thin (auth check, nil guard, delegate; Experiment maps ExperimentNotFoundError to (nil, nil) for GraphQL null). No over-engineering; interface is minimal (three methods). Wiring in app/main/util is consistent with flags and users.
+
+3. **Readability**  
+   Clear naming (CreateExperiment, GetExperiment, GetAssignment; ExperimentsService). Experiment “not found → null” behaviour is explicit in code and covered by tests. Checkboxes in Phase 3 section match deliverables.
+
+4. **Test quality**  
+   Service layer: unit tests with mock store cover all return paths (weights validation, duplicate, not found, assignment determinism). Resolver unit tests cover auth (no claims, viewer forbidden on create), nil Experiments, not-found→null, delegation success, and service error pass-through. Integration test covers full API flow (create, get, getAssignment, determinism). Deterministic assignment is asserted in service and integration tests.
+
+5. **Alignment with plan**  
+   All Phase 3 deliverables from development_workflow.mdc are present: experiments service layer (experiments, variants, user assignments), updated GraphQL schema and resolvers, DB tables (experiments, experiment_variants, experiment_assignments), integration tests API→service→DB, deterministic rollout and assignment behaviour. No scope creep.
+
+**Conclusion:** Phase 3 implementation matches the approved design. Ready to close; next step is Phase 4 (Audit logging).
+
 ## 📈 Metrics
 
-- Test coverage: unit tests for db, flags.Service (incl. all return paths: CreateFlag/UpdateFlag/DeleteFlag/EvaluateFlag errors, strategy mismatch, ReplaceRulesByFlagID), users.Service (incl. all return paths: GetUser, GetUserByEmail, UpdateUser, DeleteUser store errors and invalid role), auth (password, JWT, RequireRole), middleware (logging, auth; incl. Authorization not Bearer → 401); flags and users PostgresStore (build tag `integration`); integration tests for HTTPS+GraphQL against **real Postgres** (testcontainers). Mock errors in tests use descriptive labels (e.g. GetByKeyAndEnvironment failed, ReplaceRulesByFlagID failed on CreateFlag).
-- Tests: internal/db, internal/flags (service_test, attribute_test), internal/users, internal/auth (auth_test, jwt_test, password_test), transport/graphql/middleware (logging_test, auth_test), test/integration (tag `integration`). Default `go test ./...` skips integration; run with `-tags=integration` for full E2E.
+- Test coverage: unit tests for db, flags.Service (incl. all return paths), users.Service, experiments.Service (CreateExperiment, GetExperiment, GetAssignment, weight validation, duplicate, not found, assignment determinism), auth, middleware; flags, users, and experiments PostgresStore (build tag `integration`); **experiments resolvers** (auth, nil service, not-found→null, delegation, service errors); integration tests for HTTPS+GraphQL against **real Postgres** (testcontainers), including test/integration/integration_experiments_test.go (createExperiment, experiment query, getAssignment, determinism). Mock errors in tests use descriptive labels.
+- Tests: internal/db, internal/flags, internal/users, internal/experiments (service_test, postgres_test, errors_test), internal/auth, transport/graphql (experiments_resolvers_test), transport/graphql/middleware, test/integration (flags, users, auth, experiments; tag `integration`). Default `go test ./...` skips integration; run with `-tags=integration` for full E2E.
 - Code style: gofmt run before task completion (see .cursor/rules/coding_style.mdc).
 
 ## 📝 Changelog
+
+**2026-03-15**: Phase 3 (Experiments Integration) closed after final REVIEW (APPROVED). Delivered: experiments service layer (Store, PostgresStore, Service with CreateExperiment, GetExperiment, GetAssignment; deterministic assignment; structured errors); GraphQL schema (experiments.graphqls) and resolvers (CreateExperiment, experiment, getAssignment) with auth (admin/developer for create, admin/developer/viewer for queries) and ExperimentNotFoundError→null; wiring in app (NewApp accepts experimentsStore), cmd/main.go, test/integration/util.go; integration tests (integration_experiments_test.go) and full resolver unit tests (experiments_resolvers_test.go). progress.md updated: Phase 3 checkboxes, REVIEW section, milestones table, metrics; next step Phase 4 (Audit logging).
 
 **2026-03-10 (hotfix)**: CI/smoke fix so Actions pass on Linux. Smoke and integration scripts failed with “No public port 5432 published” and “Permission denied” on `build.sh`. Changes: (1) Docker runs for Postgres now publish port 5432 (`-p 5432:5432`) in `test_binary_smoke.sh`, `test_default_listen_addr.sh`, `test_tls_config.sh`. (2) Scripts are invoked directly (no `bash` wrapper); execute bit set in Git (`git update-index --chmod=+x`) and CI step “Make scripts executable” (`chmod +x scripts/*.sh scripts/integration/*.sh`) after checkout so scripts run on the Linux runner.
 
