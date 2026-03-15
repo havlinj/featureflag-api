@@ -1,0 +1,32 @@
+type Experiment {
+  id: ID!
+  key: String!
+  environment: String!
+}
+
+type ExperimentVariant {
+  id: ID!
+  experimentId: ID!
+  name: String!
+  weight: Int!
+}
+
+input ExperimentVariantInput {
+  name: String!
+  weight: Int!
+}
+
+input CreateExperimentInput {
+  key: String!
+  environment: String!
+  variants: [ExperimentVariantInput!]!
+}
+
+extend type Query {
+  experiment(key: String!, environment: String!): Experiment
+  getAssignment(userId: ID!, experimentKey: String!, environment: String!): ExperimentVariant
+}
+
+extend type Mutation {
+  createExperiment(input: CreateExperimentInput!): Experiment!
+}

@@ -46,11 +46,13 @@ func PostgresForIntegration(t *testing.T) (*db.DB, func()) {
 	return database, cleanup
 }
 
-// TruncateAll truncates all application tables (users, feature_flags, flag_rules) for a clean state.
+// TruncateAll truncates all application tables for a clean state.
+// Order: child tables first (experiment_assignments, experiment_variants, experiments, flag_rules, feature_flags, users).
 func TruncateAll(t *testing.T, database *db.DB) {
 	t.Helper()
 	ctx := context.Background()
-	if _, err := database.Conn().ExecContext(ctx, "TRUNCATE flag_rules, feature_flags, users CASCADE"); err != nil {
+	if _, err := database.Conn().ExecContext(ctx,
+		"TRUNCATE experiment_assignments, experiment_variants, experiments, flag_rules, feature_flags, users CASCADE"); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
 }

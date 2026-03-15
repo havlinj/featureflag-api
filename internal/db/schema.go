@@ -26,4 +26,22 @@ var schemaSQL = []string{
 		type TEXT NOT NULL CHECK (type IN ('percentage', 'attribute')),
 		value TEXT NOT NULL
 	)`,
+	`CREATE TABLE IF NOT EXISTS experiments (
+		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+		key TEXT NOT NULL,
+		environment TEXT NOT NULL,
+		UNIQUE(key, environment)
+	)`,
+	`CREATE TABLE IF NOT EXISTS experiment_variants (
+		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+		experiment_id UUID NOT NULL REFERENCES experiments(id) ON DELETE CASCADE,
+		name TEXT NOT NULL,
+		weight INTEGER NOT NULL CHECK (weight >= 0)
+	)`,
+	`CREATE TABLE IF NOT EXISTS experiment_assignments (
+		user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+		experiment_id UUID NOT NULL REFERENCES experiments(id) ON DELETE CASCADE,
+		variant_id UUID NOT NULL REFERENCES experiment_variants(id) ON DELETE CASCADE,
+		PRIMARY KEY (user_id, experiment_id)
+	)`,
 }
