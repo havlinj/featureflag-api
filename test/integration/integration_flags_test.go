@@ -129,7 +129,7 @@ func TestFlagsAPI_GraphQLOverHTTPS(t *testing.T) {
 			evaluateFlag(key: $key, evaluationContext: $evaluationContext)
 		}
 	`, map[string]interface{}{
-		"key": "pct-flag",
+		"key":               "pct-flag",
 		"evaluationContext": map[string]interface{}{"userId": "user-1"},
 	})
 	if err != nil {
@@ -161,7 +161,7 @@ func TestFlagsAPI_GraphQLOverHTTPS(t *testing.T) {
 			evaluateFlag(key: $key, evaluationContext: $evaluationContext)
 		}
 	`, map[string]interface{}{
-		"key": "test-flag",
+		"key":               "test-flag",
 		"evaluationContext": map[string]interface{}{"userId": "user-1"},
 	})
 	if err != nil {

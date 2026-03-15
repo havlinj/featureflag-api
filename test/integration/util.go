@@ -13,8 +13,8 @@ import (
 	"github.com/havlinj/featureflag-api/internal/db"
 	"github.com/havlinj/featureflag-api/internal/experiments"
 	"github.com/havlinj/featureflag-api/internal/flags"
-	"github.com/havlinj/featureflag-api/internal/users"
 	"github.com/havlinj/featureflag-api/internal/testutil"
+	"github.com/havlinj/featureflag-api/internal/users"
 	"github.com/havlinj/featureflag-api/transport/graphql"
 )
 
