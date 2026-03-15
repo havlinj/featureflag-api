@@ -7,22 +7,50 @@ package graphql
 
 import (
 	"context"
-	"fmt"
+	"errors"
 
 	"github.com/havlinj/featureflag-api/graph/model"
+	"github.com/havlinj/featureflag-api/internal/auth"
+	"github.com/havlinj/featureflag-api/internal/experiments"
 )
 
 // CreateExperiment is the resolver for the createExperiment field.
 func (r *mutationResolver) CreateExperiment(ctx context.Context, input model.CreateExperimentInput) (*model.Experiment, error) {
-	panic(fmt.Errorf("not implemented: CreateExperiment - createExperiment"))
+	if _, err := auth.RequireRole(ctx, "admin", "developer"); err != nil {
+		return nil, err
+	}
+	if r.Experiments == nil {
+		return nil, errors.New("experiments service not configured")
+	}
+	return r.Experiments.CreateExperiment(ctx, input)
 }
 
 // Experiment is the resolver for the experiment field.
 func (r *queryResolver) Experiment(ctx context.Context, key string, environment string) (*model.Experiment, error) {
-	panic(fmt.Errorf("not implemented: Experiment - experiment"))
+	if _, err := auth.RequireRole(ctx, "admin", "developer", "viewer"); err != nil {
+		return nil, err
+	}
+	if r.Experiments == nil {
+		return nil, errors.New("experiments service not configured")
+	}
+	exp, err := r.Experiments.GetExperiment(ctx, key, environment)
+	if err != nil {
+		var nf *experiments.ExperimentNotFoundError
+		if errors.As(err, &nf) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return exp, nil
 }
 
 // GetAssignment is the resolver for the getAssignment field.
 func (r *queryResolver) GetAssignment(ctx context.Context, userID string, experimentKey string, environment string) (*model.ExperimentVariant, error) {
-	panic(fmt.Errorf("not implemented: GetAssignment - getAssignment"))
+	if _, err := auth.RequireRole(ctx, "admin", "developer", "viewer"); err != nil {
+		return nil, err
+	}
+	if r.Experiments == nil {
+		return nil, errors.New("experiments service not configured")
+	}
+	return r.Experiments.GetAssignment(ctx, userID, experimentKey, environment)
 }
