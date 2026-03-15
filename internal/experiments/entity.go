@@ -17,7 +17,7 @@ type Variant struct {
 
 // Assignment records which variant a user was assigned to for an experiment.
 type Assignment struct {
-	UserID      string
+	UserID       string
 	ExperimentID string
-	VariantID   string
+	VariantID    string
 }

@@ -9,6 +9,12 @@ import (
 	"strconv"
 )
 
+type CreateExperimentInput struct {
+	Key         string                    `json:"key"`
+	Environment string                    `json:"environment"`
+	Variants    []*ExperimentVariantInput `json:"variants"`
+}
+
 type CreateFlagInput struct {
 	Key             string           `json:"key"`
 	Description     *string          `json:"description,omitempty"`
@@ -26,6 +32,24 @@ type CreateUserInput struct {
 type EvaluationContextInput struct {
 	UserID string  `json:"userId"`
 	Email  *string `json:"email,omitempty"`
+}
+
+type Experiment struct {
+	ID          string `json:"id"`
+	Key         string `json:"key"`
+	Environment string `json:"environment"`
+}
+
+type ExperimentVariant struct {
+	ID           string `json:"id"`
+	ExperimentID string `json:"experimentId"`
+	Name         string `json:"name"`
+	Weight       int    `json:"weight"`
+}
+
+type ExperimentVariantInput struct {
+	Name   string `json:"name"`
+	Weight int    `json:"weight"`
 }
 
 type FeatureFlag struct {

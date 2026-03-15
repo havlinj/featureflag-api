@@ -52,7 +52,7 @@ var ErrMissingJWTSecret = errors.New("JWT_SECRET must be set")
 func GetJWTSecret(getenv func(string) string) (string, error) {
 	s := getenv("JWT_SECRET")
 	if s == "" {
-		return "", ErrMissingJWTSecret
+		return "", fmt.Errorf("config: JWT_SECRET must be set (empty or unset): %w", ErrMissingJWTSecret)
 	}
 	return s, nil
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgconn"
@@ -31,7 +32,7 @@ func (p *PostgresStore) Create(ctx context.Context, user *User) (*User, error) {
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
-			return nil, ErrDuplicateEmail
+			return nil, fmt.Errorf("users: duplicate email=%q: %w", user.Email, ErrDuplicateEmail)
 		}
 		return nil, err
 	}
@@ -102,7 +103,7 @@ func (p *PostgresStore) Update(ctx context.Context, user *User) error {
 	}
 	n, _ := res.RowsAffected()
 	if n == 0 {
-		return ErrNotFound
+		return fmt.Errorf("users: user not found id=%q: %w", user.ID, ErrNotFound)
 	}
 	return nil
 }
@@ -115,7 +116,7 @@ func (p *PostgresStore) Delete(ctx context.Context, id string) error {
 	}
 	n, _ := res.RowsAffected()
 	if n == 0 {
-		return ErrNotFound
+		return fmt.Errorf("users: user not found id=%q: %w", id, ErrNotFound)
 	}
 	return nil
 }

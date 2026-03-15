@@ -47,6 +47,19 @@ type DirectiveRoot struct {
 }
 
 type ComplexityRoot struct {
+	Experiment struct {
+		Environment func(childComplexity int) int
+		ID          func(childComplexity int) int
+		Key         func(childComplexity int) int
+	}
+
+	ExperimentVariant struct {
+		ExperimentID func(childComplexity int) int
+		ID           func(childComplexity int) int
+		Name         func(childComplexity int) int
+		Weight       func(childComplexity int) int
+	}
+
 	FeatureFlag struct {
 		Description     func(childComplexity int) int
 		Enabled         func(childComplexity int) int
@@ -61,19 +74,22 @@ type ComplexityRoot struct {
 	}
 
 	Mutation struct {
-		CreateFlag func(childComplexity int, input model.CreateFlagInput) int
-		CreateUser func(childComplexity int, input model.CreateUserInput) int
-		DeleteFlag func(childComplexity int, key string, environment string) int
-		DeleteUser func(childComplexity int, id string) int
-		Login      func(childComplexity int, input model.LoginInput) int
-		UpdateFlag func(childComplexity int, input model.UpdateFlagInput) int
-		UpdateUser func(childComplexity int, input model.UpdateUserInput) int
+		CreateExperiment func(childComplexity int, input model.CreateExperimentInput) int
+		CreateFlag       func(childComplexity int, input model.CreateFlagInput) int
+		CreateUser       func(childComplexity int, input model.CreateUserInput) int
+		DeleteFlag       func(childComplexity int, key string, environment string) int
+		DeleteUser       func(childComplexity int, id string) int
+		Login            func(childComplexity int, input model.LoginInput) int
+		UpdateFlag       func(childComplexity int, input model.UpdateFlagInput) int
+		UpdateUser       func(childComplexity int, input model.UpdateUserInput) int
 	}
 
 	Query struct {
-		EvaluateFlag func(childComplexity int, key string, evaluationContext model.EvaluationContextInput) int
-		User         func(childComplexity int, id string) int
-		UserByEmail  func(childComplexity int, email string) int
+		EvaluateFlag  func(childComplexity int, key string, evaluationContext model.EvaluationContextInput) int
+		Experiment    func(childComplexity int, key string, environment string) int
+		GetAssignment func(childComplexity int, userID string, experimentKey string, environment string) int
+		User          func(childComplexity int, id string) int
+		UserByEmail   func(childComplexity int, email string) int
 	}
 
 	User struct {
@@ -89,12 +105,15 @@ type MutationResolver interface {
 	UpdateFlag(ctx context.Context, input model.UpdateFlagInput) (*model.FeatureFlag, error)
 	DeleteFlag(ctx context.Context, key string, environment string) (bool, error)
 	Login(ctx context.Context, input model.LoginInput) (*model.LoginPayload, error)
+	CreateExperiment(ctx context.Context, input model.CreateExperimentInput) (*model.Experiment, error)
 	CreateUser(ctx context.Context, input model.CreateUserInput) (*model.User, error)
 	UpdateUser(ctx context.Context, input model.UpdateUserInput) (*model.User, error)
 	DeleteUser(ctx context.Context, id string) (bool, error)
 }
 type QueryResolver interface {
 	EvaluateFlag(ctx context.Context, key string, evaluationContext model.EvaluationContextInput) (bool, error)
+	Experiment(ctx context.Context, key string, environment string) (*model.Experiment, error)
+	GetAssignment(ctx context.Context, userID string, experimentKey string, environment string) (*model.ExperimentVariant, error)
 	User(ctx context.Context, id string) (*model.User, error)
 	UserByEmail(ctx context.Context, email string) (*model.User, error)
 }
@@ -117,6 +136,50 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 	ec := executionContext{nil, e, 0, 0, nil}
 	_ = ec
 	switch typeName + "." + field {
+
+	case "Experiment.environment":
+		if e.complexity.Experiment.Environment == nil {
+			break
+		}
+
+		return e.complexity.Experiment.Environment(childComplexity), true
+	case "Experiment.id":
+		if e.complexity.Experiment.ID == nil {
+			break
+		}
+
+		return e.complexity.Experiment.ID(childComplexity), true
+	case "Experiment.key":
+		if e.complexity.Experiment.Key == nil {
+			break
+		}
+
+		return e.complexity.Experiment.Key(childComplexity), true
+
+	case "ExperimentVariant.experimentId":
+		if e.complexity.ExperimentVariant.ExperimentID == nil {
+			break
+		}
+
+		return e.complexity.ExperimentVariant.ExperimentID(childComplexity), true
+	case "ExperimentVariant.id":
+		if e.complexity.ExperimentVariant.ID == nil {
+			break
+		}
+
+		return e.complexity.ExperimentVariant.ID(childComplexity), true
+	case "ExperimentVariant.name":
+		if e.complexity.ExperimentVariant.Name == nil {
+			break
+		}
+
+		return e.complexity.ExperimentVariant.Name(childComplexity), true
+	case "ExperimentVariant.weight":
+		if e.complexity.ExperimentVariant.Weight == nil {
+			break
+		}
+
+		return e.complexity.ExperimentVariant.Weight(childComplexity), true
 
 	case "FeatureFlag.description":
 		if e.complexity.FeatureFlag.Description == nil {
@@ -162,6 +225,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.complexity.LoginPayload.Token(childComplexity), true
 
+	case "Mutation.createExperiment":
+		if e.complexity.Mutation.CreateExperiment == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_createExperiment_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Mutation.CreateExperiment(childComplexity, args["input"].(model.CreateExperimentInput)), true
 	case "Mutation.createFlag":
 		if e.complexity.Mutation.CreateFlag == nil {
 			break
@@ -251,6 +325,28 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.complexity.Query.EvaluateFlag(childComplexity, args["key"].(string), args["evaluationContext"].(model.EvaluationContextInput)), true
+	case "Query.experiment":
+		if e.complexity.Query.Experiment == nil {
+			break
+		}
+
+		args, err := ec.field_Query_experiment_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Query.Experiment(childComplexity, args["key"].(string), args["environment"].(string)), true
+	case "Query.getAssignment":
+		if e.complexity.Query.GetAssignment == nil {
+			break
+		}
+
+		args, err := ec.field_Query_getAssignment_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Query.GetAssignment(childComplexity, args["userId"].(string), args["experimentKey"].(string), args["environment"].(string)), true
 	case "Query.user":
 		if e.complexity.Query.User == nil {
 			break
@@ -307,9 +403,11 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 	opCtx := graphql.GetOperationContext(ctx)
 	ec := executionContext{opCtx, e, 0, 0, make(chan graphql.DeferredResult)}
 	inputUnmarshalMap := graphql.BuildUnmarshalerMap(
+		ec.unmarshalInputCreateExperimentInput,
 		ec.unmarshalInputCreateFlagInput,
 		ec.unmarshalInputCreateUserInput,
 		ec.unmarshalInputEvaluationContextInput,
+		ec.unmarshalInputExperimentVariantInput,
 		ec.unmarshalInputLoginInput,
 		ec.unmarshalInputRuleInput,
 		ec.unmarshalInputUpdateFlagInput,
@@ -410,7 +508,7 @@ func (ec *executionContext) introspectType(name string) (*introspection.Type, er
 	return introspection.WrapTypeFromDef(ec.Schema(), ec.Schema().Types[name]), nil
 }
 
-//go:embed "schema/auth.graphqls" "schema/flags.graphqls" "schema/users.graphqls"
+//go:embed "schema/auth.graphqls" "schema/experiments.graphqls" "schema/flags.graphqls" "schema/users.graphqls"
 var sourcesFS embed.FS
 
 func sourceData(filename string) string {
@@ -423,6 +521,7 @@ func sourceData(filename string) string {
 
 var sources = []*ast.Source{
 	{Name: "schema/auth.graphqls", Input: sourceData("schema/auth.graphqls"), BuiltIn: false},
+	{Name: "schema/experiments.graphqls", Input: sourceData("schema/experiments.graphqls"), BuiltIn: false},
 	{Name: "schema/flags.graphqls", Input: sourceData("schema/flags.graphqls"), BuiltIn: false},
 	{Name: "schema/users.graphqls", Input: sourceData("schema/users.graphqls"), BuiltIn: false},
 }
@@ -432,10 +531,21 @@ var parsedSchema = gqlparser.MustLoadSchema(sources...)
 
 // region    ***************************** args.gotpl *****************************
 
+func (ec *executionContext) field_Mutation_createExperiment_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input", ec.unmarshalNCreateExperimentInput2githubᚗcomᚋhavlinjᚋfeatureflagᚑapiᚋgraphᚋmodelᚐCreateExperimentInput)
+	if err != nil {
+		return nil, err
+	}
+	args["input"] = arg0
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_createFlag_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
-	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input", ec.unmarshalNCreateFlagInput2githubᚗcomᚋjanᚑhavlinᚑdevᚋfeatureflagᚑapiᚋgraphᚋmodelᚐCreateFlagInput)
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input", ec.unmarshalNCreateFlagInput2githubᚗcomᚋhavlinjᚋfeatureflagᚑapiᚋgraphᚋmodelᚐCreateFlagInput)
 	if err != nil {
 		return nil, err
 	}
@@ -446,7 +556,7 @@ func (ec *executionContext) field_Mutation_createFlag_args(ctx context.Context, 
 func (ec *executionContext) field_Mutation_createUser_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
-	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input", ec.unmarshalNCreateUserInput2githubᚗcomᚋjanᚑhavlinᚑdevᚋfeatureflagᚑapiᚋgraphᚋmodelᚐCreateUserInput)
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input", ec.unmarshalNCreateUserInput2githubᚗcomᚋhavlinjᚋfeatureflagᚑapiᚋgraphᚋmodelᚐCreateUserInput)
 	if err != nil {
 		return nil, err
 	}
@@ -484,7 +594,7 @@ func (ec *executionContext) field_Mutation_deleteUser_args(ctx context.Context, 
 func (ec *executionContext) field_Mutation_login_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
-	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input", ec.unmarshalNLoginInput2githubᚗcomᚋjanᚑhavlinᚑdevᚋfeatureflagᚑapiᚋgraphᚋmodelᚐLoginInput)
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input", ec.unmarshalNLoginInput2githubᚗcomᚋhavlinjᚋfeatureflagᚑapiᚋgraphᚋmodelᚐLoginInput)
 	if err != nil {
 		return nil, err
 	}
@@ -495,7 +605,7 @@ func (ec *executionContext) field_Mutation_login_args(ctx context.Context, rawAr
 func (ec *executionContext) field_Mutation_updateFlag_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
-	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input", ec.unmarshalNUpdateFlagInput2githubᚗcomᚋjanᚑhavlinᚑdevᚋfeatureflagᚑapiᚋgraphᚋmodelᚐUpdateFlagInput)
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input", ec.unmarshalNUpdateFlagInput2githubᚗcomᚋhavlinjᚋfeatureflagᚑapiᚋgraphᚋmodelᚐUpdateFlagInput)
 	if err != nil {
 		return nil, err
 	}
@@ -506,7 +616,7 @@ func (ec *executionContext) field_Mutation_updateFlag_args(ctx context.Context, 
 func (ec *executionContext) field_Mutation_updateUser_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
-	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input", ec.unmarshalNUpdateUserInput2githubᚗcomᚋjanᚑhavlinᚑdevᚋfeatureflagᚑapiᚋgraphᚋmodelᚐUpdateUserInput)
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input", ec.unmarshalNUpdateUserInput2githubᚗcomᚋhavlinjᚋfeatureflagᚑapiᚋgraphᚋmodelᚐUpdateUserInput)
 	if err != nil {
 		return nil, err
 	}
@@ -533,11 +643,48 @@ func (ec *executionContext) field_Query_evaluateFlag_args(ctx context.Context, r
 		return nil, err
 	}
 	args["key"] = arg0
-	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "evaluationContext", ec.unmarshalNEvaluationContextInput2githubᚗcomᚋjanᚑhavlinᚑdevᚋfeatureflagᚑapiᚋgraphᚋmodelᚐEvaluationContextInput)
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "evaluationContext", ec.unmarshalNEvaluationContextInput2githubᚗcomᚋhavlinjᚋfeatureflagᚑapiᚋgraphᚋmodelᚐEvaluationContextInput)
 	if err != nil {
 		return nil, err
 	}
 	args["evaluationContext"] = arg1
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_experiment_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "key", ec.unmarshalNString2string)
+	if err != nil {
+		return nil, err
+	}
+	args["key"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "environment", ec.unmarshalNString2string)
+	if err != nil {
+		return nil, err
+	}
+	args["environment"] = arg1
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_getAssignment_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "userId", ec.unmarshalNID2string)
+	if err != nil {
+		return nil, err
+	}
+	args["userId"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "experimentKey", ec.unmarshalNString2string)
+	if err != nil {
+		return nil, err
+	}
+	args["experimentKey"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "environment", ec.unmarshalNString2string)
+	if err != nil {
+		return nil, err
+	}
+	args["environment"] = arg2
 	return args, nil
 }
 
@@ -614,6 +761,209 @@ func (ec *executionContext) field___Type_fields_args(ctx context.Context, rawArg
 // endregion ************************** directives.gotpl **************************
 
 // region    **************************** field.gotpl *****************************
+
+func (ec *executionContext) _Experiment_id(ctx context.Context, field graphql.CollectedField, obj *model.Experiment) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Experiment_id,
+		func(ctx context.Context) (any, error) {
+			return obj.ID, nil
+		},
+		nil,
+		ec.marshalNID2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Experiment_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Experiment",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ID does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Experiment_key(ctx context.Context, field graphql.CollectedField, obj *model.Experiment) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Experiment_key,
+		func(ctx context.Context) (any, error) {
+			return obj.Key, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Experiment_key(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Experiment",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Experiment_environment(ctx context.Context, field graphql.CollectedField, obj *model.Experiment) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Experiment_environment,
+		func(ctx context.Context) (any, error) {
+			return obj.Environment, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Experiment_environment(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Experiment",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ExperimentVariant_id(ctx context.Context, field graphql.CollectedField, obj *model.ExperimentVariant) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ExperimentVariant_id,
+		func(ctx context.Context) (any, error) {
+			return obj.ID, nil
+		},
+		nil,
+		ec.marshalNID2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ExperimentVariant_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ExperimentVariant",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ID does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ExperimentVariant_experimentId(ctx context.Context, field graphql.CollectedField, obj *model.ExperimentVariant) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ExperimentVariant_experimentId,
+		func(ctx context.Context) (any, error) {
+			return obj.ExperimentID, nil
+		},
+		nil,
+		ec.marshalNID2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ExperimentVariant_experimentId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ExperimentVariant",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ID does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ExperimentVariant_name(ctx context.Context, field graphql.CollectedField, obj *model.ExperimentVariant) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ExperimentVariant_name,
+		func(ctx context.Context) (any, error) {
+			return obj.Name, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ExperimentVariant_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ExperimentVariant",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ExperimentVariant_weight(ctx context.Context, field graphql.CollectedField, obj *model.ExperimentVariant) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ExperimentVariant_weight,
+		func(ctx context.Context) (any, error) {
+			return obj.Weight, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ExperimentVariant_weight(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ExperimentVariant",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
 
 func (ec *executionContext) _FeatureFlag_id(ctx context.Context, field graphql.CollectedField, obj *model.FeatureFlag) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
@@ -770,7 +1120,7 @@ func (ec *executionContext) _FeatureFlag_rolloutStrategy(ctx context.Context, fi
 			return obj.RolloutStrategy, nil
 		},
 		nil,
-		ec.marshalNRolloutStrategy2githubᚗcomᚋjanᚑhavlinᚑdevᚋfeatureflagᚑapiᚋgraphᚋmodelᚐRolloutStrategy,
+		ec.marshalNRolloutStrategy2githubᚗcomᚋhavlinjᚋfeatureflagᚑapiᚋgraphᚋmodelᚐRolloutStrategy,
 		true,
 		true,
 	)
@@ -829,7 +1179,7 @@ func (ec *executionContext) _Mutation_createFlag(ctx context.Context, field grap
 			return ec.resolvers.Mutation().CreateFlag(ctx, fc.Args["input"].(model.CreateFlagInput))
 		},
 		nil,
-		ec.marshalNFeatureFlag2ᚖgithubᚗcomᚋjanᚑhavlinᚑdevᚋfeatureflagᚑapiᚋgraphᚋmodelᚐFeatureFlag,
+		ec.marshalNFeatureFlag2ᚖgithubᚗcomᚋhavlinjᚋfeatureflagᚑapiᚋgraphᚋmodelᚐFeatureFlag,
 		true,
 		true,
 	)
@@ -884,7 +1234,7 @@ func (ec *executionContext) _Mutation_updateFlag(ctx context.Context, field grap
 			return ec.resolvers.Mutation().UpdateFlag(ctx, fc.Args["input"].(model.UpdateFlagInput))
 		},
 		nil,
-		ec.marshalNFeatureFlag2ᚖgithubᚗcomᚋjanᚑhavlinᚑdevᚋfeatureflagᚑapiᚋgraphᚋmodelᚐFeatureFlag,
+		ec.marshalNFeatureFlag2ᚖgithubᚗcomᚋhavlinjᚋfeatureflagᚑapiᚋgraphᚋmodelᚐFeatureFlag,
 		true,
 		true,
 	)
@@ -980,7 +1330,7 @@ func (ec *executionContext) _Mutation_login(ctx context.Context, field graphql.C
 			return ec.resolvers.Mutation().Login(ctx, fc.Args["input"].(model.LoginInput))
 		},
 		nil,
-		ec.marshalNLoginPayload2ᚖgithubᚗcomᚋjanᚑhavlinᚑdevᚋfeatureflagᚑapiᚋgraphᚋmodelᚐLoginPayload,
+		ec.marshalNLoginPayload2ᚖgithubᚗcomᚋhavlinjᚋfeatureflagᚑapiᚋgraphᚋmodelᚐLoginPayload,
 		true,
 		true,
 	)
@@ -1014,6 +1364,55 @@ func (ec *executionContext) fieldContext_Mutation_login(ctx context.Context, fie
 	return fc, nil
 }
 
+func (ec *executionContext) _Mutation_createExperiment(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Mutation_createExperiment,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.resolvers.Mutation().CreateExperiment(ctx, fc.Args["input"].(model.CreateExperimentInput))
+		},
+		nil,
+		ec.marshalNExperiment2ᚖgithubᚗcomᚋhavlinjᚋfeatureflagᚑapiᚋgraphᚋmodelᚐExperiment,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Mutation_createExperiment(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_Experiment_id(ctx, field)
+			case "key":
+				return ec.fieldContext_Experiment_key(ctx, field)
+			case "environment":
+				return ec.fieldContext_Experiment_environment(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type Experiment", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_createExperiment_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Mutation_createUser(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -1025,7 +1424,7 @@ func (ec *executionContext) _Mutation_createUser(ctx context.Context, field grap
 			return ec.resolvers.Mutation().CreateUser(ctx, fc.Args["input"].(model.CreateUserInput))
 		},
 		nil,
-		ec.marshalNUser2ᚖgithubᚗcomᚋjanᚑhavlinᚑdevᚋfeatureflagᚑapiᚋgraphᚋmodelᚐUser,
+		ec.marshalNUser2ᚖgithubᚗcomᚋhavlinjᚋfeatureflagᚑapiᚋgraphᚋmodelᚐUser,
 		true,
 		true,
 	)
@@ -1076,7 +1475,7 @@ func (ec *executionContext) _Mutation_updateUser(ctx context.Context, field grap
 			return ec.resolvers.Mutation().UpdateUser(ctx, fc.Args["input"].(model.UpdateUserInput))
 		},
 		nil,
-		ec.marshalNUser2ᚖgithubᚗcomᚋjanᚑhavlinᚑdevᚋfeatureflagᚑapiᚋgraphᚋmodelᚐUser,
+		ec.marshalNUser2ᚖgithubᚗcomᚋhavlinjᚋfeatureflagᚑapiᚋgraphᚋmodelᚐUser,
 		true,
 		true,
 	)
@@ -1198,6 +1597,106 @@ func (ec *executionContext) fieldContext_Query_evaluateFlag(ctx context.Context,
 	return fc, nil
 }
 
+func (ec *executionContext) _Query_experiment(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Query_experiment,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.resolvers.Query().Experiment(ctx, fc.Args["key"].(string), fc.Args["environment"].(string))
+		},
+		nil,
+		ec.marshalOExperiment2ᚖgithubᚗcomᚋhavlinjᚋfeatureflagᚑapiᚋgraphᚋmodelᚐExperiment,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_Query_experiment(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_Experiment_id(ctx, field)
+			case "key":
+				return ec.fieldContext_Experiment_key(ctx, field)
+			case "environment":
+				return ec.fieldContext_Experiment_environment(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type Experiment", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_experiment_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_getAssignment(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Query_getAssignment,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.resolvers.Query().GetAssignment(ctx, fc.Args["userId"].(string), fc.Args["experimentKey"].(string), fc.Args["environment"].(string))
+		},
+		nil,
+		ec.marshalOExperimentVariant2ᚖgithubᚗcomᚋhavlinjᚋfeatureflagᚑapiᚋgraphᚋmodelᚐExperimentVariant,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_Query_getAssignment(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_ExperimentVariant_id(ctx, field)
+			case "experimentId":
+				return ec.fieldContext_ExperimentVariant_experimentId(ctx, field)
+			case "name":
+				return ec.fieldContext_ExperimentVariant_name(ctx, field)
+			case "weight":
+				return ec.fieldContext_ExperimentVariant_weight(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type ExperimentVariant", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_getAssignment_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Query_user(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -1209,7 +1708,7 @@ func (ec *executionContext) _Query_user(ctx context.Context, field graphql.Colle
 			return ec.resolvers.Query().User(ctx, fc.Args["id"].(string))
 		},
 		nil,
-		ec.marshalOUser2ᚖgithubᚗcomᚋjanᚑhavlinᚑdevᚋfeatureflagᚑapiᚋgraphᚋmodelᚐUser,
+		ec.marshalOUser2ᚖgithubᚗcomᚋhavlinjᚋfeatureflagᚑapiᚋgraphᚋmodelᚐUser,
 		true,
 		false,
 	)
@@ -1260,7 +1759,7 @@ func (ec *executionContext) _Query_userByEmail(ctx context.Context, field graphq
 			return ec.resolvers.Query().UserByEmail(ctx, fc.Args["email"].(string))
 		},
 		nil,
-		ec.marshalOUser2ᚖgithubᚗcomᚋjanᚑhavlinᚑdevᚋfeatureflagᚑapiᚋgraphᚋmodelᚐUser,
+		ec.marshalOUser2ᚖgithubᚗcomᚋhavlinjᚋfeatureflagᚑapiᚋgraphᚋmodelᚐUser,
 		true,
 		false,
 	)
@@ -1476,7 +1975,7 @@ func (ec *executionContext) _User_role(ctx context.Context, field graphql.Collec
 			return obj.Role, nil
 		},
 		nil,
-		ec.marshalNRole2githubᚗcomᚋjanᚑhavlinᚑdevᚋfeatureflagᚑapiᚋgraphᚋmodelᚐRole,
+		ec.marshalNRole2githubᚗcomᚋhavlinjᚋfeatureflagᚑapiᚋgraphᚋmodelᚐRole,
 		true,
 		true,
 	)
@@ -2970,6 +3469,47 @@ func (ec *executionContext) fieldContext___Type_isOneOf(_ context.Context, field
 
 // region    **************************** input.gotpl *****************************
 
+func (ec *executionContext) unmarshalInputCreateExperimentInput(ctx context.Context, obj any) (model.CreateExperimentInput, error) {
+	var it model.CreateExperimentInput
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"key", "environment", "variants"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "key":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("key"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Key = data
+		case "environment":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("environment"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Environment = data
+		case "variants":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("variants"))
+			data, err := ec.unmarshalNExperimentVariantInput2ᚕᚖgithubᚗcomᚋhavlinjᚋfeatureflagᚑapiᚋgraphᚋmodelᚐExperimentVariantInputᚄ(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Variants = data
+		}
+	}
+
+	return it, nil
+}
+
 func (ec *executionContext) unmarshalInputCreateFlagInput(ctx context.Context, obj any) (model.CreateFlagInput, error) {
 	var it model.CreateFlagInput
 	asMap := map[string]any{}
@@ -3007,14 +3547,14 @@ func (ec *executionContext) unmarshalInputCreateFlagInput(ctx context.Context, o
 			it.Environment = data
 		case "rolloutStrategy":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("rolloutStrategy"))
-			data, err := ec.unmarshalORolloutStrategy2ᚖgithubᚗcomᚋjanᚑhavlinᚑdevᚋfeatureflagᚑapiᚋgraphᚋmodelᚐRolloutStrategy(ctx, v)
+			data, err := ec.unmarshalORolloutStrategy2ᚖgithubᚗcomᚋhavlinjᚋfeatureflagᚑapiᚋgraphᚋmodelᚐRolloutStrategy(ctx, v)
 			if err != nil {
 				return it, err
 			}
 			it.RolloutStrategy = data
 		case "rules":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("rules"))
-			data, err := ec.unmarshalORuleInput2ᚕᚖgithubᚗcomᚋjanᚑhavlinᚑdevᚋfeatureflagᚑapiᚋgraphᚋmodelᚐRuleInputᚄ(ctx, v)
+			data, err := ec.unmarshalORuleInput2ᚕᚖgithubᚗcomᚋhavlinjᚋfeatureflagᚑapiᚋgraphᚋmodelᚐRuleInputᚄ(ctx, v)
 			if err != nil {
 				return it, err
 			}
@@ -3048,7 +3588,7 @@ func (ec *executionContext) unmarshalInputCreateUserInput(ctx context.Context, o
 			it.Email = data
 		case "role":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("role"))
-			data, err := ec.unmarshalNRole2githubᚗcomᚋjanᚑhavlinᚑdevᚋfeatureflagᚑapiᚋgraphᚋmodelᚐRole(ctx, v)
+			data, err := ec.unmarshalNRole2githubᚗcomᚋhavlinjᚋfeatureflagᚑapiᚋgraphᚋmodelᚐRole(ctx, v)
 			if err != nil {
 				return it, err
 			}
@@ -3094,6 +3634,40 @@ func (ec *executionContext) unmarshalInputEvaluationContextInput(ctx context.Con
 				return it, err
 			}
 			it.Email = data
+		}
+	}
+
+	return it, nil
+}
+
+func (ec *executionContext) unmarshalInputExperimentVariantInput(ctx context.Context, obj any) (model.ExperimentVariantInput, error) {
+	var it model.ExperimentVariantInput
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"name", "weight"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "name":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("name"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Name = data
+		case "weight":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("weight"))
+			data, err := ec.unmarshalNInt2int(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Weight = data
 		}
 	}
 
@@ -3150,7 +3724,7 @@ func (ec *executionContext) unmarshalInputRuleInput(ctx context.Context, obj any
 		switch k {
 		case "type":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("type"))
-			data, err := ec.unmarshalNRolloutRuleType2githubᚗcomᚋjanᚑhavlinᚑdevᚋfeatureflagᚑapiᚋgraphᚋmodelᚐRolloutRuleType(ctx, v)
+			data, err := ec.unmarshalNRolloutRuleType2githubᚗcomᚋhavlinjᚋfeatureflagᚑapiᚋgraphᚋmodelᚐRolloutRuleType(ctx, v)
 			if err != nil {
 				return it, err
 			}
@@ -3198,7 +3772,7 @@ func (ec *executionContext) unmarshalInputUpdateFlagInput(ctx context.Context, o
 			it.Enabled = data
 		case "rules":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("rules"))
-			data, err := ec.unmarshalORuleInput2ᚕᚖgithubᚗcomᚋjanᚑhavlinᚑdevᚋfeatureflagᚑapiᚋgraphᚋmodelᚐRuleInputᚄ(ctx, v)
+			data, err := ec.unmarshalORuleInput2ᚕᚖgithubᚗcomᚋhavlinjᚋfeatureflagᚑapiᚋgraphᚋmodelᚐRuleInputᚄ(ctx, v)
 			if err != nil {
 				return it, err
 			}
@@ -3239,7 +3813,7 @@ func (ec *executionContext) unmarshalInputUpdateUserInput(ctx context.Context, o
 			it.Email = data
 		case "role":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("role"))
-			data, err := ec.unmarshalORole2ᚖgithubᚗcomᚋjanᚑhavlinᚑdevᚋfeatureflagᚑapiᚋgraphᚋmodelᚐRole(ctx, v)
+			data, err := ec.unmarshalORole2ᚖgithubᚗcomᚋhavlinjᚋfeatureflagᚑapiᚋgraphᚋmodelᚐRole(ctx, v)
 			if err != nil {
 				return it, err
 			}
@@ -3264,6 +3838,109 @@ func (ec *executionContext) unmarshalInputUpdateUserInput(ctx context.Context, o
 // endregion ************************** interface.gotpl ***************************
 
 // region    **************************** object.gotpl ****************************
+
+var experimentImplementors = []string{"Experiment"}
+
+func (ec *executionContext) _Experiment(ctx context.Context, sel ast.SelectionSet, obj *model.Experiment) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, experimentImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("Experiment")
+		case "id":
+			out.Values[i] = ec._Experiment_id(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "key":
+			out.Values[i] = ec._Experiment_key(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "environment":
+			out.Values[i] = ec._Experiment_environment(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var experimentVariantImplementors = []string{"ExperimentVariant"}
+
+func (ec *executionContext) _ExperimentVariant(ctx context.Context, sel ast.SelectionSet, obj *model.ExperimentVariant) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, experimentVariantImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("ExperimentVariant")
+		case "id":
+			out.Values[i] = ec._ExperimentVariant_id(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "experimentId":
+			out.Values[i] = ec._ExperimentVariant_experimentId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "name":
+			out.Values[i] = ec._ExperimentVariant_name(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "weight":
+			out.Values[i] = ec._ExperimentVariant_weight(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
 
 var featureFlagImplementors = []string{"FeatureFlag"}
 
@@ -3412,6 +4089,13 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "createExperiment":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_createExperiment(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		case "createUser":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_createUser(ctx, field)
@@ -3488,6 +4172,44 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 				if res == graphql.Null {
 					atomic.AddUint32(&fs.Invalids, 1)
 				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "experiment":
+			field := field
+
+			innerFunc := func(ctx context.Context, _ *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_experiment(ctx, field)
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "getAssignment":
+			field := field
+
+			innerFunc := func(ctx context.Context, _ *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_getAssignment(ctx, field)
 				return res
 			}
 
@@ -3971,26 +4693,65 @@ func (ec *executionContext) marshalNBoolean2bool(ctx context.Context, sel ast.Se
 	return res
 }
 
-func (ec *executionContext) unmarshalNCreateFlagInput2githubᚗcomᚋjanᚑhavlinᚑdevᚋfeatureflagᚑapiᚋgraphᚋmodelᚐCreateFlagInput(ctx context.Context, v any) (model.CreateFlagInput, error) {
+func (ec *executionContext) unmarshalNCreateExperimentInput2githubᚗcomᚋhavlinjᚋfeatureflagᚑapiᚋgraphᚋmodelᚐCreateExperimentInput(ctx context.Context, v any) (model.CreateExperimentInput, error) {
+	res, err := ec.unmarshalInputCreateExperimentInput(ctx, v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) unmarshalNCreateFlagInput2githubᚗcomᚋhavlinjᚋfeatureflagᚑapiᚋgraphᚋmodelᚐCreateFlagInput(ctx context.Context, v any) (model.CreateFlagInput, error) {
 	res, err := ec.unmarshalInputCreateFlagInput(ctx, v)
 	return res, graphql.ErrorOnPath(ctx, err)
 }
 
-func (ec *executionContext) unmarshalNCreateUserInput2githubᚗcomᚋjanᚑhavlinᚑdevᚋfeatureflagᚑapiᚋgraphᚋmodelᚐCreateUserInput(ctx context.Context, v any) (model.CreateUserInput, error) {
+func (ec *executionContext) unmarshalNCreateUserInput2githubᚗcomᚋhavlinjᚋfeatureflagᚑapiᚋgraphᚋmodelᚐCreateUserInput(ctx context.Context, v any) (model.CreateUserInput, error) {
 	res, err := ec.unmarshalInputCreateUserInput(ctx, v)
 	return res, graphql.ErrorOnPath(ctx, err)
 }
 
-func (ec *executionContext) unmarshalNEvaluationContextInput2githubᚗcomᚋjanᚑhavlinᚑdevᚋfeatureflagᚑapiᚋgraphᚋmodelᚐEvaluationContextInput(ctx context.Context, v any) (model.EvaluationContextInput, error) {
+func (ec *executionContext) unmarshalNEvaluationContextInput2githubᚗcomᚋhavlinjᚋfeatureflagᚑapiᚋgraphᚋmodelᚐEvaluationContextInput(ctx context.Context, v any) (model.EvaluationContextInput, error) {
 	res, err := ec.unmarshalInputEvaluationContextInput(ctx, v)
 	return res, graphql.ErrorOnPath(ctx, err)
 }
 
-func (ec *executionContext) marshalNFeatureFlag2githubᚗcomᚋjanᚑhavlinᚑdevᚋfeatureflagᚑapiᚋgraphᚋmodelᚐFeatureFlag(ctx context.Context, sel ast.SelectionSet, v model.FeatureFlag) graphql.Marshaler {
+func (ec *executionContext) marshalNExperiment2githubᚗcomᚋhavlinjᚋfeatureflagᚑapiᚋgraphᚋmodelᚐExperiment(ctx context.Context, sel ast.SelectionSet, v model.Experiment) graphql.Marshaler {
+	return ec._Experiment(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNExperiment2ᚖgithubᚗcomᚋhavlinjᚋfeatureflagᚑapiᚋgraphᚋmodelᚐExperiment(ctx context.Context, sel ast.SelectionSet, v *model.Experiment) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._Experiment(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalNExperimentVariantInput2ᚕᚖgithubᚗcomᚋhavlinjᚋfeatureflagᚑapiᚋgraphᚋmodelᚐExperimentVariantInputᚄ(ctx context.Context, v any) ([]*model.ExperimentVariantInput, error) {
+	var vSlice []any
+	vSlice = graphql.CoerceList(v)
+	var err error
+	res := make([]*model.ExperimentVariantInput, len(vSlice))
+	for i := range vSlice {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithIndex(i))
+		res[i], err = ec.unmarshalNExperimentVariantInput2ᚖgithubᚗcomᚋhavlinjᚋfeatureflagᚑapiᚋgraphᚋmodelᚐExperimentVariantInput(ctx, vSlice[i])
+		if err != nil {
+			return nil, err
+		}
+	}
+	return res, nil
+}
+
+func (ec *executionContext) unmarshalNExperimentVariantInput2ᚖgithubᚗcomᚋhavlinjᚋfeatureflagᚑapiᚋgraphᚋmodelᚐExperimentVariantInput(ctx context.Context, v any) (*model.ExperimentVariantInput, error) {
+	res, err := ec.unmarshalInputExperimentVariantInput(ctx, v)
+	return &res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNFeatureFlag2githubᚗcomᚋhavlinjᚋfeatureflagᚑapiᚋgraphᚋmodelᚐFeatureFlag(ctx context.Context, sel ast.SelectionSet, v model.FeatureFlag) graphql.Marshaler {
 	return ec._FeatureFlag(ctx, sel, &v)
 }
 
-func (ec *executionContext) marshalNFeatureFlag2ᚖgithubᚗcomᚋjanᚑhavlinᚑdevᚋfeatureflagᚑapiᚋgraphᚋmodelᚐFeatureFlag(ctx context.Context, sel ast.SelectionSet, v *model.FeatureFlag) graphql.Marshaler {
+func (ec *executionContext) marshalNFeatureFlag2ᚖgithubᚗcomᚋhavlinjᚋfeatureflagᚑapiᚋgraphᚋmodelᚐFeatureFlag(ctx context.Context, sel ast.SelectionSet, v *model.FeatureFlag) graphql.Marshaler {
 	if v == nil {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
 			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
@@ -4016,16 +4777,32 @@ func (ec *executionContext) marshalNID2string(ctx context.Context, sel ast.Selec
 	return res
 }
 
-func (ec *executionContext) unmarshalNLoginInput2githubᚗcomᚋjanᚑhavlinᚑdevᚋfeatureflagᚑapiᚋgraphᚋmodelᚐLoginInput(ctx context.Context, v any) (model.LoginInput, error) {
+func (ec *executionContext) unmarshalNInt2int(ctx context.Context, v any) (int, error) {
+	res, err := graphql.UnmarshalInt(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNInt2int(ctx context.Context, sel ast.SelectionSet, v int) graphql.Marshaler {
+	_ = sel
+	res := graphql.MarshalInt(v)
+	if res == graphql.Null {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+	}
+	return res
+}
+
+func (ec *executionContext) unmarshalNLoginInput2githubᚗcomᚋhavlinjᚋfeatureflagᚑapiᚋgraphᚋmodelᚐLoginInput(ctx context.Context, v any) (model.LoginInput, error) {
 	res, err := ec.unmarshalInputLoginInput(ctx, v)
 	return res, graphql.ErrorOnPath(ctx, err)
 }
 
-func (ec *executionContext) marshalNLoginPayload2githubᚗcomᚋjanᚑhavlinᚑdevᚋfeatureflagᚑapiᚋgraphᚋmodelᚐLoginPayload(ctx context.Context, sel ast.SelectionSet, v model.LoginPayload) graphql.Marshaler {
+func (ec *executionContext) marshalNLoginPayload2githubᚗcomᚋhavlinjᚋfeatureflagᚑapiᚋgraphᚋmodelᚐLoginPayload(ctx context.Context, sel ast.SelectionSet, v model.LoginPayload) graphql.Marshaler {
 	return ec._LoginPayload(ctx, sel, &v)
 }
 
-func (ec *executionContext) marshalNLoginPayload2ᚖgithubᚗcomᚋjanᚑhavlinᚑdevᚋfeatureflagᚑapiᚋgraphᚋmodelᚐLoginPayload(ctx context.Context, sel ast.SelectionSet, v *model.LoginPayload) graphql.Marshaler {
+func (ec *executionContext) marshalNLoginPayload2ᚖgithubᚗcomᚋhavlinjᚋfeatureflagᚑapiᚋgraphᚋmodelᚐLoginPayload(ctx context.Context, sel ast.SelectionSet, v *model.LoginPayload) graphql.Marshaler {
 	if v == nil {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
 			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
@@ -4035,37 +4812,37 @@ func (ec *executionContext) marshalNLoginPayload2ᚖgithubᚗcomᚋjanᚑhavlin�
 	return ec._LoginPayload(ctx, sel, v)
 }
 
-func (ec *executionContext) unmarshalNRole2githubᚗcomᚋjanᚑhavlinᚑdevᚋfeatureflagᚑapiᚋgraphᚋmodelᚐRole(ctx context.Context, v any) (model.Role, error) {
+func (ec *executionContext) unmarshalNRole2githubᚗcomᚋhavlinjᚋfeatureflagᚑapiᚋgraphᚋmodelᚐRole(ctx context.Context, v any) (model.Role, error) {
 	var res model.Role
 	err := res.UnmarshalGQL(v)
 	return res, graphql.ErrorOnPath(ctx, err)
 }
 
-func (ec *executionContext) marshalNRole2githubᚗcomᚋjanᚑhavlinᚑdevᚋfeatureflagᚑapiᚋgraphᚋmodelᚐRole(ctx context.Context, sel ast.SelectionSet, v model.Role) graphql.Marshaler {
+func (ec *executionContext) marshalNRole2githubᚗcomᚋhavlinjᚋfeatureflagᚑapiᚋgraphᚋmodelᚐRole(ctx context.Context, sel ast.SelectionSet, v model.Role) graphql.Marshaler {
 	return v
 }
 
-func (ec *executionContext) unmarshalNRolloutRuleType2githubᚗcomᚋjanᚑhavlinᚑdevᚋfeatureflagᚑapiᚋgraphᚋmodelᚐRolloutRuleType(ctx context.Context, v any) (model.RolloutRuleType, error) {
+func (ec *executionContext) unmarshalNRolloutRuleType2githubᚗcomᚋhavlinjᚋfeatureflagᚑapiᚋgraphᚋmodelᚐRolloutRuleType(ctx context.Context, v any) (model.RolloutRuleType, error) {
 	var res model.RolloutRuleType
 	err := res.UnmarshalGQL(v)
 	return res, graphql.ErrorOnPath(ctx, err)
 }
 
-func (ec *executionContext) marshalNRolloutRuleType2githubᚗcomᚋjanᚑhavlinᚑdevᚋfeatureflagᚑapiᚋgraphᚋmodelᚐRolloutRuleType(ctx context.Context, sel ast.SelectionSet, v model.RolloutRuleType) graphql.Marshaler {
+func (ec *executionContext) marshalNRolloutRuleType2githubᚗcomᚋhavlinjᚋfeatureflagᚑapiᚋgraphᚋmodelᚐRolloutRuleType(ctx context.Context, sel ast.SelectionSet, v model.RolloutRuleType) graphql.Marshaler {
 	return v
 }
 
-func (ec *executionContext) unmarshalNRolloutStrategy2githubᚗcomᚋjanᚑhavlinᚑdevᚋfeatureflagᚑapiᚋgraphᚋmodelᚐRolloutStrategy(ctx context.Context, v any) (model.RolloutStrategy, error) {
+func (ec *executionContext) unmarshalNRolloutStrategy2githubᚗcomᚋhavlinjᚋfeatureflagᚑapiᚋgraphᚋmodelᚐRolloutStrategy(ctx context.Context, v any) (model.RolloutStrategy, error) {
 	var res model.RolloutStrategy
 	err := res.UnmarshalGQL(v)
 	return res, graphql.ErrorOnPath(ctx, err)
 }
 
-func (ec *executionContext) marshalNRolloutStrategy2githubᚗcomᚋjanᚑhavlinᚑdevᚋfeatureflagᚑapiᚋgraphᚋmodelᚐRolloutStrategy(ctx context.Context, sel ast.SelectionSet, v model.RolloutStrategy) graphql.Marshaler {
+func (ec *executionContext) marshalNRolloutStrategy2githubᚗcomᚋhavlinjᚋfeatureflagᚑapiᚋgraphᚋmodelᚐRolloutStrategy(ctx context.Context, sel ast.SelectionSet, v model.RolloutStrategy) graphql.Marshaler {
 	return v
 }
 
-func (ec *executionContext) unmarshalNRuleInput2ᚖgithubᚗcomᚋjanᚑhavlinᚑdevᚋfeatureflagᚑapiᚋgraphᚋmodelᚐRuleInput(ctx context.Context, v any) (*model.RuleInput, error) {
+func (ec *executionContext) unmarshalNRuleInput2ᚖgithubᚗcomᚋhavlinjᚋfeatureflagᚑapiᚋgraphᚋmodelᚐRuleInput(ctx context.Context, v any) (*model.RuleInput, error) {
 	res, err := ec.unmarshalInputRuleInput(ctx, v)
 	return &res, graphql.ErrorOnPath(ctx, err)
 }
@@ -4086,21 +4863,21 @@ func (ec *executionContext) marshalNString2string(ctx context.Context, sel ast.S
 	return res
 }
 
-func (ec *executionContext) unmarshalNUpdateFlagInput2githubᚗcomᚋjanᚑhavlinᚑdevᚋfeatureflagᚑapiᚋgraphᚋmodelᚐUpdateFlagInput(ctx context.Context, v any) (model.UpdateFlagInput, error) {
+func (ec *executionContext) unmarshalNUpdateFlagInput2githubᚗcomᚋhavlinjᚋfeatureflagᚑapiᚋgraphᚋmodelᚐUpdateFlagInput(ctx context.Context, v any) (model.UpdateFlagInput, error) {
 	res, err := ec.unmarshalInputUpdateFlagInput(ctx, v)
 	return res, graphql.ErrorOnPath(ctx, err)
 }
 
-func (ec *executionContext) unmarshalNUpdateUserInput2githubᚗcomᚋjanᚑhavlinᚑdevᚋfeatureflagᚑapiᚋgraphᚋmodelᚐUpdateUserInput(ctx context.Context, v any) (model.UpdateUserInput, error) {
+func (ec *executionContext) unmarshalNUpdateUserInput2githubᚗcomᚋhavlinjᚋfeatureflagᚑapiᚋgraphᚋmodelᚐUpdateUserInput(ctx context.Context, v any) (model.UpdateUserInput, error) {
 	res, err := ec.unmarshalInputUpdateUserInput(ctx, v)
 	return res, graphql.ErrorOnPath(ctx, err)
 }
 
-func (ec *executionContext) marshalNUser2githubᚗcomᚋjanᚑhavlinᚑdevᚋfeatureflagᚑapiᚋgraphᚋmodelᚐUser(ctx context.Context, sel ast.SelectionSet, v model.User) graphql.Marshaler {
+func (ec *executionContext) marshalNUser2githubᚗcomᚋhavlinjᚋfeatureflagᚑapiᚋgraphᚋmodelᚐUser(ctx context.Context, sel ast.SelectionSet, v model.User) graphql.Marshaler {
 	return ec._User(ctx, sel, &v)
 }
 
-func (ec *executionContext) marshalNUser2ᚖgithubᚗcomᚋjanᚑhavlinᚑdevᚋfeatureflagᚑapiᚋgraphᚋmodelᚐUser(ctx context.Context, sel ast.SelectionSet, v *model.User) graphql.Marshaler {
+func (ec *executionContext) marshalNUser2ᚖgithubᚗcomᚋhavlinjᚋfeatureflagᚑapiᚋgraphᚋmodelᚐUser(ctx context.Context, sel ast.SelectionSet, v *model.User) graphql.Marshaler {
 	if v == nil {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
 			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
@@ -4393,7 +5170,21 @@ func (ec *executionContext) marshalOBoolean2ᚖbool(ctx context.Context, sel ast
 	return res
 }
 
-func (ec *executionContext) unmarshalORole2ᚖgithubᚗcomᚋjanᚑhavlinᚑdevᚋfeatureflagᚑapiᚋgraphᚋmodelᚐRole(ctx context.Context, v any) (*model.Role, error) {
+func (ec *executionContext) marshalOExperiment2ᚖgithubᚗcomᚋhavlinjᚋfeatureflagᚑapiᚋgraphᚋmodelᚐExperiment(ctx context.Context, sel ast.SelectionSet, v *model.Experiment) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._Experiment(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalOExperimentVariant2ᚖgithubᚗcomᚋhavlinjᚋfeatureflagᚑapiᚋgraphᚋmodelᚐExperimentVariant(ctx context.Context, sel ast.SelectionSet, v *model.ExperimentVariant) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._ExperimentVariant(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalORole2ᚖgithubᚗcomᚋhavlinjᚋfeatureflagᚑapiᚋgraphᚋmodelᚐRole(ctx context.Context, v any) (*model.Role, error) {
 	if v == nil {
 		return nil, nil
 	}
@@ -4402,14 +5193,14 @@ func (ec *executionContext) unmarshalORole2ᚖgithubᚗcomᚋjanᚑhavlinᚑdev�
 	return res, graphql.ErrorOnPath(ctx, err)
 }
 
-func (ec *executionContext) marshalORole2ᚖgithubᚗcomᚋjanᚑhavlinᚑdevᚋfeatureflagᚑapiᚋgraphᚋmodelᚐRole(ctx context.Context, sel ast.SelectionSet, v *model.Role) graphql.Marshaler {
+func (ec *executionContext) marshalORole2ᚖgithubᚗcomᚋhavlinjᚋfeatureflagᚑapiᚋgraphᚋmodelᚐRole(ctx context.Context, sel ast.SelectionSet, v *model.Role) graphql.Marshaler {
 	if v == nil {
 		return graphql.Null
 	}
 	return v
 }
 
-func (ec *executionContext) unmarshalORolloutStrategy2ᚖgithubᚗcomᚋjanᚑhavlinᚑdevᚋfeatureflagᚑapiᚋgraphᚋmodelᚐRolloutStrategy(ctx context.Context, v any) (*model.RolloutStrategy, error) {
+func (ec *executionContext) unmarshalORolloutStrategy2ᚖgithubᚗcomᚋhavlinjᚋfeatureflagᚑapiᚋgraphᚋmodelᚐRolloutStrategy(ctx context.Context, v any) (*model.RolloutStrategy, error) {
 	if v == nil {
 		return nil, nil
 	}
@@ -4418,14 +5209,14 @@ func (ec *executionContext) unmarshalORolloutStrategy2ᚖgithubᚗcomᚋjanᚑha
 	return res, graphql.ErrorOnPath(ctx, err)
 }
 
-func (ec *executionContext) marshalORolloutStrategy2ᚖgithubᚗcomᚋjanᚑhavlinᚑdevᚋfeatureflagᚑapiᚋgraphᚋmodelᚐRolloutStrategy(ctx context.Context, sel ast.SelectionSet, v *model.RolloutStrategy) graphql.Marshaler {
+func (ec *executionContext) marshalORolloutStrategy2ᚖgithubᚗcomᚋhavlinjᚋfeatureflagᚑapiᚋgraphᚋmodelᚐRolloutStrategy(ctx context.Context, sel ast.SelectionSet, v *model.RolloutStrategy) graphql.Marshaler {
 	if v == nil {
 		return graphql.Null
 	}
 	return v
 }
 
-func (ec *executionContext) unmarshalORuleInput2ᚕᚖgithubᚗcomᚋjanᚑhavlinᚑdevᚋfeatureflagᚑapiᚋgraphᚋmodelᚐRuleInputᚄ(ctx context.Context, v any) ([]*model.RuleInput, error) {
+func (ec *executionContext) unmarshalORuleInput2ᚕᚖgithubᚗcomᚋhavlinjᚋfeatureflagᚑapiᚋgraphᚋmodelᚐRuleInputᚄ(ctx context.Context, v any) ([]*model.RuleInput, error) {
 	if v == nil {
 		return nil, nil
 	}
@@ -4435,7 +5226,7 @@ func (ec *executionContext) unmarshalORuleInput2ᚕᚖgithubᚗcomᚋjanᚑhavli
 	res := make([]*model.RuleInput, len(vSlice))
 	for i := range vSlice {
 		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithIndex(i))
-		res[i], err = ec.unmarshalNRuleInput2ᚖgithubᚗcomᚋjanᚑhavlinᚑdevᚋfeatureflagᚑapiᚋgraphᚋmodelᚐRuleInput(ctx, vSlice[i])
+		res[i], err = ec.unmarshalNRuleInput2ᚖgithubᚗcomᚋhavlinjᚋfeatureflagᚑapiᚋgraphᚋmodelᚐRuleInput(ctx, vSlice[i])
 		if err != nil {
 			return nil, err
 		}
@@ -4461,7 +5252,7 @@ func (ec *executionContext) marshalOString2ᚖstring(ctx context.Context, sel as
 	return res
 }
 
-func (ec *executionContext) marshalOUser2ᚖgithubᚗcomᚋjanᚑhavlinᚑdevᚋfeatureflagᚑapiᚋgraphᚋmodelᚐUser(ctx context.Context, sel ast.SelectionSet, v *model.User) graphql.Marshaler {
+func (ec *executionContext) marshalOUser2ᚖgithubᚗcomᚋhavlinjᚋfeatureflagᚑapiᚋgraphᚋmodelᚐUser(ctx context.Context, sel ast.SelectionSet, v *model.User) graphql.Marshaler {
 	if v == nil {
 		return graphql.Null
 	}

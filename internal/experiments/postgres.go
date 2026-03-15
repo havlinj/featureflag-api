@@ -18,7 +18,7 @@ func NewPostgresStore(conn *sql.DB) *PostgresStore {
 	return &PostgresStore{conn: conn}
 }
 
-// CreateExperiment inserts a new experiment. Returns ErrDuplicateExperiment if (key, environment) exists.
+// CreateExperiment inserts a new experiment. Returns *DuplicateExperimentError if (key, environment) exists.
 func (p *PostgresStore) CreateExperiment(ctx context.Context, exp *Experiment) (*Experiment, error) {
 	var id string
 	err := p.conn.QueryRowContext(ctx,
@@ -28,7 +28,7 @@ func (p *PostgresStore) CreateExperiment(ctx context.Context, exp *Experiment) (
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
-			return nil, ErrDuplicateExperiment
+			return nil, &DuplicateExperimentError{Key: exp.Key, Environment: exp.Environment}
 		}
 		return nil, err
 	}

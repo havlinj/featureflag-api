@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"fmt"
 )
 
 type contextKey string
@@ -32,12 +33,12 @@ func FromContext(ctx context.Context) (*Claims, bool) {
 func RequireRole(ctx context.Context, allowedRoles ...string) (userID string, err error) {
 	claims, ok := FromContext(ctx)
 	if !ok || claims == nil {
-		return "", ErrUnauthorized
+		return "", fmt.Errorf("auth: unauthorized (no or invalid claims): %w", ErrUnauthorized)
 	}
 	for _, r := range allowedRoles {
 		if claims.Role == r {
 			return claims.Sub, nil
 		}
 	}
-	return "", ErrForbidden
+	return "", fmt.Errorf("auth: forbidden (role %q not in allowed %v): %w", claims.Role, allowedRoles, ErrForbidden)
 }

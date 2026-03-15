@@ -4,6 +4,7 @@ package experiments
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/havlinj/featureflag-api/internal/db"
@@ -91,8 +92,12 @@ func TestPostgresStore_CreateExperiment_duplicate_returns_ErrDuplicateExperiment
 	if err == nil {
 		t.Fatal("expected error on duplicate key and environment")
 	}
-	if err != ErrDuplicateExperiment {
-		t.Errorf("expected ErrDuplicateExperiment, got %v", err)
+	var e *DuplicateExperimentError
+	if !errors.As(err, &e) {
+		t.Errorf("expected *DuplicateExperimentError, got %v", err)
+	}
+	if e.Key != "dup-key" || e.Environment != "staging" {
+		t.Errorf("expected Key=dup-key Environment=staging, got Key=%q Environment=%q", e.Key, e.Environment)
 	}
 }
 
