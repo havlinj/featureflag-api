@@ -142,8 +142,21 @@ func TestGetJWTSecret_returnsErrorWhenEmpty(t *testing.T) {
 
 	_, err := GetJWTSecret(getenv)
 
-	if err != ErrMissingJWTSecret {
-		t.Errorf("expected ErrMissingJWTSecret, got %v", err)
+	var e *MissingJWTSecretError
+	if !errors.As(err, &e) {
+		t.Errorf("expected *MissingJWTSecretError, got %v", err)
+	}
+	if e.EnvVar != "JWT_SECRET" {
+		t.Errorf("expected EnvVar=JWT_SECRET, got %q", e.EnvVar)
+	}
+}
+
+func TestMissingJWTSecretError_Error_full_message(t *testing.T) {
+	e := &MissingJWTSecretError{EnvVar: "JWT_SECRET"}
+	got := e.Error()
+	want := "config: JWT_SECRET must be set (empty or unset)"
+	if got != want {
+		t.Errorf("Error() = %q; want %q", got, want)
 	}
 }
 

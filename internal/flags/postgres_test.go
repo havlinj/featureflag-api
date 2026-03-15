@@ -4,6 +4,7 @@ package flags
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/havlinj/featureflag-api/internal/db"
@@ -89,8 +90,12 @@ func TestPostgresStore_Create_duplicate_key_returns_ErrDuplicateKey(t *testing.T
 	if err == nil {
 		t.Fatal("expected error on duplicate")
 	}
-	if err != ErrDuplicateKey {
-		t.Errorf("expected ErrDuplicateKey, got %v", err)
+	var e *DuplicateKeyError
+	if !errors.As(err, &e) {
+		t.Errorf("expected *DuplicateKeyError, got %v", err)
+	}
+	if e.Key != "dup-key" || e.Environment != "dev" {
+		t.Errorf("expected Key=dup-key Environment=dev, got Key=%q Environment=%q", e.Key, e.Environment)
 	}
 }
 
@@ -176,8 +181,12 @@ func TestPostgresStore_Update_not_found_returns_ErrNotFound(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error")
 	}
-	if err != ErrNotFound {
-		t.Errorf("expected ErrNotFound, got %v", err)
+	var e *NotFoundError
+	if !errors.As(err, &e) {
+		t.Errorf("expected *NotFoundError, got %v", err)
+	}
+	if e.ID != "00000000-0000-0000-0000-000000000000" {
+		t.Errorf("expected ID=00000000-0000-0000-0000-000000000000, got ID=%q", e.ID)
 	}
 }
 

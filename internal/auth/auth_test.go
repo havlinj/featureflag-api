@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"errors"
 	"testing"
 )
 
@@ -47,8 +48,12 @@ func TestRequireRole_disallowedRoleReturnsErrForbidden(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for disallowed role")
 	}
-	if err != ErrForbidden {
-		t.Errorf("expected ErrForbidden, got %v", err)
+	var e *ForbiddenError
+	if !errors.As(err, &e) {
+		t.Errorf("expected *ForbiddenError, got %v", err)
+	}
+	if e.Role != "viewer" || len(e.AllowedRoles) != 2 {
+		t.Errorf("expected Role=viewer AllowedRoles=[admin developer], got Role=%q AllowedRoles=%v", e.Role, e.AllowedRoles)
 	}
 }
 
@@ -58,8 +63,9 @@ func TestRequireRole_noClaimsReturnsErrUnauthorized(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error when no claims")
 	}
-	if err != ErrUnauthorized {
-		t.Errorf("expected ErrUnauthorized, got %v", err)
+	var e *UnauthorizedError
+	if !errors.As(err, &e) {
+		t.Errorf("expected *UnauthorizedError, got %v", err)
 	}
 }
 
@@ -71,7 +77,8 @@ func TestRequireRole_nilClaimsReturnsErrUnauthorized(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error when claims nil")
 	}
-	if err != ErrUnauthorized {
-		t.Errorf("expected ErrUnauthorized, got %v", err)
+	var e *UnauthorizedError
+	if !errors.As(err, &e) {
+		t.Errorf("expected *UnauthorizedError, got %v", err)
 	}
 }

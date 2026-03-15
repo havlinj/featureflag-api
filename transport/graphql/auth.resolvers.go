@@ -10,16 +10,12 @@ import (
 
 	"github.com/havlinj/featureflag-api/graph/model"
 	"github.com/havlinj/featureflag-api/internal/auth"
-	"github.com/havlinj/featureflag-api/internal/users"
 )
 
 // Login is the resolver for the login field.
 func (r *mutationResolver) Login(ctx context.Context, input model.LoginInput) (*model.LoginPayload, error) {
 	userID, role, err := r.Users.Login(ctx, input.Email, input.Password)
 	if err != nil {
-		if err == users.ErrNotFound || err == users.ErrInvalidCredentials {
-			return nil, err
-		}
 		return nil, err
 	}
 	token, err := auth.IssueToken(userID, role, r.JWTSecret, r.JWTExpiry)

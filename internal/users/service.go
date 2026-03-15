@@ -67,10 +67,10 @@ func (s *Service) Login(ctx context.Context, email, password string) (userID, ro
 		return "", "", fmt.Errorf("login: %w", err)
 	}
 	if u == nil {
-		return "", "", fmt.Errorf("users: user not found email=%q: %w", email, ErrNotFound)
+		return "", "", &NotFoundError{Email: email}
 	}
 	if u.PasswordHash == nil || !auth.PasswordMatches(*u.PasswordHash, password) {
-		return "", "", fmt.Errorf("users: invalid credentials email=%q: %w", email, ErrInvalidCredentials)
+		return "", "", &InvalidCredentialsError{Email: email}
 	}
 	return u.ID, string(u.Role), nil
 }
@@ -82,7 +82,7 @@ func (s *Service) UpdateUser(ctx context.Context, input model.UpdateUserInput) (
 		return nil, fmt.Errorf("get user: %w", err)
 	}
 	if u == nil {
-		return nil, fmt.Errorf("users: user not found id=%q: %w", input.ID, ErrNotFound)
+		return nil, &NotFoundError{ID: input.ID}
 	}
 	if err := applyUpdateFieldsToUser(u, input); err != nil {
 		return nil, err
@@ -122,7 +122,8 @@ func setPasswordIfProvided(u *User, password *string) error {
 // DeleteUser removes a user by ID. Returns ErrNotFound if user does not exist.
 func (s *Service) DeleteUser(ctx context.Context, id string) (bool, error) {
 	if err := s.Store.Delete(ctx, id); err != nil {
-		if errors.Is(err, ErrNotFound) {
+		var e *NotFoundError
+		if errors.As(err, &e) {
 			return false, nil
 		}
 		return false, fmt.Errorf("delete user: %w", err)
@@ -136,7 +137,7 @@ func (s *Service) ensureUniqueEmail(ctx context.Context, email string) error {
 		return fmt.Errorf("check existing email: %w", err)
 	}
 	if existing != nil {
-		return fmt.Errorf("users: duplicate email=%q: %w", email, ErrDuplicateEmail)
+		return &DuplicateEmailError{Email: email}
 	}
 	return nil
 }

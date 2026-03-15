@@ -50,8 +50,12 @@ func TestService_CreateUser_duplicate_email_returns_ErrDuplicateEmail(t *testing
 
 	_, err := svc.CreateUser(ctx, input)
 
-	if !errors.Is(err, users.ErrDuplicateEmail) {
-		t.Errorf("expected ErrDuplicateEmail, got %v", err)
+	var e *users.DuplicateEmailError
+	if !errors.As(err, &e) {
+		t.Errorf("expected *DuplicateEmailError, got %v", err)
+	}
+	if e.Email != "a@b.com" {
+		t.Errorf("expected Email=a@b.com, got %q", e.Email)
 	}
 	if len(store.CreateCalls) != 0 {
 		t.Errorf("Create should not be called, got %d calls", len(store.CreateCalls))
@@ -175,8 +179,12 @@ func TestService_UpdateUser_not_found_returns_ErrNotFound(t *testing.T) {
 
 	_, err := svc.UpdateUser(ctx, input)
 
-	if !errors.Is(err, users.ErrNotFound) {
-		t.Errorf("expected ErrNotFound, got %v", err)
+	var e *users.NotFoundError
+	if !errors.As(err, &e) {
+		t.Errorf("expected *NotFoundError, got %v", err)
+	}
+	if e.ID != "missing" {
+		t.Errorf("expected ID=missing, got %q", e.ID)
 	}
 }
 
@@ -231,7 +239,7 @@ func TestService_UpdateUser_withPassword_updatesHash(t *testing.T) {
 func TestService_DeleteUser_not_found_returns_false_nil(t *testing.T) {
 	ctx := context.Background()
 	store := &mock.Store{}
-	store.DeleteReturns = []error{users.ErrNotFound}
+	store.DeleteReturns = []error{&users.NotFoundError{ID: "missing"}}
 	svc := users.NewService(store)
 
 	got, err := svc.DeleteUser(ctx, "missing")
@@ -305,8 +313,12 @@ func TestService_Login_user_not_found_returns_ErrNotFound(t *testing.T) {
 
 	_, _, err := svc.Login(ctx, "missing@test.com", "any")
 
-	if !errors.Is(err, users.ErrNotFound) {
-		t.Errorf("expected ErrNotFound, got %v", err)
+	var e *users.NotFoundError
+	if !errors.As(err, &e) {
+		t.Errorf("expected *NotFoundError, got %v", err)
+	}
+	if e.Email != "missing@test.com" {
+		t.Errorf("expected Email=missing@test.com, got %q", e.Email)
 	}
 }
 
@@ -319,8 +331,12 @@ func TestService_Login_nil_password_hash_returns_ErrInvalidCredentials(t *testin
 
 	_, _, err := svc.Login(ctx, "a@b.com", "any")
 
-	if !errors.Is(err, users.ErrInvalidCredentials) {
-		t.Errorf("expected ErrInvalidCredentials, got %v", err)
+	var e *users.InvalidCredentialsError
+	if !errors.As(err, &e) {
+		t.Errorf("expected *InvalidCredentialsError, got %v", err)
+	}
+	if e.Email != "a@b.com" {
+		t.Errorf("expected Email=a@b.com, got %q", e.Email)
 	}
 }
 
@@ -334,8 +350,12 @@ func TestService_Login_wrong_password_returns_ErrInvalidCredentials(t *testing.T
 
 	_, _, err := svc.Login(ctx, "a@b.com", "wrong")
 
-	if !errors.Is(err, users.ErrInvalidCredentials) {
-		t.Errorf("expected ErrInvalidCredentials, got %v", err)
+	var e *users.InvalidCredentialsError
+	if !errors.As(err, &e) {
+		t.Errorf("expected *InvalidCredentialsError, got %v", err)
+	}
+	if e.Email != "a@b.com" {
+		t.Errorf("expected Email=a@b.com, got %q", e.Email)
 	}
 }
 

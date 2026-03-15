@@ -2,7 +2,6 @@ package flags
 
 import (
 	"encoding/json"
-	"fmt"
 	"strings"
 )
 
@@ -26,7 +25,7 @@ const (
 func evaluateAttributeRule(userID string, email *string, ruleValue string) (bool, error) {
 	var c attributeCondition
 	if err := json.Unmarshal([]byte(ruleValue), &c); err != nil {
-		return false, fmt.Errorf("flags: invalid rule value=%q (JSON parse failed): %w", ruleValue, ErrInvalidRule)
+		return false, &InvalidRuleError{Value: ruleValue, Reason: "JSON parse failed"}
 	}
 	attrVal := attributeValue(c.Attribute, userID, email)
 	switch c.Op {
@@ -37,20 +36,20 @@ func evaluateAttributeRule(userID string, email *string, ruleValue string) (bool
 	case opEq:
 		return attrVal == c.Value, nil
 	default:
-		return false, fmt.Errorf("flags: invalid rule op=%q value=%q: %w", c.Op, ruleValue, ErrInvalidRule)
+		return false, &InvalidRuleError{Value: ruleValue, Op: c.Op}
 	}
 }
 
 func evaluateSuffix(attrVal, suffix string, ruleValue string) (bool, error) {
 	if suffix == "" {
-		return false, fmt.Errorf("flags: invalid rule (empty suffix) value=%q: %w", ruleValue, ErrInvalidRule)
+		return false, &InvalidRuleError{Value: ruleValue, Reason: "empty suffix"}
 	}
 	return attrVal != "" && strings.HasSuffix(attrVal, suffix), nil
 }
 
 func evaluateIn(attrVal string, values []string, ruleValue string) (bool, error) {
 	if len(values) == 0 {
-		return false, fmt.Errorf("flags: invalid rule (empty 'in' values) value=%q: %w", ruleValue, ErrInvalidRule)
+		return false, &InvalidRuleError{Value: ruleValue, Reason: "empty 'in' values"}
 	}
 	for _, v := range values {
 		if attrVal == v {

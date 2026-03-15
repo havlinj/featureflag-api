@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"fmt"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgconn"
@@ -22,7 +21,7 @@ func NewPostgresStore(conn *sql.DB) *PostgresStore {
 
 // Create creates a new flag in the database. Key, Description, Enabled, Environment,
 // and RolloutStrategy must be set; ID and CreatedAt are set by the DB.
-// Returns ErrDuplicateKey if (key, environment) already exists.
+// Returns *DuplicateKeyError if (key, environment) already exists.
 func (p *PostgresStore) Create(ctx context.Context, flag *Flag) (*Flag, error) {
 	var id string
 	var createdAt time.Time
@@ -35,7 +34,7 @@ func (p *PostgresStore) Create(ctx context.Context, flag *Flag) (*Flag, error) {
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
-			return nil, fmt.Errorf("flags: duplicate key=%q environment=%q: %w", flag.Key, flag.Environment, ErrDuplicateKey)
+			return nil, &DuplicateKeyError{Key: flag.Key, Environment: string(flag.Environment)}
 		}
 		return nil, err
 	}
@@ -69,7 +68,7 @@ func (p *PostgresStore) GetByKeyAndEnvironment(ctx context.Context, key string, 
 	return &f, nil
 }
 
-// Update updates an existing flag by ID. Returns ErrNotFound if no row was updated.
+// Update updates an existing flag by ID. Returns *NotFoundError if no row was updated.
 func (p *PostgresStore) Update(ctx context.Context, flag *Flag) error {
 	res, err := p.conn.ExecContext(ctx,
 		`UPDATE feature_flags SET key = $1, description = $2, enabled = $3, environment = $4, rollout_strategy = $5 WHERE id = $6`,
@@ -80,7 +79,7 @@ func (p *PostgresStore) Update(ctx context.Context, flag *Flag) error {
 	}
 	n, _ := res.RowsAffected()
 	if n == 0 {
-		return ErrNotFound
+		return &NotFoundError{ID: flag.ID}
 	}
 	return nil
 }
@@ -110,7 +109,7 @@ func (p *PostgresStore) GetRulesByFlagID(ctx context.Context, flagID string) ([]
 }
 
 // Delete removes a flag by ID. Rules are removed by DB ON DELETE CASCADE.
-// Returns ErrNotFound if no row was deleted.
+// Returns *NotFoundError if no row was deleted.
 func (p *PostgresStore) Delete(ctx context.Context, id string) error {
 	res, err := p.conn.ExecContext(ctx, `DELETE FROM feature_flags WHERE id = $1`, id)
 	if err != nil {
@@ -118,7 +117,7 @@ func (p *PostgresStore) Delete(ctx context.Context, id string) error {
 	}
 	n, _ := res.RowsAffected()
 	if n == 0 {
-		return fmt.Errorf("flags: flag not found id=%q: %w", id, ErrNotFound)
+		return &NotFoundError{ID: id}
 	}
 	return nil
 }

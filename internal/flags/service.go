@@ -59,7 +59,7 @@ func resolveStrategyForCreate(input model.CreateFlagInput) (RolloutStrategy, err
 		return "", err
 	}
 	if strategy != RolloutStrategyNone && strategy != ruleTypeToStrategy(ruleType) {
-		return "", fmt.Errorf("%w: all rules must use the same strategy: percentage or attribute", ErrRulesStrategyMismatch)
+		return "", &RulesStrategyMismatchError{Message: "all rules must use the same strategy: percentage or attribute"}
 	}
 	return ruleTypeToStrategy(ruleType), nil
 }
@@ -96,7 +96,7 @@ func (s *Service) getFlagOrErr(ctx context.Context, key string, env DeploymentSt
 		return nil, fmt.Errorf("get flag: %w", err)
 	}
 	if flag == nil {
-		return nil, fmt.Errorf("flags: flag not found key=%q environment=%q: %w", key, env, ErrNotFound)
+		return nil, &NotFoundError{Key: key, Environment: string(env)}
 	}
 	return flag, nil
 }
@@ -129,7 +129,7 @@ func (s *Service) applyRulesUpdate(ctx context.Context, flag *Flag, rules []*mod
 // EvaluateFlag returns whether the flag is enabled for the given evaluation context.
 func (s *Service) EvaluateFlag(ctx context.Context, key string, evalCtx model.EvaluationContextInput) (bool, error) {
 	if evalCtx.UserID == "" {
-		return false, fmt.Errorf("flags: invalid user ID (empty): %w", ErrInvalidUserID)
+		return false, &InvalidUserIDError{UserID: evalCtx.UserID}
 	}
 
 	flag, err := s.Store.GetByKeyAndEnvironment(ctx, key, defaultEnvironment)
@@ -169,7 +169,7 @@ func (s *Service) ensureUniqueFlag(ctx context.Context, key string, env Deployme
 		return fmt.Errorf("check existing flag: %w", err)
 	}
 	if existing != nil {
-		return fmt.Errorf("flags: duplicate key=%q environment=%q: %w", key, env, ErrDuplicateKey)
+		return &DuplicateKeyError{Key: key, Environment: string(env)}
 	}
 	return nil
 }
@@ -231,7 +231,7 @@ func validateRulesSameType(rules []*model.RuleInput) (RuleType, error) {
 	}
 	for _, r := range rules[1:] {
 		if ruleInputToRuleType(r) != first {
-			return "", fmt.Errorf("flags: rules do not match (mixed types %v): %w", ruleTypes, ErrRulesStrategyMismatch)
+			return "", &RulesStrategyMismatchError{RuleTypes: ruleTypes}
 		}
 	}
 	return first, nil
@@ -272,7 +272,7 @@ func strategyMismatchError(current RolloutStrategy) error {
 	if current == RolloutStrategyPercentage {
 		msg = msgStrategyMismatchPercentage
 	}
-	return fmt.Errorf("flags: strategy mismatch (current=%q): %s: %w", current, msg, ErrRulesStrategyMismatch)
+	return &RulesStrategyMismatchError{CurrentStrategy: string(current), Message: msg}
 }
 
 func evaluateRulesByStrategy(strategy RolloutStrategy, userID string, email *string, rules []*Rule) (bool, error) {
@@ -318,10 +318,10 @@ func evaluateAttributeRules(userID string, email *string, rules []*Rule) (bool, 
 func evaluatePercentageRule(userID, value string) (bool, error) {
 	percentage, err := strconv.Atoi(value)
 	if err != nil {
-		return false, fmt.Errorf("flags: invalid percentage rule value=%q (not a number): %w", value, ErrInvalidRule)
+		return false, &InvalidRuleError{Value: value, Reason: "not a number"}
 	}
 	if percentage < 0 || percentage > 100 {
-		return false, fmt.Errorf("flags: invalid percentage rule value=%q (must be 0-100): %w", value, ErrInvalidRule)
+		return false, &InvalidRuleError{Value: value, Reason: "must be 0-100"}
 	}
 
 	bucket := hashToBucket(userID)

@@ -94,13 +94,12 @@ Avoid:
 Error handling rules:
 
 - Always check returned errors.
-- Wrap errors with meaningful context when appropriate.
+- Prefer **structured error types** (structs implementing `error`) over sentinel errors when the caller or tests need to inspect context (e.g. which key, ID, or input caused the failure).
+- Define one struct per error kind in the package (e.g. `DuplicateKeyError`, `NotFoundError`) with fields that carry context (e.g. `Key`, `Environment`, `ID`, `Email`). Implement `Error() string` so the type is a valid `error`.
+- Return these structs directly from the layer that detects the condition (e.g. service or repository). Use `errors.As(err, &e)` in callers or tests to match and read context; do not rely on sentinel variables for domain errors that carry context.
+- When propagating lower-level failures (e.g. DB, I/O), wrap with meaningful context: `return fmt.Errorf("create flag: %w", err)`.
 - Never silently ignore errors.
-- Always propagate errors using well-explanatory messages 
-
-Example:
-
-    return fmt.Errorf("failed to create flag: %w", err)
+- Do not panic in business logic.
 
 ---
 

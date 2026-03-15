@@ -2,7 +2,6 @@ package config
 
 import (
 	"crypto/tls"
-	"errors"
 	"fmt"
 )
 
@@ -45,14 +44,20 @@ func GetListenAddr(getenv func(string) string) string {
 	return addr
 }
 
-// ErrMissingJWTSecret is returned when JWT_SECRET is not set.
-var ErrMissingJWTSecret = errors.New("JWT_SECRET must be set")
+// MissingJWTSecretError is returned when JWT_SECRET is not set or empty.
+type MissingJWTSecretError struct {
+	EnvVar string
+}
 
-// GetJWTSecret returns the JWT secret from getenv("JWT_SECRET"). Returns ErrMissingJWTSecret if empty.
+func (e *MissingJWTSecretError) Error() string {
+	return fmt.Sprintf("config: %s must be set (empty or unset)", e.EnvVar)
+}
+
+// GetJWTSecret returns the JWT secret from getenv("JWT_SECRET"). Returns *MissingJWTSecretError if empty.
 func GetJWTSecret(getenv func(string) string) (string, error) {
 	s := getenv("JWT_SECRET")
 	if s == "" {
-		return "", fmt.Errorf("config: JWT_SECRET must be set (empty or unset): %w", ErrMissingJWTSecret)
+		return "", &MissingJWTSecretError{EnvVar: "JWT_SECRET"}
 	}
 	return s, nil
 }

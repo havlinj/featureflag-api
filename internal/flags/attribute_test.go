@@ -65,8 +65,12 @@ func TestEvaluateAttributeRule_suffix_no_match_returns_false(t *testing.T) {
 
 func TestEvaluateAttributeRule_suffix_empty_value_returns_ErrInvalidRule(t *testing.T) {
 	_, err := evaluateAttributeRule("u1", nil, `{"attribute":"email","op":"suffix","value":""}`)
-	if !errors.Is(err, ErrInvalidRule) {
-		t.Errorf("expected ErrInvalidRule, got %v", err)
+	var e *InvalidRuleError
+	if !errors.As(err, &e) {
+		t.Errorf("expected *InvalidRuleError, got %v", err)
+	}
+	if e.Reason != "empty suffix" || e.Value != `{"attribute":"email","op":"suffix","value":""}` {
+		t.Errorf("expected Reason=empty suffix and Value set, got Reason=%q Value=%q", e.Reason, e.Value)
 	}
 }
 
@@ -92,8 +96,12 @@ func TestEvaluateAttributeRule_in_no_match_returns_false(t *testing.T) {
 
 func TestEvaluateAttributeRule_in_empty_values_returns_ErrInvalidRule(t *testing.T) {
 	_, err := evaluateAttributeRule("u1", nil, `{"attribute":"userId","op":"in","values":[]}`)
-	if !errors.Is(err, ErrInvalidRule) {
-		t.Errorf("expected ErrInvalidRule, got %v", err)
+	var e *InvalidRuleError
+	if !errors.As(err, &e) {
+		t.Errorf("expected *InvalidRuleError, got %v", err)
+	}
+	if e.Reason != "empty 'in' values" {
+		t.Errorf("expected Reason=empty 'in' values, got %q", e.Reason)
 	}
 }
 
@@ -119,14 +127,22 @@ func TestEvaluateAttributeRule_eq_no_match_returns_false(t *testing.T) {
 
 func TestEvaluateAttributeRule_invalid_json_returns_ErrInvalidRule(t *testing.T) {
 	_, err := evaluateAttributeRule("u1", nil, `{invalid`)
-	if !errors.Is(err, ErrInvalidRule) {
-		t.Errorf("expected ErrInvalidRule, got %v", err)
+	var e *InvalidRuleError
+	if !errors.As(err, &e) {
+		t.Errorf("expected *InvalidRuleError, got %v", err)
+	}
+	if e.Reason != "JSON parse failed" || e.Value != `{invalid` {
+		t.Errorf("expected Reason=JSON parse failed Value={invalid, got Reason=%q Value=%q", e.Reason, e.Value)
 	}
 }
 
 func TestEvaluateAttributeRule_unknown_op_returns_ErrInvalidRule(t *testing.T) {
 	_, err := evaluateAttributeRule("u1", nil, `{"attribute":"userId","op":"unknown","value":"u1"}`)
-	if !errors.Is(err, ErrInvalidRule) {
-		t.Errorf("expected ErrInvalidRule, got %v", err)
+	var e *InvalidRuleError
+	if !errors.As(err, &e) {
+		t.Errorf("expected *InvalidRuleError, got %v", err)
+	}
+	if e.Op != "unknown" {
+		t.Errorf("expected Op=unknown, got %q", e.Op)
 	}
 }

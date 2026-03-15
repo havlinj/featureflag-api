@@ -83,8 +83,12 @@ func TestService_CreateFlag_already_exists_returns_ErrDuplicateKey(t *testing.T)
 	if got != nil {
 		t.Errorf("expected nil result, got %+v", got)
 	}
-	if !errors.Is(err, flags.ErrDuplicateKey) {
-		t.Errorf("expected ErrDuplicateKey, got %v", err)
+	var e *flags.DuplicateKeyError
+	if !errors.As(err, &e) {
+		t.Errorf("expected *DuplicateKeyError, got %v", err)
+	}
+	if e.Key != "test-flag" || e.Environment != "dev" {
+		t.Errorf("expected Key=test-flag Environment=dev, got Key=%q Environment=%q", e.Key, e.Environment)
 	}
 	if len(store.CreateCalls) != 0 {
 		t.Errorf("Create should not be called, got %d calls", len(store.CreateCalls))
@@ -186,8 +190,12 @@ func TestService_UpdateFlag_not_found_returns_ErrNotFound(t *testing.T) {
 	if got != nil {
 		t.Errorf("expected nil result, got %+v", got)
 	}
-	if !errors.Is(err, flags.ErrNotFound) {
-		t.Errorf("expected ErrNotFound, got %v", err)
+	var e *flags.NotFoundError
+	if !errors.As(err, &e) {
+		t.Errorf("expected *NotFoundError, got %v", err)
+	}
+	if e.Key != "missing" || e.Environment != "dev" {
+		t.Errorf("expected Key=missing Environment=dev, got Key=%q Environment=%q", e.Key, e.Environment)
 	}
 	if len(store.UpdateCalls) != 0 {
 		t.Errorf("Update should not be called, got %d calls", len(store.UpdateCalls))
@@ -247,8 +255,12 @@ func TestService_EvaluateFlag_empty_userID_returns_ErrInvalidUserID(t *testing.T
 	if enabled {
 		t.Error("expected false when userID is empty")
 	}
-	if !errors.Is(err, flags.ErrInvalidUserID) {
-		t.Errorf("expected ErrInvalidUserID, got %v", err)
+	var e *flags.InvalidUserIDError
+	if !errors.As(err, &e) {
+		t.Errorf("expected *InvalidUserIDError, got %v", err)
+	}
+	if e.UserID != "" {
+		t.Errorf("expected UserID empty, got %q", e.UserID)
 	}
 	if len(store.GetByKeyAndEnvironmentCalls) != 0 {
 		t.Error("store should not be called when userID is empty")
@@ -400,8 +412,12 @@ func TestService_EvaluateFlag_percentage_invalid_value_returns_ErrInvalidRule(t 
 
 	_, err := svc.EvaluateFlag(ctx, "pct", evalCtx("user-1"))
 
-	if !errors.Is(err, flags.ErrInvalidRule) {
-		t.Errorf("expected ErrInvalidRule, got %v", err)
+	var e *flags.InvalidRuleError
+	if !errors.As(err, &e) {
+		t.Errorf("expected *InvalidRuleError, got %v", err)
+	}
+	if e.Value != "x" || e.Reason != "not a number" {
+		t.Errorf("expected Value=x Reason=not a number, got Value=%q Reason=%q", e.Value, e.Reason)
 	}
 }
 
@@ -418,8 +434,12 @@ func TestService_EvaluateFlag_percentage_out_of_range_returns_ErrInvalidRule(t *
 
 	_, err := svc.EvaluateFlag(ctx, "pct", evalCtx("user-1"))
 
-	if !errors.Is(err, flags.ErrInvalidRule) {
-		t.Errorf("expected ErrInvalidRule, got %v", err)
+	var e *flags.InvalidRuleError
+	if !errors.As(err, &e) {
+		t.Errorf("expected *InvalidRuleError, got %v", err)
+	}
+	if e.Value != "150" || e.Reason != "must be 0-100" {
+		t.Errorf("expected Value=150 Reason=must be 0-100, got Value=%q Reason=%q", e.Value, e.Reason)
 	}
 }
 
@@ -558,8 +578,12 @@ func TestService_CreateFlag_mixed_rule_types_returns_ErrRulesStrategyMismatch(t 
 	if got != nil {
 		t.Errorf("expected nil, got %+v", got)
 	}
-	if !errors.Is(err, flags.ErrRulesStrategyMismatch) {
-		t.Errorf("expected ErrRulesStrategyMismatch, got %v", err)
+	var e *flags.RulesStrategyMismatchError
+	if !errors.As(err, &e) {
+		t.Errorf("expected *RulesStrategyMismatchError, got %v", err)
+	}
+	if len(e.RuleTypes) != 2 {
+		t.Errorf("expected RuleTypes len 2, got %v", e.RuleTypes)
 	}
 	if len(store.CreateCalls) != 0 {
 		t.Error("Create should not be called when rules are mixed")
@@ -601,8 +625,12 @@ func TestService_DeleteFlag_not_found_returns_false_and_ErrNotFound(t *testing.T
 	if result {
 		t.Error("expected false when flag not found")
 	}
-	if !errors.Is(err, flags.ErrNotFound) {
-		t.Errorf("expected ErrNotFound, got %v", err)
+	var e *flags.NotFoundError
+	if !errors.As(err, &e) {
+		t.Errorf("expected *NotFoundError, got %v", err)
+	}
+	if e.Key != "missing" || e.Environment != "dev" {
+		t.Errorf("expected Key=missing Environment=dev, got Key=%q Environment=%q", e.Key, e.Environment)
 	}
 	if len(store.DeleteCalls) != 0 {
 		t.Error("Delete should not be called when flag not found")
@@ -650,8 +678,12 @@ func TestService_CreateFlag_rolloutStrategy_mismatch_with_rules_returns_ErrRules
 	if got != nil {
 		t.Errorf("expected nil, got %+v", got)
 	}
-	if !errors.Is(err, flags.ErrRulesStrategyMismatch) {
-		t.Errorf("expected ErrRulesStrategyMismatch, got %v", err)
+	var e *flags.RulesStrategyMismatchError
+	if !errors.As(err, &e) {
+		t.Errorf("expected *RulesStrategyMismatchError, got %v", err)
+	}
+	if e.Message == "" {
+		t.Error("expected Message to be set")
 	}
 	if len(store.CreateCalls) != 0 {
 		t.Error("Create should not be called when strategy and rules type mismatch")
@@ -728,8 +760,12 @@ func TestService_UpdateFlag_rules_strategy_mismatch_returns_ErrRulesStrategyMism
 	if got != nil {
 		t.Errorf("expected nil, got %+v", got)
 	}
-	if !errors.Is(err, flags.ErrRulesStrategyMismatch) {
-		t.Errorf("expected ErrRulesStrategyMismatch, got %v", err)
+	var e *flags.RulesStrategyMismatchError
+	if !errors.As(err, &e) {
+		t.Errorf("expected *RulesStrategyMismatchError, got %v", err)
+	}
+	if e.CurrentStrategy != "percentage" {
+		t.Errorf("expected CurrentStrategy=percentage, got %q", e.CurrentStrategy)
 	}
 	if len(store.ReplaceRulesByFlagIDCalls) != 0 {
 		t.Error("ReplaceRulesByFlagID should not be called when strategy mismatch")

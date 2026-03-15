@@ -89,6 +89,8 @@ func TestAssignVariant_Calculation(t *testing.T) {
 ## Assertions & Error Handling
 
 - Always assert expected results explicitly.
+- For **structured errors** (custom error structs with context fields): use `errors.As(err, &e)` to extract the type, then assert both that the error is of the expected kind and that its context fields match the scenario (e.g. `e.Key == "expected-key"`, `e.Environment == "dev"`, `e.Sum == 80`). Do not only check that an error is non-nil; assert the context the struct carries.
+- For each package that defines such error types, add tests (e.g. in `errors_test.go`) that assert the **full** string returned by `Error()` (exact match, not just “contains”). This documents the intended message, keeps it readable and consistent, and catches any accidental change.
 - Check for errors returned and handle in tests.
 - Prefer descriptive error messages for easier debugging.
 - When a function under test returns **only** a boolean (single return value), name it `result` (not `ok`) so assertions read clearly, e.g. `result := Foo(); if !result { t.Error(...) }`. When the function returns multiple values (e.g. `value, bool`), keep the conventional `ok` for the boolean, e.g. `value, ok := FromContext(ctx)`.

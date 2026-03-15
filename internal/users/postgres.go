@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"fmt"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgconn"
@@ -21,7 +20,7 @@ func NewPostgresStore(conn *sql.DB) *PostgresStore {
 }
 
 // Create persists a new user. Email and Role must be set; ID and CreatedAt are set by the DB.
-// Returns ErrDuplicateEmail if email already exists.
+// Returns *DuplicateEmailError if email already exists.
 func (p *PostgresStore) Create(ctx context.Context, user *User) (*User, error) {
 	var id string
 	var createdAt time.Time
@@ -32,7 +31,7 @@ func (p *PostgresStore) Create(ctx context.Context, user *User) (*User, error) {
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
-			return nil, fmt.Errorf("users: duplicate email=%q: %w", user.Email, ErrDuplicateEmail)
+			return nil, &DuplicateEmailError{Email: user.Email}
 		}
 		return nil, err
 	}
@@ -92,7 +91,7 @@ func (p *PostgresStore) GetByEmail(ctx context.Context, email string) (*User, er
 	return &u, nil
 }
 
-// Update updates an existing user by ID. Returns ErrNotFound if no row was updated.
+// Update updates an existing user by ID. Returns *NotFoundError if no row was updated.
 func (p *PostgresStore) Update(ctx context.Context, user *User) error {
 	res, err := p.conn.ExecContext(ctx,
 		`UPDATE users SET email = $1, role = $2, password_hash = $4 WHERE id = $3`,
@@ -103,12 +102,12 @@ func (p *PostgresStore) Update(ctx context.Context, user *User) error {
 	}
 	n, _ := res.RowsAffected()
 	if n == 0 {
-		return fmt.Errorf("users: user not found id=%q: %w", user.ID, ErrNotFound)
+		return &NotFoundError{ID: user.ID}
 	}
 	return nil
 }
 
-// Delete removes a user by ID. Returns ErrNotFound if no row was deleted.
+// Delete removes a user by ID. Returns *NotFoundError if no row was deleted.
 func (p *PostgresStore) Delete(ctx context.Context, id string) error {
 	res, err := p.conn.ExecContext(ctx, `DELETE FROM users WHERE id = $1`, id)
 	if err != nil {
@@ -116,7 +115,7 @@ func (p *PostgresStore) Delete(ctx context.Context, id string) error {
 	}
 	n, _ := res.RowsAffected()
 	if n == 0 {
-		return fmt.Errorf("users: user not found id=%q: %w", id, ErrNotFound)
+		return &NotFoundError{ID: id}
 	}
 	return nil
 }

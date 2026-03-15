@@ -4,6 +4,7 @@ package users
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/havlinj/featureflag-api/internal/db"
@@ -90,8 +91,12 @@ func TestPostgresStore_Create_duplicate_email_returns_ErrDuplicateEmail(t *testi
 	if err == nil {
 		t.Fatal("expected error on duplicate email")
 	}
-	if err != ErrDuplicateEmail {
-		t.Errorf("expected ErrDuplicateEmail, got %v", err)
+	var e *DuplicateEmailError
+	if !errors.As(err, &e) {
+		t.Errorf("expected *DuplicateEmailError, got %v", err)
+	}
+	if e.Email != "dup@test.com" {
+		t.Errorf("expected Email=dup@test.com, got %q", e.Email)
 	}
 }
 
@@ -184,8 +189,12 @@ func TestPostgresStore_Update_not_found_returns_ErrNotFound(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error")
 	}
-	if err != ErrNotFound {
-		t.Errorf("expected ErrNotFound, got %v", err)
+	var e *NotFoundError
+	if !errors.As(err, &e) {
+		t.Errorf("expected *NotFoundError, got %v", err)
+	}
+	if e.ID != "00000000-0000-0000-0000-000000000000" {
+		t.Errorf("expected ID=00000000-0000-0000-0000-000000000000, got %q", e.ID)
 	}
 }
 
@@ -219,7 +228,11 @@ func TestPostgresStore_Delete_not_found_returns_ErrNotFound(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error")
 	}
-	if err != ErrNotFound {
-		t.Errorf("expected ErrNotFound, got %v", err)
+	var e *NotFoundError
+	if !errors.As(err, &e) {
+		t.Errorf("expected *NotFoundError, got %v", err)
+	}
+	if e.ID != "00000000-0000-0000-0000-000000000000" {
+		t.Errorf("expected ID=00000000-0000-0000-0000-000000000000, got %q", e.ID)
 	}
 }
