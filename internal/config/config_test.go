@@ -197,6 +197,17 @@ func TestGetJWTSecret_returnsErrorWhenTooShort(t *testing.T) {
 	}
 }
 
+func TestWeakJWTSecretError_Error_exact_string(t *testing.T) {
+	e := &WeakJWTSecretError{MinLength: 32, ActualLength: 8}
+
+	got := e.Error()
+
+	const want = "config: JWT_SECRET too short (min=32 actual=8)"
+	if got != want {
+		t.Errorf("Error() = %q, want %q", got, want)
+	}
+}
+
 func TestLoadTLSConfig_returnsNilWhenCertFileEmpty(t *testing.T) {
 	getenv := func(key string) string {
 		if key == "TLS_KEY_FILE" {

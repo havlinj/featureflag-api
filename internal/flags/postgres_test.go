@@ -246,4 +246,103 @@ func TestPostgresStore_GetRulesByFlagID_invalid_uuid_returns_error(t *testing.T)
 	}
 }
 
+func TestPostgresStore_ReplaceRulesByFlagID_replaces_existing_rules(t *testing.T) {
+	database, cleanup := testDB(t)
+	defer cleanup()
+	truncateFlags(t, database)
+	store := NewPostgresStore(database.Conn())
+	ctx := context.Background()
+	created, err := store.Create(ctx, &Flag{Key: "replace-rules", Environment: DeploymentStageDev, Enabled: false, RolloutStrategy: RolloutStrategyPercentage})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	_, err = database.Conn().ExecContext(ctx,
+		"INSERT INTO flag_rules (flag_id, type, value) VALUES ($1, $2, $3)",
+		created.ID, "percentage", "10",
+	)
+	if err != nil {
+		t.Fatalf("seed rule: %v", err)
+	}
+
+	err = store.ReplaceRulesByFlagID(ctx, created.ID, []*Rule{
+		{Type: RuleTypePercentage, Value: "55"},
+	})
+	if err != nil {
+		t.Fatalf("ReplaceRulesByFlagID: %v", err)
+	}
+
+	rules, err := store.GetRulesByFlagID(ctx, created.ID)
+	if err != nil {
+		t.Fatalf("GetRulesByFlagID: %v", err)
+	}
+	if len(rules) != 1 || rules[0].Type != RuleTypePercentage || rules[0].Value != "55" {
+		t.Fatalf("expected one percentage rule 55, got %+v", rules)
+	}
+}
+
+func TestPostgresStore_ReplaceRulesByFlagID_clears_rules_when_nil_slice(t *testing.T) {
+	database, cleanup := testDB(t)
+	defer cleanup()
+	truncateFlags(t, database)
+	store := NewPostgresStore(database.Conn())
+	ctx := context.Background()
+	created, err := store.Create(ctx, &Flag{Key: "clear-rules", Environment: DeploymentStageDev, Enabled: false, RolloutStrategy: RolloutStrategyPercentage})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	if err := store.ReplaceRulesByFlagID(ctx, created.ID, []*Rule{{Type: RuleTypePercentage, Value: "20"}}); err != nil {
+		t.Fatalf("first ReplaceRulesByFlagID: %v", err)
+	}
+
+	err = store.ReplaceRulesByFlagID(ctx, created.ID, nil)
+	if err != nil {
+		t.Fatalf("ReplaceRulesByFlagID clear: %v", err)
+	}
+
+	rules, err := store.GetRulesByFlagID(ctx, created.ID)
+	if err != nil {
+		t.Fatalf("GetRulesByFlagID: %v", err)
+	}
+	if len(rules) != 0 {
+		t.Fatalf("expected no rules after replace with nil, got %d", len(rules))
+	}
+}
+
+func TestPostgresStore_ReplaceRulesByFlagID_inside_sql_tx_committed_visible(t *testing.T) {
+	database, cleanup := testDB(t)
+	defer cleanup()
+	truncateFlags(t, database)
+	db := database.Conn()
+	store := NewPostgresStore(db)
+	ctx := context.Background()
+	created, err := store.Create(ctx, &Flag{Key: "tx-replace", Environment: DeploymentStageDev, Enabled: false, RolloutStrategy: RolloutStrategyNone})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatalf("BeginTx: %v", err)
+	}
+	txStore := store.WithTx(tx)
+	err = txStore.ReplaceRulesByFlagID(ctx, created.ID, []*Rule{
+		{Type: RuleTypeAttribute, Value: `{"attribute":"userId","op":"eq","value":"u1"}`},
+	})
+	if err != nil {
+		_ = tx.Rollback()
+		t.Fatalf("ReplaceRulesByFlagID in tx: %v", err)
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatalf("Commit: %v", err)
+	}
+
+	rules, err := store.GetRulesByFlagID(ctx, created.ID)
+	if err != nil {
+		t.Fatalf("GetRulesByFlagID: %v", err)
+	}
+	if len(rules) != 1 || rules[0].Type != RuleTypeAttribute {
+		t.Fatalf("expected one attribute rule after tx commit, got %+v", rules)
+	}
+}
+
 func strPtr(s string) *string { return &s }

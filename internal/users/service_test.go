@@ -65,6 +65,34 @@ func TestService_CreateUser_duplicate_email_returns_ErrDuplicateEmail(t *testing
 	}
 }
 
+func TestService_CreateUser_uniqueness_lookup_store_error_returns_wrapped(t *testing.T) {
+	ctx := context.Background()
+	store := &mock.Store{}
+	wantErr := errors.New("GetByEmail failed")
+	store.GetByEmailReturns = []mock.GetByEmailResult{{User: nil, Err: wantErr}}
+	svc := users.NewService(store)
+	input := model.CreateUserInput{Email: "new@x.com", Role: model.RoleDeveloper}
+
+	_, err := svc.CreateUser(ctx, input)
+
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("expected wrapped %v, got %v", wantErr, err)
+	}
+	var opErr *users.OperationError
+	if !errors.As(err, &opErr) {
+		t.Fatalf("expected *users.OperationError, got %T", err)
+	}
+	if opErr.Op != "users.service.ensure_unique_email.store_get_by_email" {
+		t.Fatalf("unexpected op %q", opErr.Op)
+	}
+	if opErr.Email != "new@x.com" {
+		t.Fatalf("unexpected context fields: %+v", opErr)
+	}
+	if len(store.CreateCalls) != 0 {
+		t.Fatalf("Create must not run after failed email uniqueness lookup, got %d calls", len(store.CreateCalls))
+	}
+}
+
 func TestService_CreateUser_withPassword_passesHashToStore(t *testing.T) {
 	ctx := context.Background()
 	store := &mock.Store{}

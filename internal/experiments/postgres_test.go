@@ -4,6 +4,7 @@ package experiments
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"testing"
 
@@ -406,6 +407,95 @@ func TestPostgresStore_UpsertAssignment_nonexistent_variant_id_returns_error(t *
 	if err == nil {
 		t.Fatal("expected error when variant_id does not exist (FK violation)")
 	}
+}
+
+func TestPostgresStore_BeginTx_happy_path(t *testing.T) {
+	database, cleanup := testDB(t)
+	defer cleanup()
+	store := NewPostgresStore(database.Conn())
+	ctx := context.Background()
+
+	tx, err := store.BeginTx(ctx)
+	if err != nil {
+		t.Fatalf("BeginTx: %v", err)
+	}
+	if err := tx.Rollback(); err != nil {
+		t.Fatalf("rollback: %v", err)
+	}
+}
+
+func TestPostgresStore_BeginTx_not_supported_on_tx_scoped_store(t *testing.T) {
+	database, cleanup := testDB(t)
+	defer cleanup()
+	ctx := context.Background()
+	root := NewPostgresStore(database.Conn())
+
+	tx, err := root.BeginTx(ctx)
+	if err != nil {
+		t.Fatalf("BeginTx: %v", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	scoped := root.WithTx(tx)
+	ps, ok := scoped.(*PostgresStore)
+	if !ok {
+		t.Fatalf("expected *PostgresStore, got %T", scoped)
+	}
+
+	_, err = ps.BeginTx(ctx)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	want := "experiments store: BeginTx not supported on tx-scoped store"
+	if err.Error() != want {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestPostgresStore_BeginTx_begin_failure_returns_wrapped_operation_error(t *testing.T) {
+	ctx := context.Background()
+	wantErr := errors.New("db begin failed")
+	badBegin := &stubBeginTxer{err: wantErr}
+	store := &PostgresStore{exec: stubExecQuerier{}, begin: badBegin}
+
+	_, err := store.BeginTx(ctx)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("expected wrapped %v, got %v", wantErr, err)
+	}
+	var opErr *OperationError
+	if !errors.As(err, &opErr) {
+		t.Fatalf("expected *OperationError, got %T", err)
+	}
+	if opErr.Op != opRepoBeginTx {
+		t.Fatalf("unexpected op %q", opErr.Op)
+	}
+}
+
+// stubBeginTxer implements beginTxer for BeginTx error-path tests without a real DB.
+type stubBeginTxer struct {
+	err error
+}
+
+func (s *stubBeginTxer) BeginTx(_ context.Context, _ *sql.TxOptions) (*sql.Tx, error) {
+	return nil, s.err
+}
+
+// stubExecQuerier satisfies execQuerier with no-ops (unused by BeginTx tests).
+type stubExecQuerier struct{}
+
+func (stubExecQuerier) ExecContext(context.Context, string, ...any) (sql.Result, error) {
+	return nil, errors.New("stub: ExecContext not implemented")
+}
+
+func (stubExecQuerier) QueryContext(context.Context, string, ...any) (*sql.Rows, error) {
+	return nil, errors.New("stub: QueryContext not implemented")
+}
+
+func (stubExecQuerier) QueryRowContext(context.Context, string, ...any) *sql.Row {
+	return nil
 }
 
 func seedUserForAssignment(t *testing.T, database *db.DB) string {

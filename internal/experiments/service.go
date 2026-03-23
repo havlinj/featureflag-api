@@ -141,10 +141,6 @@ func validateVariantWeights(variants []*model.ExperimentVariantInput) error {
 	return nil
 }
 
-func (s *Service) ensureUniqueExperiment(ctx context.Context, key, environment string) error {
-	return s.ensureUniqueExperimentWithStore(ctx, s.store, key, environment)
-}
-
 func (s *Service) prepareAuditTx(ctx context.Context) (*auditTxContext, error) {
 	storeTxAware, ok := s.store.(TxAwareStore)
 	if !ok {
@@ -172,10 +168,6 @@ func (s *Service) ensureUniqueExperimentWithStore(ctx context.Context, store Sto
 		return &DuplicateExperimentError{Key: key, Environment: environment}
 	}
 	return nil
-}
-
-func (s *Service) persistVariants(ctx context.Context, experimentID string, inputs []*model.ExperimentVariantInput) error {
-	return s.persistVariantsWithStore(ctx, s.store, experimentID, inputs)
 }
 
 func (s *Service) persistVariantsWithStore(ctx context.Context, store Store, experimentID string, inputs []*model.ExperimentVariantInput) error {

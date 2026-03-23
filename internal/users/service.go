@@ -266,10 +266,6 @@ func (s *Service) deleteUserWithStore(ctx context.Context, store Store, id strin
 	return true, nil
 }
 
-func (s *Service) ensureUniqueEmail(ctx context.Context, email string) error {
-	return s.ensureUniqueEmailWithStore(ctx, s.store, email)
-}
-
 func (s *Service) prepareAuditTx(ctx context.Context) (*auditTxContext, error) {
 	storeTxAware, ok := s.store.(TxAwareStore)
 	if !ok {

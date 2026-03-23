@@ -189,10 +189,6 @@ func (s *Service) updateFlagWithStore(ctx context.Context, store Store, input mo
 	return flag, nil
 }
 
-func (s *Service) getFlagOrErr(ctx context.Context, key string, env DeploymentStage) (*Flag, error) {
-	return s.getFlagOrErrWithStore(ctx, s.store, key, env)
-}
-
 func (s *Service) getFlagOrErrWithStore(ctx context.Context, store Store, key string, env DeploymentStage) (*Flag, error) {
 	flag, err := store.GetByKeyAndEnvironment(ctx, key, env)
 	if err != nil {
@@ -202,10 +198,6 @@ func (s *Service) getFlagOrErrWithStore(ctx context.Context, store Store, key st
 		return nil, &NotFoundError{Key: key, Environment: string(env)}
 	}
 	return flag, nil
-}
-
-func (s *Service) applyRulesUpdate(ctx context.Context, flag *Flag, rules []*model.RuleInput) error {
-	return s.applyRulesUpdateWithStore(ctx, s.store, flag, rules)
 }
 
 func (s *Service) applyRulesUpdateWithStore(ctx context.Context, store Store, flag *Flag, rules []*model.RuleInput) error {
@@ -309,10 +301,6 @@ func (s *Service) deleteFlagWithStoreAndID(ctx context.Context, store Store, key
 		return false, "", &OperationError{Op: opServiceDeleteFlagStoreDelete, FlagID: flag.ID, Key: key, Environment: string(env), Cause: err}
 	}
 	return true, flag.ID, nil
-}
-
-func (s *Service) ensureUniqueFlag(ctx context.Context, key string, env DeploymentStage) error {
-	return s.ensureUniqueFlagWithStore(ctx, s.store, key, env)
 }
 
 func (s *Service) prepareAuditTx(ctx context.Context) (*auditTxContext, error) {

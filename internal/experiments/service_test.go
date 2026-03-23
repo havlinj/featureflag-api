@@ -166,6 +166,34 @@ func TestService_CreateExperiment_duplicate_returns_ErrDuplicateExperiment(t *te
 	}
 }
 
+func TestService_CreateExperiment_uniqueness_lookup_store_error_returns_wrapped(t *testing.T) {
+	ctx := context.Background()
+	store := &mock.Store{}
+	wantErr := errors.New("GetExperimentByKeyAndEnvironment failed")
+	store.GetExperimentByKeyAndEnvironmentReturns = []mock.GetExperimentResult{{Exp: nil, Err: wantErr}}
+	svc := experiments.NewService(store)
+	input := model.CreateExperimentInput{Key: "new-exp", Environment: "dev", Variants: variants50_50()}
+
+	_, err := svc.CreateExperiment(ctx, input)
+
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("expected wrapped %v, got %v", wantErr, err)
+	}
+	var opErr *experiments.OperationError
+	if !errors.As(err, &opErr) {
+		t.Fatalf("expected *experiments.OperationError, got %T", err)
+	}
+	if opErr.Op != "experiments.service.ensure_unique_experiment.store_get_by_key_and_environment" {
+		t.Fatalf("unexpected op %q", opErr.Op)
+	}
+	if opErr.Key != "new-exp" || opErr.Environment != "dev" {
+		t.Fatalf("unexpected context fields: %+v", opErr)
+	}
+	if len(store.CreateExperimentCalls) != 0 {
+		t.Fatalf("CreateExperiment must not run after failed uniqueness lookup, got %d calls", len(store.CreateExperimentCalls))
+	}
+}
+
 func TestService_CreateExperiment_store_create_error_returns_wrapped(t *testing.T) {
 	ctx := context.Background()
 	store := &mock.Store{}
