@@ -115,14 +115,14 @@ func (s *Service) GetUserByEmail(ctx context.Context, email string) (*model.User
 }
 
 // Login verifies email and password and returns the user ID and role for token issuance.
-// Returns ErrNotFound if no user, ErrInvalidCredentials if password does not match.
+// It always returns InvalidCredentialsError for authentication failures.
 func (s *Service) Login(ctx context.Context, email, password string) (userID, role string, err error) {
 	u, err := s.store.GetByEmail(ctx, email)
 	if err != nil {
 		return "", "", fmt.Errorf("login: %w", err)
 	}
 	if u == nil {
-		return "", "", &NotFoundError{Email: email}
+		return "", "", &InvalidCredentialsError{Email: email}
 	}
 	if u.PasswordHash == nil || !auth.PasswordMatches(*u.PasswordHash, password) {
 		return "", "", &InvalidCredentialsError{Email: email}

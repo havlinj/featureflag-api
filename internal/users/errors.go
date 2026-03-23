@@ -30,5 +30,5 @@ type InvalidCredentialsError struct {
 }
 
 func (e *InvalidCredentialsError) Error() string {
-	return fmt.Sprintf("users: invalid credentials email=%q", e.Email)
+	return "users: invalid credentials"
 }

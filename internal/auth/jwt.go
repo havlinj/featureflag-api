@@ -7,6 +7,7 @@ import (
 )
 
 const defaultExpiry = 24 * time.Hour
+const tokenIssuer = "featureflag-api"
 
 // jwtClaims is the JWT standard claims plus our custom fields.
 type jwtClaims struct {
@@ -26,6 +27,8 @@ func IssueToken(userID, role string, secret []byte, expiry time.Duration) (strin
 			Subject:   userID,
 			ExpiresAt: jwt.NewNumericDate(now.Add(expiry)),
 			IssuedAt:  jwt.NewNumericDate(now),
+			NotBefore: jwt.NewNumericDate(now),
+			Issuer:    tokenIssuer,
 		},
 		Role: role,
 	}
@@ -38,12 +41,15 @@ func IssueToken(userID, role string, secret []byte, expiry time.Duration) (strin
 func ParseAndValidate(tokenString string, secret []byte) (*Claims, error) {
 	token, err := jwt.ParseWithClaims(tokenString, &jwtClaims{}, func(token *jwt.Token) (interface{}, error) {
 		return secret, nil
-	})
+	}, jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}), jwt.WithIssuer(tokenIssuer))
 	if err != nil {
 		return nil, err
 	}
 	jc, ok := token.Claims.(*jwtClaims)
 	if !ok || !token.Valid {
+		return nil, jwt.ErrTokenInvalidClaims
+	}
+	if jc.Subject == "" || jc.Role == "" {
 		return nil, jwt.ErrTokenInvalidClaims
 	}
 	return &Claims{Sub: jc.Subject, Role: jc.Role}, nil

@@ -34,7 +34,7 @@ func TestNotFoundError_Error_by_email_full_message(t *testing.T) {
 func TestInvalidCredentialsError_Error_full_message(t *testing.T) {
 	e := &InvalidCredentialsError{Email: "u@x.com"}
 	got := e.Error()
-	want := `users: invalid credentials email="u@x.com"`
+	want := "users: invalid credentials"
 	if got != want {
 		t.Errorf("Error() = %q; want %q", got, want)
 	}

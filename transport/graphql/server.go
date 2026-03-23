@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"net/http"
+	"time"
 )
 
 // Server runs the GraphQL HTTP(S) server.
@@ -15,8 +16,13 @@ type Server struct {
 func NewServer(handler http.Handler, tlsConfig *tls.Config) *Server {
 	return &Server{
 		srv: &http.Server{
-			Handler:   handler,
-			TLSConfig: tlsConfig,
+			Handler:           handler,
+			TLSConfig:         tlsConfig,
+			ReadHeaderTimeout: 5 * time.Second,
+			ReadTimeout:       10 * time.Second,
+			WriteTimeout:      15 * time.Second,
+			IdleTimeout:       60 * time.Second,
+			MaxHeaderBytes:    1 << 20,
 		},
 	}
 }

@@ -3,6 +3,8 @@ package auth
 import (
 	"testing"
 	"time"
+
+	"github.com/golang-jwt/jwt/v5"
 )
 
 const testSecret = "test-jwt-secret-at-least-32-bytes-long"
@@ -73,5 +75,55 @@ func TestIssueToken_zeroExpiryUsesDefault(t *testing.T) {
 	}
 	if claims.Sub != "u" {
 		t.Errorf("expected sub=u, got %q", claims.Sub)
+	}
+}
+
+func TestParseAndValidate_rejectsUnexpectedSigningMethod(t *testing.T) {
+	claims := jwtClaims{
+		RegisteredClaims: jwt.RegisteredClaims{
+			Subject:   "u1",
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour)),
+			IssuedAt:  jwt.NewNumericDate(time.Now()),
+			NotBefore: jwt.NewNumericDate(time.Now()),
+			Issuer:    tokenIssuer,
+		},
+		Role: "admin",
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodHS384, claims)
+	tokenString, err := token.SignedString([]byte(testSecret))
+	if err != nil {
+		t.Fatalf("SignedString: %v", err)
+	}
+
+	_, err = ParseAndValidate(tokenString, []byte(testSecret))
+
+	if err == nil {
+		t.Fatal("expected error for unexpected signing method")
+	}
+}
+
+func TestParseAndValidate_rejectsEmptySubject(t *testing.T) {
+	token, err := IssueToken("", "admin", []byte(testSecret), time.Hour)
+	if err != nil {
+		t.Fatalf("IssueToken: %v", err)
+	}
+
+	_, err = ParseAndValidate(token, []byte(testSecret))
+
+	if err == nil {
+		t.Fatal("expected error for empty subject claim")
+	}
+}
+
+func TestParseAndValidate_rejectsEmptyRole(t *testing.T) {
+	token, err := IssueToken("user-1", "", []byte(testSecret), time.Hour)
+	if err != nil {
+		t.Fatalf("IssueToken: %v", err)
+	}
+
+	_, err = ParseAndValidate(token, []byte(testSecret))
+
+	if err == nil {
+		t.Fatal("expected error for empty role claim")
 	}
 }

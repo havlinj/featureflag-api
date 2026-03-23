@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/99designs/gqlgen/graphql/handler"
+	"github.com/99designs/gqlgen/graphql/handler/extension"
 	"github.com/havlinj/featureflag-api/graph"
 	"github.com/havlinj/featureflag-api/internal/audit"
 	"github.com/havlinj/featureflag-api/internal/experiments"
@@ -31,6 +32,7 @@ func NewApp(
 	auditStore audit.Store,
 	jwtSecret []byte,
 ) *App {
+	logger := slog.Default()
 	resolver := graphql.NewResolver(
 		flags.NewServiceWithAudit(flagsStore, auditStore),
 		users.NewServiceWithAudit(usersStore, auditStore),
@@ -41,9 +43,12 @@ func NewApp(
 	)
 	schema := graph.NewExecutableSchema(graph.Config{Resolvers: resolver})
 	gqlHandler := handler.NewDefaultServer(schema)
+	gqlHandler.Use(extension.FixedComplexityLimit(200))
 	chain := middleware.Chain(gqlHandler,
-		middleware.Logging(slog.Default()),
+		middleware.Recovery(logger),
+		middleware.Logging(logger),
 		middleware.Auth(jwtSecret),
+		middleware.BodyLimit(1<<20),
 	)
 	srv := graphql.NewServer(chain, tlsConfig)
 	return &App{server: Server{graphQLServer: srv}}

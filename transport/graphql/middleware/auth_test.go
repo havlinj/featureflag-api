@@ -4,6 +4,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/havlinj/featureflag-api/internal/auth"
 )
 
 func TestAuth_invalidToken_returns401(t *testing.T) {
@@ -70,5 +72,29 @@ func TestAuth_authorizationNotBearer_returns401(t *testing.T) {
 
 	if rec.Code != http.StatusUnauthorized {
 		t.Errorf("expected 401 when Authorization is not Bearer, got %d", rec.Code)
+	}
+}
+
+func TestAuth_bearerWithExtraSpacesAroundToken_callsNext(t *testing.T) {
+	token, err := auth.IssueToken("user-1", "admin", []byte("secret"), 0)
+	if err != nil {
+		t.Fatalf("IssueToken: %v", err)
+	}
+	called := false
+	handler := Auth([]byte("secret"))(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusOK)
+	}))
+	req := httptest.NewRequest(http.MethodGet, "/graphql", nil)
+	req.Header.Set("Authorization", "Bearer    "+token+"   ")
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if !called {
+		t.Error("expected next handler to be called for valid token with extra spaces")
+	}
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", rec.Code)
 	}
 }

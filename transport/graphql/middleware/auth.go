@@ -24,7 +24,11 @@ func Auth(secret []byte) func(http.Handler) http.Handler {
 				writeUnauthorized(w)
 				return
 			}
-			tokenString := strings.TrimPrefix(header, prefix)
+			tokenString := strings.TrimSpace(strings.TrimPrefix(header, prefix))
+			if tokenString == "" {
+				writeUnauthorized(w)
+				return
+			}
 			claims, err := auth.ParseAndValidate(tokenString, secret)
 			if err != nil {
 				writeUnauthorized(w)

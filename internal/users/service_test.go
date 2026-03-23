@@ -307,7 +307,7 @@ func TestService_Login_happy_path_returns_userID_and_role(t *testing.T) {
 	}
 }
 
-func TestService_Login_user_not_found_returns_ErrNotFound(t *testing.T) {
+func TestService_Login_user_not_found_returns_ErrInvalidCredentials(t *testing.T) {
 	ctx := context.Background()
 	store := &mock.Store{}
 	store.GetByEmailReturns = []mock.GetByEmailResult{{User: nil, Err: nil}}
@@ -315,9 +315,9 @@ func TestService_Login_user_not_found_returns_ErrNotFound(t *testing.T) {
 
 	_, _, err := svc.Login(ctx, "missing@test.com", "any")
 
-	var e *users.NotFoundError
+	var e *users.InvalidCredentialsError
 	if !errors.As(err, &e) {
-		t.Errorf("expected *NotFoundError, got %v", err)
+		t.Errorf("expected *InvalidCredentialsError, got %v", err)
 	}
 	if e.Email != "missing@test.com" {
 		t.Errorf("expected Email=missing@test.com, got %q", e.Email)

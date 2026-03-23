@@ -30,6 +30,9 @@ jobs:
       - name: Unit tests
         run: bash scripts/test_unit.sh
 
+      - name: Coverage gate
+        run: bash scripts/test_coverage.sh
+
       - name: Integration tests (Go, testcontainers)
         run: bash scripts/test_integration.sh
 

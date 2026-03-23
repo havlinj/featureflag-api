@@ -6,5 +6,5 @@ ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$ROOT_DIR"
 
 echo "== unit tests (./internal/... ./transport/...)"
-go test ./internal/... ./transport/...
+go test -race ./internal/... ./transport/...
 echo "OK"

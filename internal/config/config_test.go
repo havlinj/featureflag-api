@@ -31,7 +31,7 @@ func TestGetDSN_buildsFromEnvWhenDATABASE_DSNEmpty(t *testing.T) {
 
 	result := GetDSN(getenv)
 
-	expected := "postgres://u:p@dbhost:5433/mydb?sslmode=disable"
+	expected := "postgres://u:p@dbhost:5433/mydb?sslmode=require"
 	if result != expected {
 		t.Errorf("expected %q, got %q", expected, result)
 	}
@@ -50,7 +50,7 @@ func TestGetDSN_usesDefaultHostWhenPGHOSTEmpty(t *testing.T) {
 
 	result := GetDSN(getenv)
 
-	if result != "postgres://postgres:@localhost:5432/d?sslmode=disable" {
+	if result != "postgres://postgres:@localhost:5432/d?sslmode=require" {
 		t.Errorf("expected localhost in DSN, got %q", result)
 	}
 }
@@ -68,7 +68,7 @@ func TestGetDSN_usesDefaultPortWhenPGPORTEmpty(t *testing.T) {
 
 	result := GetDSN(getenv)
 
-	if result != "postgres://postgres:@h:5432/d?sslmode=disable" {
+	if result != "postgres://postgres:@h:5432/d?sslmode=require" {
 		t.Errorf("expected port 5432 in DSN, got %q", result)
 	}
 }
@@ -89,7 +89,7 @@ func TestGetDSN_usesDefaultUserWhenPGUSEREmpty(t *testing.T) {
 
 	result := GetDSN(getenv)
 
-	if result != "postgres://postgres:@h:5432/d?sslmode=disable" {
+	if result != "postgres://postgres:@h:5432/d?sslmode=require" {
 		t.Errorf("expected user postgres in DSN, got %q", result)
 	}
 }
@@ -107,7 +107,7 @@ func TestGetDSN_usesDefaultDatabaseWhenPGDATABASEEmpty(t *testing.T) {
 
 	result := GetDSN(getenv)
 
-	if result != "postgres://postgres:@h:5432/featureflag?sslmode=disable" {
+	if result != "postgres://postgres:@h:5432/featureflag?sslmode=require" {
 		t.Errorf("expected database featureflag in DSN, got %q", result)
 	}
 }
@@ -163,7 +163,7 @@ func TestMissingJWTSecretError_Error_full_message(t *testing.T) {
 func TestGetJWTSecret_returnsSecretWhenSet(t *testing.T) {
 	getenv := func(key string) string {
 		if key == "JWT_SECRET" {
-			return "my-secret"
+			return "my-secret-at-least-32-bytes-long"
 		}
 		return ""
 	}
@@ -173,8 +173,27 @@ func TestGetJWTSecret_returnsSecretWhenSet(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if result != "my-secret" {
-		t.Errorf("expected my-secret, got %q", result)
+	if result != "my-secret-at-least-32-bytes-long" {
+		t.Errorf("expected long secret, got %q", result)
+	}
+}
+
+func TestGetJWTSecret_returnsErrorWhenTooShort(t *testing.T) {
+	getenv := func(key string) string {
+		if key == "JWT_SECRET" {
+			return "short-secret"
+		}
+		return ""
+	}
+
+	_, err := GetJWTSecret(getenv)
+
+	var e *WeakJWTSecretError
+	if !errors.As(err, &e) {
+		t.Errorf("expected *WeakJWTSecretError, got %v", err)
+	}
+	if e.MinLength != minJWTSecretLength {
+		t.Errorf("expected MinLength=%d, got %d", minJWTSecretLength, e.MinLength)
 	}
 }
 

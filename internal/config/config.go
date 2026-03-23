@@ -5,6 +5,8 @@ import (
 	"fmt"
 )
 
+const minJWTSecretLength = 32
+
 // GetDSN returns the database DSN. If getenv("DATABASE_DSN") is non-empty, it returns that.
 // Otherwise it builds a DSN from PGHOST, PGPORT, PGUSER, PGPASSWORD, PGDATABASE with defaults.
 func GetDSN(getenv func(string) string) string {
@@ -32,7 +34,7 @@ func buildDSNFromEnv(getenv func(string) string) string {
 	if dbname == "" {
 		dbname = "featureflag"
 	}
-	return "postgres://" + user + ":" + password + "@" + host + ":" + port + "/" + dbname + "?sslmode=disable"
+	return "postgres://" + user + ":" + password + "@" + host + ":" + port + "/" + dbname + "?sslmode=require"
 }
 
 // GetListenAddr returns the listen address. Defaults to ":8080" if getenv("LISTEN_ADDR") is empty.
@@ -59,7 +61,20 @@ func GetJWTSecret(getenv func(string) string) (string, error) {
 	if s == "" {
 		return "", &MissingJWTSecretError{EnvVar: "JWT_SECRET"}
 	}
+	if len(s) < minJWTSecretLength {
+		return "", &WeakJWTSecretError{MinLength: minJWTSecretLength, ActualLength: len(s)}
+	}
 	return s, nil
+}
+
+// WeakJWTSecretError is returned when JWT_SECRET is too short for secure usage.
+type WeakJWTSecretError struct {
+	MinLength    int
+	ActualLength int
+}
+
+func (e *WeakJWTSecretError) Error() string {
+	return fmt.Sprintf("config: JWT_SECRET too short (min=%d actual=%d)", e.MinLength, e.ActualLength)
 }
 
 // TLSConfigLoader loads a tls.Config from cert and key file paths.

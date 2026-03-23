@@ -7,7 +7,7 @@ cd "$ROOT_DIR"
 
 "$SCRIPT_DIR/../build.sh" >/dev/null 2>&1
 
-export JWT_SECRET="test-secret"
+export JWT_SECRET="test-secret-at-least-32-bytes-long"
 export DATABASE_DSN="postgres://nonexistenthost:5432/nonexistent?sslmode=disable"
 if "$ROOT_DIR/bin/featureflag-api" 2>/dev/null; then
   echo "Expected binary to exit non-zero when database is unreachable" >&2

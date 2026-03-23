@@ -42,14 +42,27 @@ func startAppWithDB(t *testing.T, database *db.DB) (*app.App, *testutil.GraphQLC
 			log.Fatalf("server error: %v", err)
 		}
 	}()
-	time.Sleep(100 * time.Millisecond)
 	client := testutil.NewClientForIntegration("https://" + addr)
+	waitForGraphQLReady(t, client)
 	shutdown := func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		_ = a.Shutdown(ctx)
 	}
 	return a, client, shutdown
+}
+
+func waitForGraphQLReady(t *testing.T, client *testutil.GraphQLClient) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		resp, err := client.DoRequest(`query Ready { __typename }`, nil)
+		if err == nil && resp != nil && len(resp.Errors) == 0 {
+			return
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	t.Fatalf("server did not become ready before timeout: %s", time.Now().Format(time.RFC3339))
 }
 
 // requireDataAndNoErrors fails the test if the GraphQL response has no data or has errors.
