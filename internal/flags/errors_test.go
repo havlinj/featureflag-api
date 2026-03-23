@@ -1,6 +1,7 @@
 package flags
 
 import (
+	"errors"
 	"testing"
 )
 
@@ -91,5 +92,39 @@ func TestRulesStrategyMismatchError_Error_current_only_full_message(t *testing.T
 	want := `flags: rules strategy mismatch (current="attribute")`
 	if got != want {
 		t.Errorf("Error() = %q; want %q", got, want)
+	}
+}
+
+func TestOperationError_Error_and_unwrap_are_deterministic(t *testing.T) {
+	causeA := errors.New("db failure A")
+	errA := &OperationError{
+		Op:          opServiceCreateFlagStoreCreate,
+		Key:         "checkout",
+		Environment: "prod",
+		FlagID:      "f1",
+		Cause:       causeA,
+	}
+
+	if got, want := errA.Error(), `flags: operation="flags.service.create_flag.store_create" key="checkout" environment="prod" flag_id="f1": db failure A`; got != want {
+		t.Errorf("Error() = %q; want %q", got, want)
+	}
+	if !errors.Is(errA, causeA) {
+		t.Errorf("errors.Is(errA, causeA) = false; want true")
+	}
+
+	causeB := errors.New("db failure B")
+	errB := &OperationError{
+		Op:          opRepoGetRulesByFlagIDScan,
+		Key:         "",
+		Environment: "",
+		FlagID:      "f2",
+		Cause:       causeB,
+	}
+
+	if got, want := errB.Error(), `flags: operation="flags.repo.get_rules_by_flag_id.scan" key="" environment="" flag_id="f2": db failure B`; got != want {
+		t.Errorf("Error() = %q; want %q", got, want)
+	}
+	if !errors.Is(errB, causeB) {
+		t.Errorf("errors.Is(errB, causeB) = false; want true")
 	}
 }

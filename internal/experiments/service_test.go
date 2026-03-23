@@ -4,10 +4,10 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"strings"
 	"testing"
 
 	"github.com/havlinj/featureflag-api/graph/model"
+	"github.com/havlinj/featureflag-api/internal/audit"
 	"github.com/havlinj/featureflag-api/internal/auth"
 	"github.com/havlinj/featureflag-api/internal/experiments"
 	"github.com/havlinj/featureflag-api/internal/experiments/mock"
@@ -183,6 +183,16 @@ func TestService_CreateExperiment_store_create_error_returns_wrapped(t *testing.
 	if !errors.Is(err, wantErr) {
 		t.Errorf("expected wrapped %v, got %v", wantErr, err)
 	}
+	var opErr *experiments.OperationError
+	if !errors.As(err, &opErr) {
+		t.Fatalf("expected *experiments.OperationError, got %T", err)
+	}
+	if opErr.Op != "experiments.service.create_experiment.store_create_experiment" {
+		t.Fatalf("unexpected op %q", opErr.Op)
+	}
+	if opErr.Key != "x" || opErr.Environment != "dev" {
+		t.Fatalf("unexpected context fields: %+v", opErr)
+	}
 }
 
 func TestService_CreateExperiment_create_variant_error_returns_wrapped(t *testing.T) {
@@ -204,6 +214,16 @@ func TestService_CreateExperiment_create_variant_error_returns_wrapped(t *testin
 	}
 	if !errors.Is(err, wantErr) {
 		t.Errorf("expected wrapped %v, got %v", wantErr, err)
+	}
+	var opErr *experiments.OperationError
+	if !errors.As(err, &opErr) {
+		t.Fatalf("expected *experiments.OperationError, got %T", err)
+	}
+	if opErr.Op != "experiments.service.create_experiment.store_create_variant" {
+		t.Fatalf("unexpected op %q", opErr.Op)
+	}
+	if opErr.ExperimentID != "exp-1" || opErr.VariantName != "A" || opErr.VariantWeight != 50 {
+		t.Fatalf("unexpected context fields: %+v", opErr)
 	}
 }
 
@@ -240,6 +260,16 @@ func TestService_GetExperiment_store_error_returns_wrapped(t *testing.T) {
 	}
 	if !errors.Is(err, wantErr) {
 		t.Errorf("expected wrapped %v, got %v", wantErr, err)
+	}
+	var opErr *experiments.OperationError
+	if !errors.As(err, &opErr) {
+		t.Fatalf("expected *experiments.OperationError, got %T", err)
+	}
+	if opErr.Op != "experiments.service.get_experiment.store_get_by_key_and_environment" {
+		t.Fatalf("unexpected op %q", opErr.Op)
+	}
+	if opErr.Key != "x" || opErr.Environment != "dev" {
+		t.Fatalf("unexpected context fields: %+v", opErr)
 	}
 }
 
@@ -445,6 +475,16 @@ func TestService_GetAssignment_upsert_error_returns_wrapped(t *testing.T) {
 	if !errors.Is(err, wantErr) {
 		t.Errorf("expected wrapped %v, got %v", wantErr, err)
 	}
+	var opErr *experiments.OperationError
+	if !errors.As(err, &opErr) {
+		t.Fatalf("expected *experiments.OperationError, got %T", err)
+	}
+	if opErr.Op != "experiments.service.get_assignment.store_upsert_assignment" {
+		t.Fatalf("unexpected op %q", opErr.Op)
+	}
+	if opErr.UserID != "user-1" || opErr.ExperimentID != "exp-1" || opErr.VariantID != "vA" || opErr.Key != "upsert-err" || opErr.Environment != "dev" {
+		t.Fatalf("unexpected context fields: %+v", opErr)
+	}
 }
 
 func TestService_GetAssignment_upsert_error_includes_context(t *testing.T) {
@@ -468,9 +508,15 @@ func TestService_GetAssignment_upsert_error_includes_context(t *testing.T) {
 	if !errors.Is(err, wantErr) {
 		t.Fatalf("expected wrapped %v, got %v", wantErr, err)
 	}
-	msg := err.Error()
-	if !strings.Contains(msg, `user_id="user-1"`) || !strings.Contains(msg, `experiment_id="exp-1"`) || !strings.Contains(msg, `variant_id="vA"`) {
-		t.Fatalf("expected contextual error message, got %q", msg)
+	var opErr *experiments.OperationError
+	if !errors.As(err, &opErr) {
+		t.Fatalf("expected *experiments.OperationError, got %T", err)
+	}
+	if opErr.Op != "experiments.service.get_assignment.store_upsert_assignment" {
+		t.Fatalf("unexpected op %q", opErr.Op)
+	}
+	if opErr.UserID != "user-1" || opErr.ExperimentID != "exp-1" || opErr.VariantID != "vA" || opErr.Key != "upsert-ctx" || opErr.Environment != "dev" {
+		t.Fatalf("unexpected context fields: %+v", opErr)
 	}
 }
 
@@ -555,8 +601,9 @@ func TestService_CreateExperiment_withAudit_missingActor_returns_error(t *testin
 
 	_, err := svc.CreateExperiment(context.Background(), input)
 
-	if err == nil || err.Error() != "audit: missing actor id in context" {
-		t.Fatalf("expected missing actor error, got %v", err)
+	var e *audit.MissingActorIDError
+	if !errors.As(err, &e) {
+		t.Fatalf("expected *audit.MissingActorIDError, got %T (%v)", err, err)
 	}
 }
 
@@ -572,8 +619,9 @@ func TestService_CreateExperiment_withAudit_notTxAwareAuditStore_returns_error(t
 
 	_, err := svc.CreateExperiment(ctx, input)
 
-	if err == nil || err.Error() != "audit: audit store is not tx-aware" {
-		t.Fatalf("expected tx-aware audit store error, got %v", err)
+	var e *audit.TxAwareRequiredError
+	if !errors.As(err, &e) {
+		t.Fatalf("expected *audit.TxAwareRequiredError, got %T (%v)", err, err)
 	}
 }
 
@@ -611,7 +659,7 @@ func TestService_CreateExperiment_withoutAudit_storeBeginTx_error_is_returned(t 
 
 	_, err := svc.CreateExperiment(context.Background(), input)
 
-	if err == nil || err.Error() != "begin tx failed" {
-		t.Fatalf("expected begin tx failed error, got %v", err)
+	if !errors.Is(err, store.beginErr) {
+		t.Fatalf("expected %v, got %v", store.beginErr, err)
 	}
 }

@@ -51,8 +51,9 @@ func (m *txAwareOnlyMock) WithTx(tx *sql.Tx) audit.Store {
 func TestPrepareWriteTx_missing_actor_returns_error(t *testing.T) {
 	_, _, _, err := audit.PrepareWriteTx(context.Background(), &txAwareOnlyMock{})
 
-	if err == nil || err.Error() != "audit: missing actor id in context" {
-		t.Fatalf("expected missing actor error, got %v", err)
+	var e *audit.MissingActorIDError
+	if !errors.As(err, &e) {
+		t.Fatalf("expected *audit.MissingActorIDError, got %T (%v)", err, err)
 	}
 }
 
@@ -61,8 +62,9 @@ func TestPrepareWriteTx_missing_tx_starter_returns_error(t *testing.T) {
 
 	_, _, _, err := audit.PrepareWriteTx(ctx, &txAwareOnlyMock{})
 
-	if err == nil || err.Error() != "audit: audit store cannot start transactions" {
-		t.Fatalf("expected tx starter error, got %v", err)
+	var e *audit.TxStarterRequiredError
+	if !errors.As(err, &e) {
+		t.Fatalf("expected *audit.TxStarterRequiredError, got %T (%v)", err, err)
 	}
 }
 
@@ -71,8 +73,9 @@ func TestPrepareWriteTx_missing_tx_aware_returns_error(t *testing.T) {
 
 	_, _, _, err := audit.PrepareWriteTx(ctx, &txStarterOnlyMock{})
 
-	if err == nil || err.Error() != "audit: audit store is not tx-aware" {
-		t.Fatalf("expected tx-aware error, got %v", err)
+	var e *audit.TxAwareRequiredError
+	if !errors.As(err, &e) {
+		t.Fatalf("expected *audit.TxAwareRequiredError, got %T (%v)", err, err)
 	}
 }
 

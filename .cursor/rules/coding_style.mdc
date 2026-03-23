@@ -97,9 +97,15 @@ Error handling rules:
 - Prefer **structured error types** (structs implementing `error`) over sentinel errors when the caller or tests need to inspect context (e.g. which key, ID, or input caused the failure).
 - Define one struct per error kind in the package (e.g. `DuplicateKeyError`, `NotFoundError`) with fields that carry context (e.g. `Key`, `Environment`, `ID`, `Email`). Implement `Error() string` so the type is a valid `error`.
 - Return these structs directly from the layer that detects the condition (e.g. service or repository). Use `errors.As(err, &e)` in callers or tests to match and read context; do not rely on sentinel variables for domain errors that carry context.
-- When propagating lower-level failures (e.g. DB, I/O), wrap with meaningful context: `return fmt.Errorf("create flag: %w", err)`.
+- Distinguish two categories: domain errors (business/expected) and operation errors (technical/unexpected). Domain errors must remain direct (do not wrap them in operation wrappers).
+- For technical failures in service/repository operation steps, return package `OperationError` with stable `Op`, relevant context fields, and root `Cause`.
+- For operation failures, preserve chain semantics so both `errors.As` (typed context) and `errors.Is` (cause matching) work.
+- In tests, prefer typed assertions (`errors.As`) with field checks; do not rely primarily on plain `err.Error()` matching when typed assertions are possible.
+- Keep deterministic `Error()` format tests for custom error structs (especially `OperationError`) as complementary checks.
 - Never silently ignore errors.
 - Do not panic in business logic.
+
+Reference: `docs/error_handling.md`
 
 ---
 

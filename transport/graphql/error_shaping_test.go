@@ -20,6 +20,9 @@ func TestPresentError_unauthorized_is_sanitized(t *testing.T) {
 	if presented.Message != msgUnauthorized {
 		t.Fatalf("expected %q, got %q", msgUnauthorized, presented.Message)
 	}
+	if presented.Extensions["code"] != codeUnauthorized {
+		t.Fatalf("expected code %q, got %v", codeUnauthorized, presented.Extensions["code"])
+	}
 }
 
 func TestPresentError_forbidden_is_sanitized(t *testing.T) {
@@ -32,6 +35,9 @@ func TestPresentError_forbidden_is_sanitized(t *testing.T) {
 	}
 	if presented.Message != msgForbidden {
 		t.Fatalf("expected %q, got %q", msgForbidden, presented.Message)
+	}
+	if presented.Extensions["code"] != codeForbidden {
+		t.Fatalf("expected code %q, got %v", codeForbidden, presented.Extensions["code"])
 	}
 }
 
@@ -46,6 +52,9 @@ func TestPresentError_invalid_credentials_is_sanitized(t *testing.T) {
 	if presented.Message != msgInvalidCredential {
 		t.Fatalf("expected %q, got %q", msgInvalidCredential, presented.Message)
 	}
+	if presented.Extensions["code"] != codeInvalidCredential {
+		t.Fatalf("expected code %q, got %v", codeInvalidCredential, presented.Extensions["code"])
+	}
 }
 
 func TestPresentError_internal_config_is_sanitized(t *testing.T) {
@@ -58,5 +67,8 @@ func TestPresentError_internal_config_is_sanitized(t *testing.T) {
 	}
 	if presented.Message != msgInternalError {
 		t.Fatalf("expected %q, got %q", msgInternalError, presented.Message)
+	}
+	if presented.Extensions["code"] != codeInternal {
+		t.Fatalf("expected code %q, got %v", codeInternal, presented.Extensions["code"])
 	}
 }

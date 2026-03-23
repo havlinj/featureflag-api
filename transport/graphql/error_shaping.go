@@ -17,23 +17,37 @@ const (
 	msgForbidden         = "forbidden"
 	msgInvalidCredential = "invalid credentials"
 	msgInternalError     = "internal error"
+
+	codeUnauthorized      = "UNAUTHORIZED"
+	codeForbidden         = "FORBIDDEN"
+	codeInvalidCredential = "INVALID_CREDENTIALS"
+	codeInternal          = "INTERNAL"
 )
 
 // PresentError maps internal errors to safe external GraphQL messages.
 func PresentError(ctx context.Context, err error) *gqlerror.Error {
 	if isUnauthorizedError(err) {
-		return graphql.DefaultErrorPresenter(ctx, errors.New(msgUnauthorized))
+		return presentWithCode(ctx, msgUnauthorized, codeUnauthorized)
 	}
 	if isForbiddenError(err) {
-		return graphql.DefaultErrorPresenter(ctx, errors.New(msgForbidden))
+		return presentWithCode(ctx, msgForbidden, codeForbidden)
 	}
 	if isInvalidCredentialsError(err) {
-		return graphql.DefaultErrorPresenter(ctx, errors.New(msgInvalidCredential))
+		return presentWithCode(ctx, msgInvalidCredential, codeInvalidCredential)
 	}
 	if isInternalConfigError(err) {
-		return graphql.DefaultErrorPresenter(ctx, errors.New(msgInternalError))
+		return presentWithCode(ctx, msgInternalError, codeInternal)
 	}
 	return graphql.DefaultErrorPresenter(ctx, err)
+}
+
+func presentWithCode(ctx context.Context, message, code string) *gqlerror.Error {
+	ge := graphql.DefaultErrorPresenter(ctx, errors.New(message))
+	if ge.Extensions == nil {
+		ge.Extensions = make(map[string]any, 1)
+	}
+	ge.Extensions["code"] = code
+	return ge
 }
 
 func isUnauthorizedError(err error) bool {

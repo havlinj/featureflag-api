@@ -4,11 +4,11 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"strings"
 	"testing"
 	"time"
 
 	"github.com/havlinj/featureflag-api/graph/model"
+	"github.com/havlinj/featureflag-api/internal/audit"
 	"github.com/havlinj/featureflag-api/internal/auth"
 	"github.com/havlinj/featureflag-api/internal/flags"
 	"github.com/havlinj/featureflag-api/internal/flags/mock"
@@ -117,6 +117,16 @@ func TestService_CreateFlag_get_existing_error_returns_wrapped_error(t *testing.
 	if !errors.Is(err, wantErr) {
 		t.Errorf("expected wrapped %v, got %v", wantErr, err)
 	}
+	var opErr *flags.OperationError
+	if !errors.As(err, &opErr) {
+		t.Fatalf("expected *flags.OperationError, got %T", err)
+	}
+	if opErr.Op != "flags.service.ensure_unique_flag.store_get_by_key_and_environment" {
+		t.Fatalf("unexpected op %q", opErr.Op)
+	}
+	if opErr.Key != "test-flag" || opErr.Environment != "dev" {
+		t.Fatalf("unexpected context fields: %+v", opErr)
+	}
 	if len(store.CreateCalls) != 0 {
 		t.Errorf("Create should not be called, got %d calls", len(store.CreateCalls))
 	}
@@ -142,6 +152,16 @@ func TestService_CreateFlag_create_error_returns_wrapped_error(t *testing.T) {
 	}
 	if !errors.Is(err, wantErr) {
 		t.Errorf("expected wrapped %v, got %v", wantErr, err)
+	}
+	var opErr *flags.OperationError
+	if !errors.As(err, &opErr) {
+		t.Fatalf("expected *flags.OperationError, got %T", err)
+	}
+	if opErr.Op != "flags.service.create_flag.store_create" {
+		t.Fatalf("unexpected op %q", opErr.Op)
+	}
+	if opErr.Key != "test-flag" || opErr.Environment != "dev" {
+		t.Fatalf("unexpected context fields: %+v", opErr)
 	}
 }
 
@@ -252,6 +272,16 @@ func TestService_UpdateFlag_get_error_returns_wrapped_error(t *testing.T) {
 	if !errors.Is(err, wantErr) {
 		t.Errorf("expected wrapped %v, got %v", wantErr, err)
 	}
+	var opErr *flags.OperationError
+	if !errors.As(err, &opErr) {
+		t.Fatalf("expected *flags.OperationError, got %T", err)
+	}
+	if opErr.Op != "flags.service.get_flag_or_err.store_get_by_key_and_environment" {
+		t.Fatalf("unexpected op %q", opErr.Op)
+	}
+	if opErr.Key != "test-flag" || opErr.Environment != "dev" {
+		t.Fatalf("unexpected context fields: %+v", opErr)
+	}
 }
 
 func TestService_UpdateFlag_update_error_returns_wrapped_error(t *testing.T) {
@@ -272,6 +302,16 @@ func TestService_UpdateFlag_update_error_returns_wrapped_error(t *testing.T) {
 	}
 	if !errors.Is(err, wantErr) {
 		t.Errorf("expected wrapped %v, got %v", wantErr, err)
+	}
+	var opErr *flags.OperationError
+	if !errors.As(err, &opErr) {
+		t.Fatalf("expected *flags.OperationError, got %T", err)
+	}
+	if opErr.Op != "flags.service.update_flag.store_update" {
+		t.Fatalf("unexpected op %q", opErr.Op)
+	}
+	if opErr.Key != "test-flag" || opErr.Environment != "dev" || opErr.FlagID != "f1" {
+		t.Fatalf("unexpected context fields: %+v", opErr)
 	}
 }
 
@@ -513,6 +553,16 @@ func TestService_EvaluateFlag_get_flag_error_returns_error(t *testing.T) {
 	if err == nil || !errors.Is(err, wantErr) {
 		t.Errorf("expected wrapped %v, got %v", wantErr, err)
 	}
+	var opErr *flags.OperationError
+	if !errors.As(err, &opErr) {
+		t.Fatalf("expected *flags.OperationError, got %T", err)
+	}
+	if opErr.Op != "flags.service.evaluate_flag.store_get_by_key_and_environment" {
+		t.Fatalf("unexpected op %q", opErr.Op)
+	}
+	if opErr.Key != "key" || opErr.Environment != "dev" {
+		t.Fatalf("unexpected context fields: %+v", opErr)
+	}
 }
 
 func TestService_EvaluateFlag_get_rules_error_returns_error(t *testing.T) {
@@ -534,6 +584,16 @@ func TestService_EvaluateFlag_get_rules_error_returns_error(t *testing.T) {
 	}
 	if err == nil || !errors.Is(err, wantErr) {
 		t.Errorf("expected wrapped %v, got %v", wantErr, err)
+	}
+	var opErr *flags.OperationError
+	if !errors.As(err, &opErr) {
+		t.Fatalf("expected *flags.OperationError, got %T", err)
+	}
+	if opErr.Op != "flags.service.evaluate_flag.store_get_rules_by_flag_id" {
+		t.Fatalf("unexpected op %q", opErr.Op)
+	}
+	if opErr.Key != "key" || opErr.Environment != "dev" || opErr.FlagID != "f1" {
+		t.Fatalf("unexpected context fields: %+v", opErr)
 	}
 }
 
@@ -767,6 +827,16 @@ func TestService_CreateFlag_ReplaceRulesByFlagID_error_returns_wrapped_error(t *
 	if !errors.Is(err, wantErr) {
 		t.Errorf("expected wrapped %v, got %v", wantErr, err)
 	}
+	var opErr *flags.OperationError
+	if !errors.As(err, &opErr) {
+		t.Fatalf("expected *flags.OperationError, got %T", err)
+	}
+	if opErr.Op != "flags.service.create_flag.replace_rules_by_flag_id" {
+		t.Fatalf("unexpected op %q", opErr.Op)
+	}
+	if opErr.FlagID != "id-1" {
+		t.Fatalf("unexpected context fields: %+v", opErr)
+	}
 }
 
 func TestService_EvaluateFlag_get_rules_error_includes_context(t *testing.T) {
@@ -789,9 +859,15 @@ func TestService_EvaluateFlag_get_rules_error_includes_context(t *testing.T) {
 	if !errors.Is(err, wantErr) {
 		t.Fatalf("expected wrapped %v, got %v", wantErr, err)
 	}
-	msg := err.Error()
-	if !strings.Contains(msg, `flag_id="f1"`) || !strings.Contains(msg, `key="ctx-flag"`) || !strings.Contains(msg, `environment="dev"`) {
-		t.Fatalf("expected contextual error message, got %q", msg)
+	var opErr *flags.OperationError
+	if !errors.As(err, &opErr) {
+		t.Fatalf("expected *flags.OperationError, got %T", err)
+	}
+	if opErr.Op != "flags.service.evaluate_flag.store_get_rules_by_flag_id" {
+		t.Fatalf("unexpected op %q", opErr.Op)
+	}
+	if opErr.FlagID != "f1" || opErr.Key != "ctx-flag" || opErr.Environment != "dev" {
+		t.Fatalf("unexpected context fields: %+v", opErr)
 	}
 }
 
@@ -814,6 +890,16 @@ func TestService_UpdateFlag_rules_empty_ReplaceRulesByFlagID_error_returns_wrapp
 	}
 	if !errors.Is(err, wantErr) {
 		t.Errorf("expected wrapped %v, got %v", wantErr, err)
+	}
+	var opErr *flags.OperationError
+	if !errors.As(err, &opErr) {
+		t.Fatalf("expected *flags.OperationError, got %T", err)
+	}
+	if opErr.Op != "flags.service.update_flag.replace_rules_by_flag_id.clear" {
+		t.Fatalf("unexpected op %q", opErr.Op)
+	}
+	if opErr.FlagID != "f1" || opErr.Key != "f" || opErr.Environment != "dev" {
+		t.Fatalf("unexpected context fields: %+v", opErr)
 	}
 }
 
@@ -872,6 +958,16 @@ func TestService_UpdateFlag_ReplaceRulesByFlagID_error_returns_wrapped_error(t *
 	if !errors.Is(err, wantErr) {
 		t.Errorf("expected wrapped %v, got %v", wantErr, err)
 	}
+	var opErr *flags.OperationError
+	if !errors.As(err, &opErr) {
+		t.Fatalf("expected *flags.OperationError, got %T", err)
+	}
+	if opErr.Op != "flags.service.update_flag.replace_rules_by_flag_id" {
+		t.Fatalf("unexpected op %q", opErr.Op)
+	}
+	if opErr.FlagID != "f1" || opErr.Key != "f" || opErr.Environment != "dev" {
+		t.Fatalf("unexpected context fields: %+v", opErr)
+	}
 }
 
 func TestService_DeleteFlag_StoreDelete_error_returns_wrapped_error(t *testing.T) {
@@ -891,6 +987,16 @@ func TestService_DeleteFlag_StoreDelete_error_returns_wrapped_error(t *testing.T
 	}
 	if !errors.Is(err, wantErr) {
 		t.Errorf("expected wrapped %v, got %v", wantErr, err)
+	}
+	var opErr *flags.OperationError
+	if !errors.As(err, &opErr) {
+		t.Fatalf("expected *flags.OperationError, got %T", err)
+	}
+	if opErr.Op != "flags.service.delete_flag.store_delete" {
+		t.Fatalf("unexpected op %q", opErr.Op)
+	}
+	if opErr.FlagID != "f1" || opErr.Key != "x" || opErr.Environment != "dev" {
+		t.Fatalf("unexpected context fields: %+v", opErr)
 	}
 }
 
@@ -933,8 +1039,9 @@ func TestService_CreateFlag_withAudit_missingActor_returns_error(t *testing.T) {
 
 	_, err := svc.CreateFlag(context.Background(), input)
 
-	if err == nil || err.Error() != "audit: missing actor id in context" {
-		t.Fatalf("expected missing actor error, got %v", err)
+	var e *audit.MissingActorIDError
+	if !errors.As(err, &e) {
+		t.Fatalf("expected *audit.MissingActorIDError, got %T (%v)", err, err)
 	}
 }
 
@@ -946,8 +1053,9 @@ func TestService_CreateFlag_withAudit_notTxAwareAuditStore_returns_error(t *test
 
 	_, err := svc.CreateFlag(ctx, input)
 
-	if err == nil || err.Error() != "audit: audit store is not tx-aware" {
-		t.Fatalf("expected tx-aware audit store error, got %v", err)
+	var e *audit.TxAwareRequiredError
+	if !errors.As(err, &e) {
+		t.Fatalf("expected *audit.TxAwareRequiredError, got %T (%v)", err, err)
 	}
 }
 

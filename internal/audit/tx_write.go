@@ -3,7 +3,6 @@ package audit
 import (
 	"context"
 	"database/sql"
-	"errors"
 
 	"github.com/havlinj/featureflag-api/internal/auth"
 )
@@ -12,17 +11,17 @@ import (
 func PrepareWriteTx(ctx context.Context, store Store) (string, *sql.Tx, Store, error) {
 	actorID, ok := auth.ActorIDFromContext(ctx)
 	if !ok {
-		return "", nil, nil, errors.New("audit: missing actor id in context")
+		return "", nil, nil, &MissingActorIDError{}
 	}
 
 	txStarter, ok := store.(TxStarter)
 	if !ok {
-		return "", nil, nil, errors.New("audit: audit store cannot start transactions")
+		return "", nil, nil, &TxStarterRequiredError{}
 	}
 
 	txAware, ok := store.(TxAwareStore)
 	if !ok {
-		return "", nil, nil, errors.New("audit: audit store is not tx-aware")
+		return "", nil, nil, &TxAwareRequiredError{}
 	}
 
 	tx, err := txStarter.BeginTx(ctx)

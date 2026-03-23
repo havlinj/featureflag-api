@@ -2,6 +2,23 @@ package users
 
 import "fmt"
 
+// Operation identifiers for structured context propagation across service/repository layers.
+const (
+	opServiceCreateUserStoreCreate            = "users.service.create_user.store_create"
+	opServiceGetUserStoreGetByID              = "users.service.get_user.store_get_by_id"
+	opServiceGetUserByEmailStoreGetByEmail    = "users.service.get_user_by_email.store_get_by_email"
+	opServiceLoginStoreGetByEmail             = "users.service.login.store_get_by_email"
+	opServiceUpdateUserStoreGetByID           = "users.service.update_user.store_get_by_id"
+	opServiceUpdateUserStoreUpdate            = "users.service.update_user.store_update"
+	opServiceDeleteUserStoreDelete            = "users.service.delete_user.store_delete"
+	opServiceEnsureUniqueEmailStoreGetByEmail = "users.service.ensure_unique_email.store_get_by_email"
+	opRepoCreate                              = "users.repo.create"
+	opRepoGetByID                             = "users.repo.get_by_id"
+	opRepoGetByEmail                          = "users.repo.get_by_email"
+	opRepoUpdate                              = "users.repo.update"
+	opRepoDelete                              = "users.repo.delete"
+)
+
 // DuplicateEmailError is returned when creating a user with an email that already exists.
 type DuplicateEmailError struct {
 	Email string
@@ -31,4 +48,21 @@ type InvalidCredentialsError struct {
 
 func (e *InvalidCredentialsError) Error() string {
 	return "users: invalid credentials"
+}
+
+// OperationError is returned when a store/service operation fails and should carry structured context.
+type OperationError struct {
+	Op    string
+	ID    string
+	Email string
+	Role  string
+	Cause error
+}
+
+func (e *OperationError) Error() string {
+	return fmt.Sprintf("users: operation=%q id=%q email=%q role=%q: %v", e.Op, e.ID, e.Email, e.Role, e.Cause)
+}
+
+func (e *OperationError) Unwrap() error {
+	return e.Cause
 }

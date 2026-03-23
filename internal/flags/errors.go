@@ -2,6 +2,31 @@ package flags
 
 import "fmt"
 
+// Operation identifiers for structured context propagation across service/repository layers.
+const (
+	opServiceCreateFlagStoreCreate                   = "flags.service.create_flag.store_create"
+	opServiceCreateFlagReplaceRulesByFlagID          = "flags.service.create_flag.replace_rules_by_flag_id"
+	opServiceUpdateFlagStoreUpdate                   = "flags.service.update_flag.store_update"
+	opServiceGetFlagOrErrStoreGetByKeyAndEnvironment = "flags.service.get_flag_or_err.store_get_by_key_and_environment"
+	opServiceUpdateFlagReplaceRulesByFlagIDClear     = "flags.service.update_flag.replace_rules_by_flag_id.clear"
+	opServiceUpdateFlagReplaceRulesByFlagID          = "flags.service.update_flag.replace_rules_by_flag_id"
+	opServiceEvaluateFlagStoreGetByKeyAndEnvironment = "flags.service.evaluate_flag.store_get_by_key_and_environment"
+	opServiceEvaluateFlagStoreGetRulesByFlagID       = "flags.service.evaluate_flag.store_get_rules_by_flag_id"
+	opServiceDeleteFlagStoreDelete                   = "flags.service.delete_flag.store_delete"
+	opServiceEnsureUniqueFlagStoreGetByKeyAndEnv     = "flags.service.ensure_unique_flag.store_get_by_key_and_environment"
+	opRepoCreate                                     = "flags.repo.create"
+	opRepoGetByKeyAndEnvironment                     = "flags.repo.get_by_key_and_environment"
+	opRepoUpdate                                     = "flags.repo.update"
+	opRepoGetRulesByFlagIDQuery                      = "flags.repo.get_rules_by_flag_id.query"
+	opRepoGetRulesByFlagIDScan                       = "flags.repo.get_rules_by_flag_id.scan"
+	opRepoGetRulesByFlagIDIterate                    = "flags.repo.get_rules_by_flag_id.iterate"
+	opRepoDelete                                     = "flags.repo.delete"
+	opRepoReplaceRulesByFlagIDDelete                 = "flags.repo.replace_rules_by_flag_id.delete"
+	opRepoReplaceRulesByFlagIDInsert                 = "flags.repo.replace_rules_by_flag_id.insert"
+	opRepoReplaceRulesByFlagIDBeginTx                = "flags.repo.replace_rules_by_flag_id.begin_tx"
+	opRepoReplaceRulesByFlagIDCommit                 = "flags.repo.replace_rules_by_flag_id.commit"
+)
+
 // DuplicateKeyError is returned when creating a flag that already exists (key + environment).
 // Match with: var e *DuplicateKeyError; errors.As(err, &e)
 type DuplicateKeyError struct {
@@ -58,6 +83,23 @@ type RulesStrategyMismatchError struct {
 	CurrentStrategy string
 	RuleTypes       []string
 	Message         string
+}
+
+// OperationError is returned when a store/service operation fails and should carry structured context.
+type OperationError struct {
+	Op          string
+	Key         string
+	Environment string
+	FlagID      string
+	Cause       error
+}
+
+func (e *OperationError) Error() string {
+	return fmt.Sprintf("flags: operation=%q key=%q environment=%q flag_id=%q: %v", e.Op, e.Key, e.Environment, e.FlagID, e.Cause)
+}
+
+func (e *OperationError) Unwrap() error {
+	return e.Cause
 }
 
 func (e *RulesStrategyMismatchError) Error() string {

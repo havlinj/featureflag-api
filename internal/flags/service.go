@@ -96,7 +96,7 @@ func (s *Service) createFlagWithStore(ctx context.Context, store Store, input mo
 	}
 	created, err := store.Create(ctx, flag)
 	if err != nil {
-		return nil, fmt.Errorf("create flag key=%q environment=%q: %w", input.Key, env, err)
+		return nil, &OperationError{Op: opServiceCreateFlagStoreCreate, Key: input.Key, Environment: string(env), Cause: err}
 	}
 	if err := persistRulesForNewFlag(ctx, store, created.ID, input.Rules); err != nil {
 		return nil, err
@@ -124,7 +124,7 @@ func persistRulesForNewFlag(ctx context.Context, store Store, flagID string, rul
 		return nil
 	}
 	if err := store.ReplaceRulesByFlagID(ctx, flagID, ruleInputsToRules(flagID, rules)); err != nil {
-		return fmt.Errorf("create flag rules: %w", err)
+		return &OperationError{Op: opServiceCreateFlagReplaceRulesByFlagID, FlagID: flagID, Cause: err}
 	}
 	return nil
 }
@@ -184,7 +184,7 @@ func (s *Service) updateFlagWithStore(ctx context.Context, store Store, input mo
 		return nil, err
 	}
 	if err := store.Update(ctx, flag); err != nil {
-		return nil, fmt.Errorf("update flag id=%q key=%q environment=%q: %w", flag.ID, flag.Key, flag.Environment, err)
+		return nil, &OperationError{Op: opServiceUpdateFlagStoreUpdate, Key: flag.Key, Environment: string(flag.Environment), FlagID: flag.ID, Cause: err}
 	}
 	return flag, nil
 }
@@ -196,7 +196,7 @@ func (s *Service) getFlagOrErr(ctx context.Context, key string, env DeploymentSt
 func (s *Service) getFlagOrErrWithStore(ctx context.Context, store Store, key string, env DeploymentStage) (*Flag, error) {
 	flag, err := store.GetByKeyAndEnvironment(ctx, key, env)
 	if err != nil {
-		return nil, fmt.Errorf("get flag key=%q environment=%q: %w", key, env, err)
+		return nil, &OperationError{Op: opServiceGetFlagOrErrStoreGetByKeyAndEnvironment, Key: key, Environment: string(env), Cause: err}
 	}
 	if flag == nil {
 		return nil, &NotFoundError{Key: key, Environment: string(env)}
@@ -215,7 +215,7 @@ func (s *Service) applyRulesUpdateWithStore(ctx context.Context, store Store, fl
 	if len(rules) == 0 {
 		flag.RolloutStrategy = RolloutStrategyNone
 		if err := store.ReplaceRulesByFlagID(ctx, flag.ID, nil); err != nil {
-			return fmt.Errorf("update flag rules: %w", err)
+			return &OperationError{Op: opServiceUpdateFlagReplaceRulesByFlagIDClear, FlagID: flag.ID, Key: flag.Key, Environment: string(flag.Environment), Cause: err}
 		}
 		return nil
 	}
@@ -228,7 +228,7 @@ func (s *Service) applyRulesUpdateWithStore(ctx context.Context, store Store, fl
 	}
 	flag.RolloutStrategy = ruleTypeToStrategy(ruleType)
 	if err := store.ReplaceRulesByFlagID(ctx, flag.ID, ruleInputsToRules(flag.ID, rules)); err != nil {
-		return fmt.Errorf("update flag rules: %w", err)
+		return &OperationError{Op: opServiceUpdateFlagReplaceRulesByFlagID, FlagID: flag.ID, Key: flag.Key, Environment: string(flag.Environment), Cause: err}
 	}
 	return nil
 }
@@ -246,7 +246,7 @@ func (s *Service) EvaluateFlagInEnvironment(ctx context.Context, key string, env
 
 	flag, err := s.store.GetByKeyAndEnvironment(ctx, key, env)
 	if err != nil {
-		return false, fmt.Errorf("get flag for evaluation key=%q environment=%q: %w", key, env, err)
+		return false, &OperationError{Op: opServiceEvaluateFlagStoreGetByKeyAndEnvironment, Key: key, Environment: string(env), Cause: err}
 	}
 	if flag == nil || !flag.Enabled {
 		return false, nil
@@ -254,7 +254,7 @@ func (s *Service) EvaluateFlagInEnvironment(ctx context.Context, key string, env
 
 	rules, err := s.store.GetRulesByFlagID(ctx, flag.ID)
 	if err != nil {
-		return false, fmt.Errorf("get rules for evaluation flag_id=%q key=%q environment=%q: %w", flag.ID, key, env, err)
+		return false, &OperationError{Op: opServiceEvaluateFlagStoreGetRulesByFlagID, FlagID: flag.ID, Key: key, Environment: string(env), Cause: err}
 	}
 	if len(rules) == 0 {
 		return true, nil
@@ -306,7 +306,7 @@ func (s *Service) deleteFlagWithStoreAndID(ctx context.Context, store Store, key
 		return false, "", err
 	}
 	if err := store.Delete(ctx, flag.ID); err != nil {
-		return false, "", fmt.Errorf("delete flag id=%q key=%q environment=%q: %w", flag.ID, key, env, err)
+		return false, "", &OperationError{Op: opServiceDeleteFlagStoreDelete, FlagID: flag.ID, Key: key, Environment: string(env), Cause: err}
 	}
 	return true, flag.ID, nil
 }
@@ -336,7 +336,7 @@ func (s *Service) prepareAuditTx(ctx context.Context) (*auditTxContext, error) {
 func (s *Service) ensureUniqueFlagWithStore(ctx context.Context, store Store, key string, env DeploymentStage) error {
 	existing, err := store.GetByKeyAndEnvironment(ctx, key, env)
 	if err != nil {
-		return fmt.Errorf("check existing flag key=%q environment=%q: %w", key, env, err)
+		return &OperationError{Op: opServiceEnsureUniqueFlagStoreGetByKeyAndEnv, Key: key, Environment: string(env), Cause: err}
 	}
 	if existing != nil {
 		return &DuplicateKeyError{Key: key, Environment: string(env)}

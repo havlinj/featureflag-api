@@ -113,7 +113,7 @@ func (s *Service) createExperimentWithStore(ctx context.Context, store Store, in
 	exp := &Experiment{Key: input.Key, Environment: input.Environment}
 	created, err := store.CreateExperiment(ctx, exp)
 	if err != nil {
-		return nil, fmt.Errorf("create experiment key=%q environment=%q: %w", input.Key, input.Environment, err)
+		return nil, &OperationError{Op: opServiceCreateExperimentStoreCreateExperiment, Key: input.Key, Environment: input.Environment, Cause: err}
 	}
 	if err := s.persistVariantsWithStore(ctx, store, created.ID, input.Variants); err != nil {
 		return nil, err
@@ -166,7 +166,7 @@ func (s *Service) prepareAuditTx(ctx context.Context) (*auditTxContext, error) {
 func (s *Service) ensureUniqueExperimentWithStore(ctx context.Context, store Store, key, environment string) error {
 	existing, err := store.GetExperimentByKeyAndEnvironment(ctx, key, environment)
 	if err != nil {
-		return fmt.Errorf("check existing experiment key=%q environment=%q: %w", key, environment, err)
+		return &OperationError{Op: opServiceEnsureUniqueExperimentStoreGetByKeyAndEnvironment, Key: key, Environment: environment, Cause: err}
 	}
 	if existing != nil {
 		return &DuplicateExperimentError{Key: key, Environment: environment}
@@ -183,7 +183,13 @@ func (s *Service) persistVariantsWithStore(ctx context.Context, store Store, exp
 		v := &Variant{ExperimentID: experimentID, Name: in.Name, Weight: in.Weight}
 		_, err := store.CreateVariant(ctx, v)
 		if err != nil {
-			return fmt.Errorf("create variant %q: %w", in.Name, err)
+			return &OperationError{
+				Op:            opServiceCreateExperimentStoreCreateVariant,
+				ExperimentID:  experimentID,
+				VariantName:   in.Name,
+				VariantWeight: in.Weight,
+				Cause:         err,
+			}
 		}
 	}
 	return nil
@@ -193,7 +199,7 @@ func (s *Service) persistVariantsWithStore(ctx context.Context, store Store, exp
 func (s *Service) GetExperiment(ctx context.Context, key, environment string) (*model.Experiment, error) {
 	exp, err := s.store.GetExperimentByKeyAndEnvironment(ctx, key, environment)
 	if err != nil {
-		return nil, fmt.Errorf("get experiment key=%q environment=%q: %w", key, environment, err)
+		return nil, &OperationError{Op: opServiceGetExperimentStoreGetByKeyAndEnvironment, Key: key, Environment: environment, Cause: err}
 	}
 	if exp == nil {
 		return nil, &ExperimentNotFoundError{Key: key, Environment: environment}
@@ -213,21 +219,29 @@ func (s *Service) GetAssignment(ctx context.Context, userID, experimentKey, envi
 	}
 	variants, err := s.store.GetVariantsByExperimentID(ctx, exp.ID)
 	if err != nil {
-		return nil, fmt.Errorf("get variants experiment_id=%q experiment_key=%q environment=%q: %w", exp.ID, experimentKey, environment, err)
+		return nil, &OperationError{Op: opServiceGetAssignmentStoreGetVariantsByExperimentID, Key: experimentKey, Environment: environment, ExperimentID: exp.ID, UserID: userID, Cause: err}
 	}
 	if len(variants) == 0 {
 		return nil, &VariantNotFoundError{ExperimentKey: experimentKey, Environment: environment}
 	}
 	existing, err := s.store.GetAssignment(ctx, userID, exp.ID)
 	if err != nil {
-		return nil, fmt.Errorf("get assignment user_id=%q experiment_id=%q experiment_key=%q environment=%q: %w", userID, exp.ID, experimentKey, environment, err)
+		return nil, &OperationError{Op: opServiceGetAssignmentStoreGetAssignment, Key: experimentKey, Environment: environment, ExperimentID: exp.ID, UserID: userID, Cause: err}
 	}
 	if existing != nil {
 		return s.variantByID(ctx, existing.VariantID, variants)
 	}
 	assigned := assignVariantByWeight(userID, exp.ID, variants)
 	if err := s.store.UpsertAssignment(ctx, &Assignment{UserID: userID, ExperimentID: exp.ID, VariantID: assigned.ID}); err != nil {
-		return nil, fmt.Errorf("upsert assignment user_id=%q experiment_id=%q variant_id=%q experiment_key=%q environment=%q: %w", userID, exp.ID, assigned.ID, experimentKey, environment, err)
+		return nil, &OperationError{
+			Op:           opServiceGetAssignmentStoreUpsertAssignment,
+			Key:          experimentKey,
+			Environment:  environment,
+			ExperimentID: exp.ID,
+			UserID:       userID,
+			VariantID:    assigned.ID,
+			Cause:        err,
+		}
 	}
 	return variantToModel(assigned), nil
 }
@@ -235,7 +249,7 @@ func (s *Service) GetAssignment(ctx context.Context, userID, experimentKey, envi
 func (s *Service) getExperimentOrErr(ctx context.Context, key, environment string) (*Experiment, error) {
 	exp, err := s.store.GetExperimentByKeyAndEnvironment(ctx, key, environment)
 	if err != nil {
-		return nil, fmt.Errorf("get experiment key=%q environment=%q: %w", key, environment, err)
+		return nil, &OperationError{Op: opServiceGetExperimentOrErrStoreGetByKeyAndEnvironment, Key: key, Environment: environment, Cause: err}
 	}
 	if exp == nil {
 		return nil, &ExperimentNotFoundError{Key: key, Environment: environment}

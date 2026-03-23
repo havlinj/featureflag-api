@@ -102,11 +102,9 @@ func TestPostgresStore_List_filters_by_entity(t *testing.T) {
 func TestPostgresStore_Create_nil_entry_returns_error(t *testing.T) {
 	store := &audit.PostgresStore{}
 	err := store.Create(context.Background(), nil)
-	if err == nil {
-		t.Fatal("expected error")
-	}
-	if err.Error() != "audit store: entry is nil" {
-		t.Fatalf("unexpected error: %v", err)
+	var e *audit.NilEntryError
+	if !errors.As(err, &e) {
+		t.Fatalf("expected *audit.NilEntryError, got %T (%v)", err, err)
 	}
 }
 
@@ -141,10 +139,8 @@ func TestPostgresStore_BeginTx_on_tx_scoped_store_returns_error(t *testing.T) {
 		t.Fatal("expected tx-scoped *audit.PostgresStore")
 	}
 	_, err = txStore.BeginTx(ctx)
-	if err == nil {
-		t.Fatal("expected error")
-	}
-	if err.Error() != "audit store: BeginTx not supported on tx-scoped store" {
-		t.Fatalf("unexpected error: %v", err)
+	var e *audit.BeginTxUnsupportedError
+	if !errors.As(err, &e) {
+		t.Fatalf("expected *audit.BeginTxUnsupportedError, got %T (%v)", err, err)
 	}
 }

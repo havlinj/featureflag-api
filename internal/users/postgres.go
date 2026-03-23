@@ -48,7 +48,7 @@ func (p *PostgresStore) Create(ctx context.Context, user *User) (*User, error) {
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
 			return nil, &DuplicateEmailError{Email: user.Email}
 		}
-		return nil, err
+		return nil, &OperationError{Op: opRepoCreate, Email: user.Email, Role: string(user.Role), Cause: err}
 	}
 	out := *user
 	out.ID = id
@@ -82,7 +82,7 @@ func (p *PostgresStore) GetByID(ctx context.Context, id string) (*User, error) {
 		return nil, nil
 	}
 	if err != nil {
-		return nil, err
+		return nil, &OperationError{Op: opRepoGetByID, ID: id, Cause: err}
 	}
 	u.PasswordHash = scanNullString(&ph)
 	return &u, nil
@@ -100,7 +100,7 @@ func (p *PostgresStore) GetByEmail(ctx context.Context, email string) (*User, er
 		return nil, nil
 	}
 	if err != nil {
-		return nil, err
+		return nil, &OperationError{Op: opRepoGetByEmail, Email: email, Cause: err}
 	}
 	u.PasswordHash = scanNullString(&ph)
 	return &u, nil
@@ -113,7 +113,7 @@ func (p *PostgresStore) Update(ctx context.Context, user *User) error {
 		user.Email, user.Role, user.ID, nullString(user.PasswordHash),
 	)
 	if err != nil {
-		return err
+		return &OperationError{Op: opRepoUpdate, ID: user.ID, Email: user.Email, Role: string(user.Role), Cause: err}
 	}
 	n, _ := res.RowsAffected()
 	if n == 0 {
@@ -126,7 +126,7 @@ func (p *PostgresStore) Update(ctx context.Context, user *User) error {
 func (p *PostgresStore) Delete(ctx context.Context, id string) error {
 	res, err := p.exec.ExecContext(ctx, `DELETE FROM users WHERE id = $1`, id)
 	if err != nil {
-		return err
+		return &OperationError{Op: opRepoDelete, ID: id, Cause: err}
 	}
 	n, _ := res.RowsAffected()
 	if n == 0 {

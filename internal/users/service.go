@@ -85,7 +85,7 @@ func (s *Service) createUserWithStore(ctx context.Context, store Store, input mo
 	}
 	created, err := store.Create(ctx, user)
 	if err != nil {
-		return nil, fmt.Errorf("create user email=%q role=%q: %w", input.Email, input.Role, err)
+		return nil, &OperationError{Op: opServiceCreateUserStoreCreate, Email: input.Email, Role: string(input.Role), Cause: err}
 	}
 	return created, nil
 }
@@ -94,7 +94,7 @@ func (s *Service) createUserWithStore(ctx context.Context, store Store, input mo
 func (s *Service) GetUser(ctx context.Context, id string) (*model.User, error) {
 	u, err := s.store.GetByID(ctx, id)
 	if err != nil {
-		return nil, fmt.Errorf("get user id=%q: %w", id, err)
+		return nil, &OperationError{Op: opServiceGetUserStoreGetByID, ID: id, Cause: err}
 	}
 	if u == nil {
 		return nil, nil
@@ -106,7 +106,7 @@ func (s *Service) GetUser(ctx context.Context, id string) (*model.User, error) {
 func (s *Service) GetUserByEmail(ctx context.Context, email string) (*model.User, error) {
 	u, err := s.store.GetByEmail(ctx, email)
 	if err != nil {
-		return nil, fmt.Errorf("get user by email=%q: %w", email, err)
+		return nil, &OperationError{Op: opServiceGetUserByEmailStoreGetByEmail, Email: email, Cause: err}
 	}
 	if u == nil {
 		return nil, nil
@@ -119,7 +119,7 @@ func (s *Service) GetUserByEmail(ctx context.Context, email string) (*model.User
 func (s *Service) Login(ctx context.Context, email, password string) (userID, role string, err error) {
 	u, err := s.store.GetByEmail(ctx, email)
 	if err != nil {
-		return "", "", fmt.Errorf("login: %w", err)
+		return "", "", &OperationError{Op: opServiceLoginStoreGetByEmail, Email: email, Cause: err}
 	}
 	if u == nil {
 		return "", "", &InvalidCredentialsError{Email: email}
@@ -174,7 +174,7 @@ func (s *Service) UpdateUser(ctx context.Context, input model.UpdateUserInput) (
 func (s *Service) updateUserWithStore(ctx context.Context, store Store, input model.UpdateUserInput) (*User, error) {
 	u, err := store.GetByID(ctx, input.ID)
 	if err != nil {
-		return nil, fmt.Errorf("get user for update id=%q: %w", input.ID, err)
+		return nil, &OperationError{Op: opServiceUpdateUserStoreGetByID, ID: input.ID, Cause: err}
 	}
 	if u == nil {
 		return nil, &NotFoundError{ID: input.ID}
@@ -183,7 +183,7 @@ func (s *Service) updateUserWithStore(ctx context.Context, store Store, input mo
 		return nil, err
 	}
 	if err := store.Update(ctx, u); err != nil {
-		return nil, fmt.Errorf("update user id=%q email=%q: %w", u.ID, u.Email, err)
+		return nil, &OperationError{Op: opServiceUpdateUserStoreUpdate, ID: u.ID, Email: u.Email, Role: string(u.Role), Cause: err}
 	}
 	return u, nil
 }
@@ -261,7 +261,7 @@ func (s *Service) deleteUserWithStore(ctx context.Context, store Store, id strin
 		if errors.As(err, &e) {
 			return false, nil
 		}
-		return false, fmt.Errorf("delete user id=%q: %w", id, err)
+		return false, &OperationError{Op: opServiceDeleteUserStoreDelete, ID: id, Cause: err}
 	}
 	return true, nil
 }
@@ -291,7 +291,7 @@ func (s *Service) prepareAuditTx(ctx context.Context) (*auditTxContext, error) {
 func (s *Service) ensureUniqueEmailWithStore(ctx context.Context, store Store, email string) error {
 	existing, err := store.GetByEmail(ctx, email)
 	if err != nil {
-		return fmt.Errorf("check existing email=%q: %w", email, err)
+		return &OperationError{Op: opServiceEnsureUniqueEmailStoreGetByEmail, Email: email, Cause: err}
 	}
 	if existing != nil {
 		return &DuplicateEmailError{Email: email}

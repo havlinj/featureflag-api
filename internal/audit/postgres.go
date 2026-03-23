@@ -39,7 +39,7 @@ func newPostgresStoreWithTx(tx *sql.Tx) *PostgresStore {
 // It is not part of the Store interface, but it is useful for domain-level atomicity.
 func (p *PostgresStore) BeginTx(ctx context.Context) (*sql.Tx, error) {
 	if p.begin == nil {
-		return nil, errors.New("audit store: BeginTx not supported on tx-scoped store")
+		return nil, &BeginTxUnsupportedError{}
 	}
 	return p.begin.BeginTx(ctx, nil)
 }
@@ -51,14 +51,24 @@ func (p *PostgresStore) WithTx(tx *sql.Tx) Store {
 
 func (p *PostgresStore) Create(ctx context.Context, entry *Entry) error {
 	if entry == nil {
-		return errors.New("audit store: entry is nil")
+		return &NilEntryError{}
 	}
 	_, err := p.exec.ExecContext(ctx,
 		`INSERT INTO audit_logs (entity, entity_id, action, actor_id)
 		 VALUES ($1, $2, $3, $4)`,
 		entry.Entity, entry.EntityID, entry.Action, entry.ActorID,
 	)
-	return err
+	if err != nil {
+		return &OperationError{
+			Op:       opRepoCreate,
+			Entity:   entry.Entity,
+			EntityID: entry.EntityID,
+			Action:   entry.Action,
+			ActorID:  entry.ActorID,
+			Cause:    err,
+		}
+	}
+	return nil
 }
 
 func (p *PostgresStore) GetByID(ctx context.Context, id string) (*Entry, error) {
@@ -74,7 +84,7 @@ func (p *PostgresStore) GetByID(ctx context.Context, id string) (*Entry, error) 
 		return nil, nil
 	}
 	if err != nil {
-		return nil, err
+		return nil, &OperationError{Op: opRepoGetByID, ID: id, Cause: err}
 	}
 	out.ActorID = actorID.String
 	out.CreatedAt = createdAt
@@ -129,7 +139,7 @@ func (p *PostgresStore) List(ctx context.Context, filter ListFilter, limit, offs
 
 	rows, err := p.exec.QueryContext(ctx, query, args...)
 	if err != nil {
-		return nil, err
+		return nil, &OperationError{Op: opRepoListQuery, Limit: limit, Offset: offset, Cause: err}
 	}
 	defer rows.Close()
 
@@ -138,13 +148,13 @@ func (p *PostgresStore) List(ctx context.Context, filter ListFilter, limit, offs
 		var e Entry
 		var actorID sql.NullString
 		if err := rows.Scan(&e.ID, &e.Entity, &e.EntityID, &e.Action, &actorID, &e.CreatedAt); err != nil {
-			return nil, err
+			return nil, &OperationError{Op: opRepoListScan, Limit: limit, Offset: offset, Cause: err}
 		}
 		e.ActorID = actorID.String
 		out = append(out, &e)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, err
+		return nil, &OperationError{Op: opRepoListIterate, Limit: limit, Offset: offset, Cause: err}
 	}
 	return out, nil
 }

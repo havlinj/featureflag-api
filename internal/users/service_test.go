@@ -4,10 +4,10 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"strings"
 	"testing"
 
 	"github.com/havlinj/featureflag-api/graph/model"
+	"github.com/havlinj/featureflag-api/internal/audit"
 	"github.com/havlinj/featureflag-api/internal/auth"
 	"github.com/havlinj/featureflag-api/internal/testutil/auditmock"
 	"github.com/havlinj/featureflag-api/internal/users"
@@ -126,6 +126,16 @@ func TestService_GetUser_store_error_returns_wrapped_error(t *testing.T) {
 	if !errors.Is(err, wantErr) {
 		t.Errorf("expected wrapped %v, got %v", wantErr, err)
 	}
+	var opErr *users.OperationError
+	if !errors.As(err, &opErr) {
+		t.Fatalf("expected *users.OperationError, got %T", err)
+	}
+	if opErr.Op != "users.service.get_user.store_get_by_id" {
+		t.Fatalf("unexpected op %q", opErr.Op)
+	}
+	if opErr.ID != "some-id" {
+		t.Fatalf("unexpected context fields: %+v", opErr)
+	}
 }
 
 // --- GetUserByEmail ---
@@ -165,6 +175,16 @@ func TestService_GetUserByEmail_store_error_returns_wrapped_error(t *testing.T) 
 	}
 	if !errors.Is(err, wantErr) {
 		t.Errorf("expected wrapped %v, got %v", wantErr, err)
+	}
+	var opErr *users.OperationError
+	if !errors.As(err, &opErr) {
+		t.Fatalf("expected *users.OperationError, got %T", err)
+	}
+	if opErr.Op != "users.service.get_user_by_email.store_get_by_email" {
+		t.Fatalf("unexpected op %q", opErr.Op)
+	}
+	if opErr.Email != "x@y.com" {
+		t.Fatalf("unexpected context fields: %+v", opErr)
 	}
 }
 
@@ -209,6 +229,16 @@ func TestService_UpdateUser_get_error_returns_wrapped_error(t *testing.T) {
 	if !errors.Is(err, wantErr) {
 		t.Errorf("expected wrapped %v, got %v", wantErr, err)
 	}
+	var opErr *users.OperationError
+	if !errors.As(err, &opErr) {
+		t.Fatalf("expected *users.OperationError, got %T", err)
+	}
+	if opErr.Op != "users.service.update_user.store_get_by_id" {
+		t.Fatalf("unexpected op %q", opErr.Op)
+	}
+	if opErr.ID != "some-id" {
+		t.Fatalf("unexpected context fields: %+v", opErr)
+	}
 	if len(store.UpdateCalls) != 0 {
 		t.Error("Update should not be called when GetByID fails")
 	}
@@ -232,8 +262,15 @@ func TestService_UpdateUser_get_error_includes_context(t *testing.T) {
 	if !errors.Is(err, wantErr) {
 		t.Fatalf("expected wrapped %v, got %v", wantErr, err)
 	}
-	if !strings.Contains(err.Error(), `id="user-ctx-id"`) {
-		t.Fatalf("expected contextual error message, got %q", err.Error())
+	var opErr *users.OperationError
+	if !errors.As(err, &opErr) {
+		t.Fatalf("expected *users.OperationError, got %T", err)
+	}
+	if opErr.Op != "users.service.update_user.store_get_by_id" {
+		t.Fatalf("unexpected op %q", opErr.Op)
+	}
+	if opErr.ID != "user-ctx-id" {
+		t.Fatalf("unexpected context fields: %+v", opErr)
 	}
 }
 
@@ -308,6 +345,16 @@ func TestService_DeleteUser_store_error_returns_wrapped_error(t *testing.T) {
 	}
 	if !errors.Is(err, wantErr) {
 		t.Errorf("expected wrapped %v, got %v", wantErr, err)
+	}
+	var opErr *users.OperationError
+	if !errors.As(err, &opErr) {
+		t.Fatalf("expected *users.OperationError, got %T", err)
+	}
+	if opErr.Op != "users.service.delete_user.store_delete" {
+		t.Fatalf("unexpected op %q", opErr.Op)
+	}
+	if opErr.ID != "some-id" {
+		t.Fatalf("unexpected context fields: %+v", opErr)
 	}
 }
 
@@ -429,8 +476,9 @@ func TestService_CreateUser_withAudit_missingActor_returns_error(t *testing.T) {
 
 	_, err := svc.CreateUser(context.Background(), input)
 
-	if err == nil || err.Error() != "audit: missing actor id in context" {
-		t.Fatalf("expected missing actor error, got %v", err)
+	var e *audit.MissingActorIDError
+	if !errors.As(err, &e) {
+		t.Fatalf("expected *audit.MissingActorIDError, got %T (%v)", err, err)
 	}
 }
 
@@ -442,8 +490,9 @@ func TestService_UpdateUser_withAudit_notTxAwareAuditStore_returns_error(t *test
 
 	_, err := svc.UpdateUser(ctx, input)
 
-	if err == nil || err.Error() != "audit: audit store is not tx-aware" {
-		t.Fatalf("expected tx-aware audit store error, got %v", err)
+	var e *audit.TxAwareRequiredError
+	if !errors.As(err, &e) {
+		t.Fatalf("expected *audit.TxAwareRequiredError, got %T (%v)", err, err)
 	}
 }
 

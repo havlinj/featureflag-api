@@ -199,6 +199,10 @@ func TestLogin_invalidCredentials_errorIsSanitized(t *testing.T) {
 	if strings.Contains(errText, "missing-user@test.com") {
 		t.Fatalf("error message leaks email context: %s", errText)
 	}
+	codes := graphqlErrorCodes(loginResp)
+	if len(codes) == 0 || codes[0] != "INVALID_CREDENTIALS" {
+		t.Fatalf("expected INVALID_CREDENTIALS code, got %v", codes)
+	}
 }
 
 func TestCreateFlag_forbiddenError_isSanitized(t *testing.T) {
@@ -266,5 +270,9 @@ func TestCreateFlag_forbiddenError_isSanitized(t *testing.T) {
 	}
 	if strings.Contains(errText, "allowed") || strings.Contains(errText, "admin") || strings.Contains(errText, "developer") {
 		t.Fatalf("error message leaks role policy details: %s", errText)
+	}
+	codes := graphqlErrorCodes(createFlagResp)
+	if len(codes) == 0 || codes[0] != "FORBIDDEN" {
+		t.Fatalf("expected FORBIDDEN code, got %v", codes)
 	}
 }

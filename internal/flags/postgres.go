@@ -56,7 +56,7 @@ func (p *PostgresStore) Create(ctx context.Context, flag *Flag) (*Flag, error) {
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
 			return nil, &DuplicateKeyError{Key: flag.Key, Environment: string(flag.Environment)}
 		}
-		return nil, err
+		return nil, &OperationError{Op: opRepoCreate, Key: flag.Key, Environment: string(flag.Environment), Cause: err}
 	}
 	out := *flag
 	out.ID = id
@@ -79,7 +79,7 @@ func (p *PostgresStore) GetByKeyAndEnvironment(ctx context.Context, key string, 
 		return nil, nil
 	}
 	if err != nil {
-		return nil, err
+		return nil, &OperationError{Op: opRepoGetByKeyAndEnvironment, Key: key, Environment: string(env), Cause: err}
 	}
 	if desc.Valid {
 		f.Description = &desc.String
@@ -95,7 +95,7 @@ func (p *PostgresStore) Update(ctx context.Context, flag *Flag) error {
 		flag.Key, flag.Description, flag.Enabled, flag.Environment, flag.RolloutStrategy, flag.ID,
 	)
 	if err != nil {
-		return err
+		return &OperationError{Op: opRepoUpdate, FlagID: flag.ID, Key: flag.Key, Environment: string(flag.Environment), Cause: err}
 	}
 	n, _ := res.RowsAffected()
 	if n == 0 {
@@ -111,19 +111,19 @@ func (p *PostgresStore) GetRulesByFlagID(ctx context.Context, flagID string) ([]
 		flagID,
 	)
 	if err != nil {
-		return nil, err
+		return nil, &OperationError{Op: opRepoGetRulesByFlagIDQuery, FlagID: flagID, Cause: err}
 	}
 	defer rows.Close()
 	var rules []*Rule
 	for rows.Next() {
 		var r Rule
 		if err := rows.Scan(&r.ID, &r.FlagID, &r.Type, &r.Value); err != nil {
-			return nil, err
+			return nil, &OperationError{Op: opRepoGetRulesByFlagIDScan, FlagID: flagID, Cause: err}
 		}
 		rules = append(rules, &r)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, err
+		return nil, &OperationError{Op: opRepoGetRulesByFlagIDIterate, FlagID: flagID, Cause: err}
 	}
 	return rules, nil
 }
@@ -133,7 +133,7 @@ func (p *PostgresStore) GetRulesByFlagID(ctx context.Context, flagID string) ([]
 func (p *PostgresStore) Delete(ctx context.Context, id string) error {
 	res, err := p.exec.ExecContext(ctx, `DELETE FROM feature_flags WHERE id = $1`, id)
 	if err != nil {
-		return err
+		return &OperationError{Op: opRepoDelete, FlagID: id, Cause: err}
 	}
 	n, _ := res.RowsAffected()
 	if n == 0 {
@@ -147,14 +147,14 @@ func (p *PostgresStore) ReplaceRulesByFlagID(ctx context.Context, flagID string,
 	// If this store is tx-scoped (begin == nil), we must not start a nested transaction.
 	if p.begin == nil {
 		if _, err := p.exec.ExecContext(ctx, `DELETE FROM flag_rules WHERE flag_id = $1`, flagID); err != nil {
-			return err
+			return &OperationError{Op: opRepoReplaceRulesByFlagIDDelete, FlagID: flagID, Cause: err}
 		}
 		for _, r := range rules {
 			if _, err := p.exec.ExecContext(ctx,
 				`INSERT INTO flag_rules (flag_id, type, value) VALUES ($1, $2, $3)`,
 				flagID, r.Type, r.Value,
 			); err != nil {
-				return err
+				return &OperationError{Op: opRepoReplaceRulesByFlagIDInsert, FlagID: flagID, Cause: err}
 			}
 		}
 		return nil
@@ -163,7 +163,7 @@ func (p *PostgresStore) ReplaceRulesByFlagID(ctx context.Context, flagID string,
 	// Otherwise, start a transaction (standalone usage).
 	tx, err := p.begin.BeginTx(ctx, nil)
 	if err != nil {
-		return err
+		return &OperationError{Op: opRepoReplaceRulesByFlagIDBeginTx, FlagID: flagID, Cause: err}
 	}
 	committed := false
 	defer func() {
@@ -177,7 +177,7 @@ func (p *PostgresStore) ReplaceRulesByFlagID(ctx context.Context, flagID string,
 		return err
 	}
 	if err := tx.Commit(); err != nil {
-		return err
+		return &OperationError{Op: opRepoReplaceRulesByFlagIDCommit, FlagID: flagID, Cause: err}
 	}
 	committed = true
 	return nil

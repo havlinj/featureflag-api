@@ -43,7 +43,11 @@ func (p *PostgresStore) BeginTx(ctx context.Context) (*sql.Tx, error) {
 	if p.begin == nil {
 		return nil, errors.New("experiments store: BeginTx not supported on tx-scoped store")
 	}
-	return p.begin.BeginTx(ctx, nil)
+	tx, err := p.begin.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, &OperationError{Op: opRepoBeginTx, Cause: err}
+	}
+	return tx, nil
 }
 
 // CreateExperiment inserts a new experiment. Returns *DuplicateExperimentError if (key, environment) exists.
@@ -58,7 +62,7 @@ func (p *PostgresStore) CreateExperiment(ctx context.Context, exp *Experiment) (
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
 			return nil, &DuplicateExperimentError{Key: exp.Key, Environment: exp.Environment}
 		}
-		return nil, err
+		return nil, &OperationError{Op: opRepoCreateExperiment, Key: exp.Key, Environment: exp.Environment, Cause: err}
 	}
 	out := *exp
 	out.ID = id
@@ -76,7 +80,7 @@ func (p *PostgresStore) GetExperimentByKeyAndEnvironment(ctx context.Context, ke
 		return nil, nil
 	}
 	if err != nil {
-		return nil, err
+		return nil, &OperationError{Op: opRepoGetExperimentByKeyAndEnvironment, Key: key, Environment: environment, Cause: err}
 	}
 	return &exp, nil
 }
@@ -92,7 +96,7 @@ func (p *PostgresStore) GetExperimentByID(ctx context.Context, id string) (*Expe
 		return nil, nil
 	}
 	if err != nil {
-		return nil, err
+		return nil, &OperationError{Op: opRepoGetExperimentByID, ExperimentID: id, Cause: err}
 	}
 	return &exp, nil
 }
@@ -105,7 +109,7 @@ func (p *PostgresStore) CreateVariant(ctx context.Context, v *Variant) (*Variant
 		v.ExperimentID, v.Name, v.Weight,
 	).Scan(&id)
 	if err != nil {
-		return nil, err
+		return nil, &OperationError{Op: opRepoCreateVariant, ExperimentID: v.ExperimentID, VariantName: v.Name, VariantWeight: v.Weight, Cause: err}
 	}
 	out := *v
 	out.ID = id
@@ -119,18 +123,21 @@ func (p *PostgresStore) GetVariantsByExperimentID(ctx context.Context, experimen
 		experimentID,
 	)
 	if err != nil {
-		return nil, err
+		return nil, &OperationError{Op: opRepoGetVariantsByExperimentIDQuery, ExperimentID: experimentID, Cause: err}
 	}
 	defer rows.Close()
 	var list []*Variant
 	for rows.Next() {
 		var v Variant
 		if err := rows.Scan(&v.ID, &v.ExperimentID, &v.Name, &v.Weight); err != nil {
-			return nil, err
+			return nil, &OperationError{Op: opRepoGetVariantsByExperimentIDScan, ExperimentID: experimentID, Cause: err}
 		}
 		list = append(list, &v)
 	}
-	return list, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, &OperationError{Op: opRepoGetVariantsByExperimentIDIterate, ExperimentID: experimentID, Cause: err}
+	}
+	return list, nil
 }
 
 // GetAssignment returns the user's assignment for an experiment or (nil, nil) if not assigned.
@@ -144,7 +151,7 @@ func (p *PostgresStore) GetAssignment(ctx context.Context, userID, experimentID 
 		return nil, nil
 	}
 	if err != nil {
-		return nil, err
+		return nil, &OperationError{Op: opRepoGetAssignment, UserID: userID, ExperimentID: experimentID, Cause: err}
 	}
 	return &a, nil
 }
@@ -157,5 +164,8 @@ func (p *PostgresStore) UpsertAssignment(ctx context.Context, a *Assignment) err
 		 ON CONFLICT (user_id, experiment_id) DO UPDATE SET variant_id = $3`,
 		a.UserID, a.ExperimentID, a.VariantID,
 	)
-	return err
+	if err != nil {
+		return &OperationError{Op: opRepoUpsertAssignment, UserID: a.UserID, ExperimentID: a.ExperimentID, VariantID: a.VariantID, Cause: err}
+	}
+	return nil
 }

@@ -93,3 +93,26 @@ func graphqlErrorMessages(resp *graphql.GraphQLResponse) string {
 	}
 	return strings.Join(parts, " | ")
 }
+
+func graphqlErrorCodes(resp *graphql.GraphQLResponse) []string {
+	if resp == nil || len(resp.Errors) == 0 {
+		return nil
+	}
+	codes := make([]string, 0, len(resp.Errors))
+	for _, e := range resp.Errors {
+		m, ok := e.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		ext, ok := m["extensions"].(map[string]interface{})
+		if !ok {
+			continue
+		}
+		code, ok := ext["code"].(string)
+		if !ok || code == "" {
+			continue
+		}
+		codes = append(codes, code)
+	}
+	return codes
+}

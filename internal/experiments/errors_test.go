@@ -1,6 +1,7 @@
 package experiments
 
 import (
+	"errors"
 	"testing"
 )
 
@@ -64,5 +65,41 @@ func TestInvalidUserIDError_Error_full_message(t *testing.T) {
 	want := `experiments: invalid user ID (got "")`
 	if got != want {
 		t.Errorf("Error() = %q; want %q", got, want)
+	}
+}
+
+func TestOperationError_Error_and_unwrap_are_deterministic(t *testing.T) {
+	causeA := errors.New("db failure A")
+	errA := &OperationError{
+		Op:            opServiceGetAssignmentStoreUpsertAssignment,
+		Key:           "ab-test",
+		Environment:   "prod",
+		ExperimentID:  "e1",
+		UserID:        "u1",
+		VariantID:     "v1",
+		VariantName:   "A",
+		VariantWeight: 50,
+		Cause:         causeA,
+	}
+
+	if got, want := errA.Error(), `experiments: operation="experiments.service.get_assignment.store_upsert_assignment" key="ab-test" environment="prod" experiment_id="e1" user_id="u1" variant_id="v1" variant_name="A" variant_weight=50: db failure A`; got != want {
+		t.Errorf("Error() = %q; want %q", got, want)
+	}
+	if !errors.Is(errA, causeA) {
+		t.Errorf("errors.Is(errA, causeA) = false; want true")
+	}
+
+	causeB := errors.New("db failure B")
+	errB := &OperationError{
+		Op:           opRepoGetVariantsByExperimentIDScan,
+		ExperimentID: "e2",
+		Cause:        causeB,
+	}
+
+	if got, want := errB.Error(), `experiments: operation="experiments.repo.get_variants_by_experiment_id.scan" key="" environment="" experiment_id="e2" user_id="" variant_id="" variant_name="" variant_weight=0: db failure B`; got != want {
+		t.Errorf("Error() = %q; want %q", got, want)
+	}
+	if !errors.Is(errB, causeB) {
+		t.Errorf("errors.Is(errB, causeB) = false; want true")
 	}
 }
