@@ -116,4 +116,3 @@ func TestAuditLogsAPI_negative_offset_returns_error(t *testing.T) {
 	}
 	requireGraphQLErrors(t, resp)
 }
-
