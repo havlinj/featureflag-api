@@ -14,11 +14,11 @@ import (
 
 // Login is the resolver for the login field.
 func (r *mutationResolver) Login(ctx context.Context, input model.LoginInput) (*model.LoginPayload, error) {
-	userID, role, err := r.Users.Login(ctx, input.Email, input.Password)
+	userID, role, err := r.users.Login(ctx, input.Email, input.Password)
 	if err != nil {
 		return nil, err
 	}
-	token, err := auth.IssueToken(userID, role, r.JWTSecret, r.JWTExpiry)
+	token, err := auth.IssueToken(userID, role, r.jwtSecret, r.jwtExpiry)
 	if err != nil {
 		return nil, err
 	}

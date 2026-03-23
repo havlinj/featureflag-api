@@ -13,8 +13,8 @@ import (
 
 // Service holds business logic for users. It depends on Store so it can be mocked in tests.
 type Service struct {
-	Store Store
-	Audit audit.Store
+	store Store
+	audit audit.Store
 }
 
 type auditTxContext struct {
@@ -26,18 +26,18 @@ type auditTxContext struct {
 
 // NewService returns a users service that uses the given store.
 func NewService(store Store) *Service {
-	return &Service{Store: store}
+	return &Service{store: store}
 }
 
 // NewServiceWithAudit returns a users service that writes audit logs for critical mutations.
 func NewServiceWithAudit(store Store, auditStore audit.Store) *Service {
-	return &Service{Store: store, Audit: auditStore}
+	return &Service{store: store, audit: auditStore}
 }
 
 // CreateUser creates a new user. Returns ErrDuplicateEmail if email already exists.
 func (s *Service) CreateUser(ctx context.Context, input model.CreateUserInput) (*model.User, error) {
-	if s.Audit == nil {
-		created, err := s.createUserWithStore(ctx, s.Store, input)
+	if s.audit == nil {
+		created, err := s.createUserWithStore(ctx, s.store, input)
 		if err != nil {
 			return nil, err
 		}
@@ -92,7 +92,7 @@ func (s *Service) createUserWithStore(ctx context.Context, store Store, input mo
 
 // GetUser returns the user by ID, or nil if not found.
 func (s *Service) GetUser(ctx context.Context, id string) (*model.User, error) {
-	u, err := s.Store.GetByID(ctx, id)
+	u, err := s.store.GetByID(ctx, id)
 	if err != nil {
 		return nil, fmt.Errorf("get user: %w", err)
 	}
@@ -104,7 +104,7 @@ func (s *Service) GetUser(ctx context.Context, id string) (*model.User, error) {
 
 // GetUserByEmail returns the user by email, or nil if not found.
 func (s *Service) GetUserByEmail(ctx context.Context, email string) (*model.User, error) {
-	u, err := s.Store.GetByEmail(ctx, email)
+	u, err := s.store.GetByEmail(ctx, email)
 	if err != nil {
 		return nil, fmt.Errorf("get user by email: %w", err)
 	}
@@ -117,7 +117,7 @@ func (s *Service) GetUserByEmail(ctx context.Context, email string) (*model.User
 // Login verifies email and password and returns the user ID and role for token issuance.
 // Returns ErrNotFound if no user, ErrInvalidCredentials if password does not match.
 func (s *Service) Login(ctx context.Context, email, password string) (userID, role string, err error) {
-	u, err := s.Store.GetByEmail(ctx, email)
+	u, err := s.store.GetByEmail(ctx, email)
 	if err != nil {
 		return "", "", fmt.Errorf("login: %w", err)
 	}
@@ -132,8 +132,8 @@ func (s *Service) Login(ctx context.Context, email, password string) (userID, ro
 
 // UpdateUser updates an existing user. Returns ErrNotFound if user does not exist.
 func (s *Service) UpdateUser(ctx context.Context, input model.UpdateUserInput) (*model.User, error) {
-	if s.Audit == nil {
-		updated, err := s.updateUserWithStore(ctx, s.Store, input)
+	if s.audit == nil {
+		updated, err := s.updateUserWithStore(ctx, s.store, input)
 		if err != nil {
 			return nil, err
 		}
@@ -216,8 +216,8 @@ func setPasswordIfProvided(u *User, password *string) error {
 
 // DeleteUser removes a user by ID. Returns ErrNotFound if user does not exist.
 func (s *Service) DeleteUser(ctx context.Context, id string) (bool, error) {
-	if s.Audit == nil {
-		return s.deleteUserWithStore(ctx, s.Store, id)
+	if s.audit == nil {
+		return s.deleteUserWithStore(ctx, s.store, id)
 	}
 
 	auditCtx, err := s.prepareAuditTx(ctx)
@@ -267,16 +267,16 @@ func (s *Service) deleteUserWithStore(ctx context.Context, store Store, id strin
 }
 
 func (s *Service) ensureUniqueEmail(ctx context.Context, email string) error {
-	return s.ensureUniqueEmailWithStore(ctx, s.Store, email)
+	return s.ensureUniqueEmailWithStore(ctx, s.store, email)
 }
 
 func (s *Service) prepareAuditTx(ctx context.Context) (*auditTxContext, error) {
-	storeTxAware, ok := s.Store.(TxAwareStore)
+	storeTxAware, ok := s.store.(TxAwareStore)
 	if !ok {
 		return nil, errors.New("audit: users store is not tx-aware")
 	}
 
-	actorID, tx, auditTxStore, err := audit.PrepareWriteTx(ctx, s.Audit)
+	actorID, tx, auditTxStore, err := audit.PrepareWriteTx(ctx, s.audit)
 	if err != nil {
 		return nil, err
 	}

@@ -16,8 +16,8 @@ const weightSum = 100
 // Service holds core business logic for experiments. It depends on Store for
 // persistence so that the latter can be mocked in unit tests.
 type Service struct {
-	Store Store
-	Audit audit.Store
+	store Store
+	audit audit.Store
 }
 
 type auditTxContext struct {
@@ -29,19 +29,19 @@ type auditTxContext struct {
 
 // NewService returns an experiments service that uses the given store.
 func NewService(store Store) *Service {
-	return &Service{Store: store}
+	return &Service{store: store}
 }
 
 // NewServiceWithAudit returns an experiments service that writes audit logs for critical mutations.
 func NewServiceWithAudit(store Store, auditStore audit.Store) *Service {
-	return &Service{Store: store, Audit: auditStore}
+	return &Service{store: store, audit: auditStore}
 }
 
 // CreateExperiment creates a new experiment with the given variants.
 // Variant weights must sum to 100; otherwise returns *InvalidWeightsError.
 func (s *Service) CreateExperiment(ctx context.Context, input model.CreateExperimentInput) (*model.Experiment, error) {
-	if s.Audit == nil {
-		created, err := s.createExperimentWithStore(ctx, s.Store, input)
+	if s.audit == nil {
+		created, err := s.createExperimentWithStore(ctx, s.store, input)
 		if err != nil {
 			return nil, err
 		}
@@ -117,16 +117,16 @@ func validateVariantWeights(variants []*model.ExperimentVariantInput) error {
 }
 
 func (s *Service) ensureUniqueExperiment(ctx context.Context, key, environment string) error {
-	return s.ensureUniqueExperimentWithStore(ctx, s.Store, key, environment)
+	return s.ensureUniqueExperimentWithStore(ctx, s.store, key, environment)
 }
 
 func (s *Service) prepareAuditTx(ctx context.Context) (*auditTxContext, error) {
-	storeTxAware, ok := s.Store.(TxAwareStore)
+	storeTxAware, ok := s.store.(TxAwareStore)
 	if !ok {
 		return nil, errors.New("audit: experiments store is not tx-aware")
 	}
 
-	actorID, tx, auditTxStore, err := audit.PrepareWriteTx(ctx, s.Audit)
+	actorID, tx, auditTxStore, err := audit.PrepareWriteTx(ctx, s.audit)
 	if err != nil {
 		return nil, err
 	}
@@ -150,7 +150,7 @@ func (s *Service) ensureUniqueExperimentWithStore(ctx context.Context, store Sto
 }
 
 func (s *Service) persistVariants(ctx context.Context, experimentID string, inputs []*model.ExperimentVariantInput) error {
-	return s.persistVariantsWithStore(ctx, s.Store, experimentID, inputs)
+	return s.persistVariantsWithStore(ctx, s.store, experimentID, inputs)
 }
 
 func (s *Service) persistVariantsWithStore(ctx context.Context, store Store, experimentID string, inputs []*model.ExperimentVariantInput) error {
@@ -166,7 +166,7 @@ func (s *Service) persistVariantsWithStore(ctx context.Context, store Store, exp
 
 // GetExperiment returns the experiment for the given key and environment, or *ExperimentNotFoundError.
 func (s *Service) GetExperiment(ctx context.Context, key, environment string) (*model.Experiment, error) {
-	exp, err := s.Store.GetExperimentByKeyAndEnvironment(ctx, key, environment)
+	exp, err := s.store.GetExperimentByKeyAndEnvironment(ctx, key, environment)
 	if err != nil {
 		return nil, fmt.Errorf("get experiment: %w", err)
 	}
@@ -186,14 +186,14 @@ func (s *Service) GetAssignment(ctx context.Context, userID, experimentKey, envi
 	if err != nil {
 		return nil, err
 	}
-	variants, err := s.Store.GetVariantsByExperimentID(ctx, exp.ID)
+	variants, err := s.store.GetVariantsByExperimentID(ctx, exp.ID)
 	if err != nil {
 		return nil, fmt.Errorf("get variants: %w", err)
 	}
 	if len(variants) == 0 {
 		return nil, &VariantNotFoundError{ExperimentKey: experimentKey, Environment: environment}
 	}
-	existing, err := s.Store.GetAssignment(ctx, userID, exp.ID)
+	existing, err := s.store.GetAssignment(ctx, userID, exp.ID)
 	if err != nil {
 		return nil, fmt.Errorf("get assignment: %w", err)
 	}
@@ -201,14 +201,14 @@ func (s *Service) GetAssignment(ctx context.Context, userID, experimentKey, envi
 		return s.variantByID(ctx, existing.VariantID, variants)
 	}
 	assigned := assignVariantByWeight(userID, exp.ID, variants)
-	if err := s.Store.UpsertAssignment(ctx, &Assignment{UserID: userID, ExperimentID: exp.ID, VariantID: assigned.ID}); err != nil {
+	if err := s.store.UpsertAssignment(ctx, &Assignment{UserID: userID, ExperimentID: exp.ID, VariantID: assigned.ID}); err != nil {
 		return nil, fmt.Errorf("upsert assignment: %w", err)
 	}
 	return variantToModel(assigned), nil
 }
 
 func (s *Service) getExperimentOrErr(ctx context.Context, key, environment string) (*Experiment, error) {
-	exp, err := s.Store.GetExperimentByKeyAndEnvironment(ctx, key, environment)
+	exp, err := s.store.GetExperimentByKeyAndEnvironment(ctx, key, environment)
 	if err != nil {
 		return nil, fmt.Errorf("get experiment: %w", err)
 	}

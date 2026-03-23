@@ -17,8 +17,8 @@ const defaultEnvironment = DeploymentStageDev
 // Service holds core business logic for feature flags. It depends on Store for
 // persistence so that the latter can be mocked in unit tests.
 type Service struct {
-	Store Store
-	Audit audit.Store
+	store Store
+	audit audit.Store
 }
 
 type auditTxContext struct {
@@ -30,18 +30,18 @@ type auditTxContext struct {
 
 // NewService returns a flags service that uses the given store.
 func NewService(store Store) *Service {
-	return &Service{Store: store}
+	return &Service{store: store}
 }
 
 // NewServiceWithAudit returns a flags service that writes audit logs for critical mutations.
 func NewServiceWithAudit(store Store, auditStore audit.Store) *Service {
-	return &Service{Store: store, Audit: auditStore}
+	return &Service{store: store, audit: auditStore}
 }
 
 // CreateFlag creates a new feature flag. Optional rules set rollout strategy; all rules must be same type.
 func (s *Service) CreateFlag(ctx context.Context, input model.CreateFlagInput) (*model.FeatureFlag, error) {
-	if s.Audit == nil {
-		created, err := s.createFlagWithStore(ctx, s.Store, input)
+	if s.audit == nil {
+		created, err := s.createFlagWithStore(ctx, s.store, input)
 		if err != nil {
 			return nil, err
 		}
@@ -131,8 +131,8 @@ func persistRulesForNewFlag(ctx context.Context, store Store, flagID string, rul
 
 // UpdateFlag updates an existing feature flag. If Rules is present, replaces all rules and updates strategy.
 func (s *Service) UpdateFlag(ctx context.Context, input model.UpdateFlagInput) (*model.FeatureFlag, error) {
-	if s.Audit == nil {
-		updated, err := s.updateFlagWithStore(ctx, s.Store, input)
+	if s.audit == nil {
+		updated, err := s.updateFlagWithStore(ctx, s.store, input)
 		if err != nil {
 			return nil, err
 		}
@@ -185,7 +185,7 @@ func (s *Service) updateFlagWithStore(ctx context.Context, store Store, input mo
 }
 
 func (s *Service) getFlagOrErr(ctx context.Context, key string, env DeploymentStage) (*Flag, error) {
-	return s.getFlagOrErrWithStore(ctx, s.Store, key, env)
+	return s.getFlagOrErrWithStore(ctx, s.store, key, env)
 }
 
 func (s *Service) getFlagOrErrWithStore(ctx context.Context, store Store, key string, env DeploymentStage) (*Flag, error) {
@@ -200,7 +200,7 @@ func (s *Service) getFlagOrErrWithStore(ctx context.Context, store Store, key st
 }
 
 func (s *Service) applyRulesUpdate(ctx context.Context, flag *Flag, rules []*model.RuleInput) error {
-	return s.applyRulesUpdateWithStore(ctx, s.Store, flag, rules)
+	return s.applyRulesUpdateWithStore(ctx, s.store, flag, rules)
 }
 
 func (s *Service) applyRulesUpdateWithStore(ctx context.Context, store Store, flag *Flag, rules []*model.RuleInput) error {
@@ -234,7 +234,7 @@ func (s *Service) EvaluateFlag(ctx context.Context, key string, evalCtx model.Ev
 		return false, &InvalidUserIDError{UserID: evalCtx.UserID}
 	}
 
-	flag, err := s.Store.GetByKeyAndEnvironment(ctx, key, defaultEnvironment)
+	flag, err := s.store.GetByKeyAndEnvironment(ctx, key, defaultEnvironment)
 	if err != nil {
 		return false, fmt.Errorf("get flag: %w", err)
 	}
@@ -242,7 +242,7 @@ func (s *Service) EvaluateFlag(ctx context.Context, key string, evalCtx model.Ev
 		return false, nil
 	}
 
-	rules, err := s.Store.GetRulesByFlagID(ctx, flag.ID)
+	rules, err := s.store.GetRulesByFlagID(ctx, flag.ID)
 	if err != nil {
 		return false, fmt.Errorf("get rules: %w", err)
 	}
@@ -255,8 +255,8 @@ func (s *Service) EvaluateFlag(ctx context.Context, key string, evalCtx model.Ev
 
 // DeleteFlag removes a flag by key and deployment stage. Rules are removed by DB CASCADE.
 func (s *Service) DeleteFlag(ctx context.Context, key string, env DeploymentStage) (bool, error) {
-	if s.Audit == nil {
-		ok, _, err := s.deleteFlagWithStoreAndID(ctx, s.Store, key, env)
+	if s.audit == nil {
+		ok, _, err := s.deleteFlagWithStoreAndID(ctx, s.store, key, env)
 		return ok, err
 	}
 
@@ -302,16 +302,16 @@ func (s *Service) deleteFlagWithStoreAndID(ctx context.Context, store Store, key
 }
 
 func (s *Service) ensureUniqueFlag(ctx context.Context, key string, env DeploymentStage) error {
-	return s.ensureUniqueFlagWithStore(ctx, s.Store, key, env)
+	return s.ensureUniqueFlagWithStore(ctx, s.store, key, env)
 }
 
 func (s *Service) prepareAuditTx(ctx context.Context) (*auditTxContext, error) {
-	storeTxAware, ok := s.Store.(TxAwareStore)
+	storeTxAware, ok := s.store.(TxAwareStore)
 	if !ok {
 		return nil, errors.New("audit: flags store is not tx-aware")
 	}
 
-	actorID, tx, auditTxStore, err := audit.PrepareWriteTx(ctx, s.Audit)
+	actorID, tx, auditTxStore, err := audit.PrepareWriteTx(ctx, s.audit)
 	if err != nil {
 		return nil, err
 	}

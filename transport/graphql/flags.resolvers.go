@@ -21,7 +21,7 @@ func (r *mutationResolver) CreateFlag(ctx context.Context, input model.CreateFla
 		return nil, err
 	}
 	ctx = auth.WithActorID(ctx, actorID)
-	return r.Flags.CreateFlag(ctx, input)
+	return r.flags.CreateFlag(ctx, input)
 }
 
 // UpdateFlag is the resolver for the updateFlag field.
@@ -31,7 +31,7 @@ func (r *mutationResolver) UpdateFlag(ctx context.Context, input model.UpdateFla
 		return nil, err
 	}
 	ctx = auth.WithActorID(ctx, actorID)
-	return r.Flags.UpdateFlag(ctx, input)
+	return r.flags.UpdateFlag(ctx, input)
 }
 
 // DeleteFlag is the resolver for the deleteFlag field.
@@ -41,7 +41,7 @@ func (r *mutationResolver) DeleteFlag(ctx context.Context, key string, environme
 		return false, err
 	}
 	ctx = auth.WithActorID(ctx, actorID)
-	return r.Flags.DeleteFlag(ctx, key, flags.DeploymentStage(environment))
+	return r.flags.DeleteFlag(ctx, key, flags.DeploymentStage(environment))
 }
 
 // EvaluateFlag is the resolver for the evaluateFlag field.
@@ -49,7 +49,7 @@ func (r *queryResolver) EvaluateFlag(ctx context.Context, key string, evaluation
 	if _, err := auth.RequireRole(ctx, "admin", "developer", "viewer"); err != nil {
 		return false, err
 	}
-	return r.Flags.EvaluateFlag(ctx, key, evaluationContext)
+	return r.flags.EvaluateFlag(ctx, key, evaluationContext)
 }
 
 // Mutation returns graph.MutationResolver implementation.

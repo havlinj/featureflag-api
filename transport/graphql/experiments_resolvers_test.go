@@ -16,6 +16,10 @@ type mockExperimentsService struct {
 	GetExperimentFunc func(ctx context.Context, key, environment string) (*model.Experiment, error)
 }
 
+func newTestResolverWithExperiments(expSvc ExperimentsService) *Resolver {
+	return NewResolver(nil, nil, expSvc, nil, nil, 0)
+}
+
 func (m *mockExperimentsService) CreateExperiment(ctx context.Context, input model.CreateExperimentInput) (*model.Experiment, error) {
 	return nil, errors.New("mock not used")
 }
@@ -39,7 +43,7 @@ func TestExperiment_resolver_returns_nil_nil_when_not_found(t *testing.T) {
 			return nil, &experiments.ExperimentNotFoundError{Key: key, Environment: env}
 		},
 	}
-	r := &Resolver{Experiments: mock}
+	r := newTestResolverWithExperiments(mock)
 	q := &queryResolver{r}
 
 	exp, err := q.Experiment(auth.WithClaims(context.Background(), &auth.Claims{Sub: "u1", Role: "viewer"}), "missing", "prod")
@@ -61,7 +65,7 @@ func TestExperiment_resolver_passes_through_error_when_not_not_found(t *testing.
 			return nil, wantErr
 		},
 	}
-	r := &Resolver{Experiments: mock}
+	r := newTestResolverWithExperiments(mock)
 	q := &queryResolver{r}
 
 	exp, err := q.Experiment(auth.WithClaims(context.Background(), &auth.Claims{Sub: "u1", Role: "viewer"}), "x", "dev")
@@ -76,7 +80,7 @@ func TestExperiment_resolver_passes_through_error_when_not_not_found(t *testing.
 
 // TestCreateExperiment_resolver_requires_auth documents that createExperiment requires admin or developer.
 func TestCreateExperiment_resolver_requires_auth(t *testing.T) {
-	r := &Resolver{Experiments: nil}
+	r := newTestResolverWithExperiments(nil)
 	mut := &mutationResolver{r}
 
 	input := model.CreateExperimentInput{

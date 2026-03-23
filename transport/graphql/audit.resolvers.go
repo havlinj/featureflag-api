@@ -18,7 +18,7 @@ func (r *queryResolver) requireAuditReadAccess(ctx context.Context) error {
 	if _, err := auth.RequireRole(ctx, "admin"); err != nil {
 		return err
 	}
-	if r.Audit == nil {
+	if r.audit == nil {
 		return errors.New("audit service not configured")
 	}
 	return nil
@@ -29,7 +29,7 @@ func (r *queryResolver) AuditLog(ctx context.Context, id string) (*model.AuditLo
 	if err := r.requireAuditReadAccess(ctx); err != nil {
 		return nil, err
 	}
-	entry, err := r.Audit.GetByID(ctx, id)
+	entry, err := r.audit.GetByID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -65,7 +65,7 @@ func (r *queryResolver) AuditLogs(ctx context.Context, filter *model.AuditLogsFi
 		}
 	}
 
-	entries, err := r.Audit.List(ctx, f, resolvedLimit, resolvedOffset)
+	entries, err := r.audit.List(ctx, f, resolvedLimit, resolvedOffset)
 	if err != nil {
 		return nil, err
 	}

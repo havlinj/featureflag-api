@@ -19,7 +19,7 @@ func (r *mutationResolver) CreateUser(ctx context.Context, input model.CreateUse
 		return nil, err
 	}
 	ctx = auth.WithActorID(ctx, actorID)
-	return r.Users.CreateUser(ctx, input)
+	return r.users.CreateUser(ctx, input)
 }
 
 // UpdateUser is the resolver for the updateUser field.
@@ -29,7 +29,7 @@ func (r *mutationResolver) UpdateUser(ctx context.Context, input model.UpdateUse
 		return nil, err
 	}
 	ctx = auth.WithActorID(ctx, actorID)
-	return r.Users.UpdateUser(ctx, input)
+	return r.users.UpdateUser(ctx, input)
 }
 
 // DeleteUser is the resolver for the deleteUser field.
@@ -39,7 +39,7 @@ func (r *mutationResolver) DeleteUser(ctx context.Context, id string) (bool, err
 		return false, err
 	}
 	ctx = auth.WithActorID(ctx, actorID)
-	return r.Users.DeleteUser(ctx, id)
+	return r.users.DeleteUser(ctx, id)
 }
 
 // User is the resolver for the user field.
@@ -47,7 +47,7 @@ func (r *queryResolver) User(ctx context.Context, id string) (*model.User, error
 	if _, err := auth.RequireRole(ctx, "admin", "developer", "viewer"); err != nil {
 		return nil, err
 	}
-	return r.Users.GetUser(ctx, id)
+	return r.users.GetUser(ctx, id)
 }
 
 // UserByEmail is the resolver for the userByEmail field.
@@ -55,5 +55,5 @@ func (r *queryResolver) UserByEmail(ctx context.Context, email string) (*model.U
 	if _, err := auth.RequireRole(ctx, "admin", "developer", "viewer"); err != nil {
 		return nil, err
 	}
-	return r.Users.GetUserByEmail(ctx, email)
+	return r.users.GetUserByEmail(ctx, email)
 }

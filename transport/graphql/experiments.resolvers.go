@@ -21,10 +21,10 @@ func (r *mutationResolver) CreateExperiment(ctx context.Context, input model.Cre
 		return nil, err
 	}
 	ctx = auth.WithActorID(ctx, actorID)
-	if r.Experiments == nil {
+	if r.experiments == nil {
 		return nil, errors.New("experiments service not configured")
 	}
-	return r.Experiments.CreateExperiment(ctx, input)
+	return r.experiments.CreateExperiment(ctx, input)
 }
 
 // Experiment is the resolver for the experiment field.
@@ -32,10 +32,10 @@ func (r *queryResolver) Experiment(ctx context.Context, key string, environment 
 	if _, err := auth.RequireRole(ctx, "admin", "developer", "viewer"); err != nil {
 		return nil, err
 	}
-	if r.Experiments == nil {
+	if r.experiments == nil {
 		return nil, errors.New("experiments service not configured")
 	}
-	exp, err := r.Experiments.GetExperiment(ctx, key, environment)
+	exp, err := r.experiments.GetExperiment(ctx, key, environment)
 	if err != nil {
 		var nf *experiments.ExperimentNotFoundError
 		if errors.As(err, &nf) {
@@ -51,8 +51,8 @@ func (r *queryResolver) GetAssignment(ctx context.Context, userID string, experi
 	if _, err := auth.RequireRole(ctx, "admin", "developer", "viewer"); err != nil {
 		return nil, err
 	}
-	if r.Experiments == nil {
+	if r.experiments == nil {
 		return nil, errors.New("experiments service not configured")
 	}
-	return r.Experiments.GetAssignment(ctx, userID, experimentKey, environment)
+	return r.experiments.GetAssignment(ctx, userID, experimentKey, environment)
 }

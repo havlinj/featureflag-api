@@ -17,7 +17,7 @@ import (
 )
 
 type App struct {
-	Server Server
+	server Server
 }
 
 // NewApp builds the application. Pass non-nil tlsConfig to serve over HTTPS.
@@ -31,14 +31,14 @@ func NewApp(
 	auditStore audit.Store,
 	jwtSecret []byte,
 ) *App {
-	resolver := &graphql.Resolver{
-		Flags:       flags.NewServiceWithAudit(flagsStore, auditStore),
-		Users:       users.NewServiceWithAudit(usersStore, auditStore),
-		Experiments: experiments.NewServiceWithAudit(experimentsStore, auditStore),
-		Audit:       audit.NewService(auditStore),
-		JWTSecret:   jwtSecret,
-		JWTExpiry:   24 * time.Hour,
-	}
+	resolver := graphql.NewResolver(
+		flags.NewServiceWithAudit(flagsStore, auditStore),
+		users.NewServiceWithAudit(usersStore, auditStore),
+		experiments.NewServiceWithAudit(experimentsStore, auditStore),
+		audit.NewService(auditStore),
+		jwtSecret,
+		24*time.Hour,
+	)
 	schema := graph.NewExecutableSchema(graph.Config{Resolvers: resolver})
 	gqlHandler := handler.NewDefaultServer(schema)
 	chain := middleware.Chain(gqlHandler,
@@ -46,13 +46,13 @@ func NewApp(
 		middleware.Auth(jwtSecret),
 	)
 	srv := graphql.NewServer(chain, tlsConfig)
-	return &App{Server: Server{GraphQLServer: srv}}
+	return &App{server: Server{graphQLServer: srv}}
 }
 
 func (a *App) Run(addr string) error {
-	return a.Server.GraphQLServer.Run(addr)
+	return a.server.graphQLServer.Run(addr)
 }
 
 func (a *App) Shutdown(ctx context.Context) error {
-	return a.Server.GraphQLServer.Shutdown(ctx)
+	return a.server.graphQLServer.Shutdown(ctx)
 }

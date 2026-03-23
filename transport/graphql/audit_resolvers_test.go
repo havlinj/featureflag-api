@@ -14,6 +14,10 @@ type auditResolverMockStore struct {
 	listFunc    func(ctx context.Context, filter audit.ListFilter, limit, offset int) ([]*audit.Entry, error)
 }
 
+func newTestResolverWithAudit(auditSvc *audit.Service) *Resolver {
+	return NewResolver(nil, nil, nil, auditSvc, nil, 0)
+}
+
 func (m *auditResolverMockStore) Create(ctx context.Context, entry *audit.Entry) error { return nil }
 func (m *auditResolverMockStore) GetByID(ctx context.Context, id string) (*audit.Entry, error) {
 	return m.getByIDFunc(ctx, id)
@@ -23,7 +27,7 @@ func (m *auditResolverMockStore) List(ctx context.Context, filter audit.ListFilt
 }
 
 func TestAuditLog_resolver_requires_auth(t *testing.T) {
-	r := &Resolver{Audit: nil}
+	r := newTestResolverWithAudit(nil)
 	q := &queryResolver{r}
 
 	_, err := q.AuditLog(context.Background(), "id-1")
@@ -44,7 +48,7 @@ func TestAuditLog_resolver_returns_nil_when_not_found(t *testing.T) {
 			return nil, nil
 		},
 	}
-	r := &Resolver{Audit: audit.NewService(mock)}
+	r := newTestResolverWithAudit(audit.NewService(mock))
 	q := &queryResolver{r}
 	ctx := auth.WithClaims(context.Background(), &auth.Claims{Sub: "u1", Role: "admin"})
 
@@ -65,7 +69,7 @@ func TestAuditLogs_resolver_rejects_negative_offset(t *testing.T) {
 			return nil, nil
 		},
 	}
-	r := &Resolver{Audit: audit.NewService(mock)}
+	r := newTestResolverWithAudit(audit.NewService(mock))
 	q := &queryResolver{r}
 	ctx := auth.WithClaims(context.Background(), &auth.Claims{Sub: "u1", Role: "admin"})
 	offset := -1
@@ -92,7 +96,7 @@ func TestAuditLogs_resolver_uses_defaults_and_maps_entries(t *testing.T) {
 			return []*audit.Entry{{ID: "a1", Entity: "feature_flag", EntityID: "f1", Action: "create", ActorID: "u1"}}, nil
 		},
 	}
-	r := &Resolver{Audit: audit.NewService(mock)}
+	r := newTestResolverWithAudit(audit.NewService(mock))
 	q := &queryResolver{r}
 	ctx := auth.WithClaims(context.Background(), &auth.Claims{Sub: "u1", Role: "admin"})
 
@@ -122,7 +126,7 @@ func TestAuditLogs_resolver_caps_limit_to_max(t *testing.T) {
 			return nil, nil
 		},
 	}
-	r := &Resolver{Audit: audit.NewService(mock)}
+	r := newTestResolverWithAudit(audit.NewService(mock))
 	q := &queryResolver{r}
 	ctx := auth.WithClaims(context.Background(), &auth.Claims{Sub: "u1", Role: "admin"})
 	limit := audit.MaxListLimit + 1000

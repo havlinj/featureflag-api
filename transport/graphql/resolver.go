@@ -25,12 +25,30 @@ type ExperimentsService interface {
 
 // Resolver wires GraphQL resolvers to the service layers.
 type Resolver struct {
-	Flags       *flags.Service
-	Users       *users.Service
-	Experiments ExperimentsService
-	Audit       *audit.Service
-	JWTSecret   []byte
-	JWTExpiry   time.Duration
+	flags       *flags.Service
+	users       *users.Service
+	experiments ExperimentsService
+	audit       *audit.Service
+	jwtSecret   []byte
+	jwtExpiry   time.Duration
+}
+
+func NewResolver(
+	flagsService *flags.Service,
+	usersService *users.Service,
+	experimentsService ExperimentsService,
+	auditService *audit.Service,
+	jwtSecret []byte,
+	jwtExpiry time.Duration,
+) *Resolver {
+	return &Resolver{
+		flags:       flagsService,
+		users:       usersService,
+		experiments: experimentsService,
+		audit:       auditService,
+		jwtSecret:   jwtSecret,
+		jwtExpiry:   jwtExpiry,
+	}
 }
 
 // Ensure *experiments.Service implements ExperimentsService at compile time.
