@@ -9,7 +9,6 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
-	"sync"
 	"sync/atomic"
 
 	"github.com/99designs/gqlgen/graphql"
@@ -23,20 +22,10 @@ import (
 
 // NewExecutableSchema creates an ExecutableSchema from the ResolverRoot interface.
 func NewExecutableSchema(cfg Config) graphql.ExecutableSchema {
-	return &executableSchema{
-		schema:     cfg.Schema,
-		resolvers:  cfg.Resolvers,
-		directives: cfg.Directives,
-		complexity: cfg.Complexity,
-	}
+	return &executableSchema{SchemaData: cfg.Schema, Resolvers: cfg.Resolvers, Directives: cfg.Directives, ComplexityRoot: cfg.Complexity}
 }
 
-type Config struct {
-	Schema     *ast.Schema
-	Resolvers  ResolverRoot
-	Directives DirectiveRoot
-	Complexity ComplexityRoot
-}
+type Config = graphql.Config[ResolverRoot, DirectiveRoot, ComplexityRoot]
 
 type ResolverRoot interface {
 	Mutation() MutationResolver
@@ -131,152 +120,147 @@ type QueryResolver interface {
 	UserByEmail(ctx context.Context, email string) (*model.User, error)
 }
 
-type executableSchema struct {
-	schema     *ast.Schema
-	resolvers  ResolverRoot
-	directives DirectiveRoot
-	complexity ComplexityRoot
-}
+type executableSchema graphql.ExecutableSchemaState[ResolverRoot, DirectiveRoot, ComplexityRoot]
 
 func (e *executableSchema) Schema() *ast.Schema {
-	if e.schema != nil {
-		return e.schema
+	if e.SchemaData != nil {
+		return e.SchemaData
 	}
 	return parsedSchema
 }
 
 func (e *executableSchema) Complexity(ctx context.Context, typeName, field string, childComplexity int, rawArgs map[string]any) (int, bool) {
-	ec := executionContext{nil, e, 0, 0, nil}
+	ec := newExecutionContext(nil, e, nil)
 	_ = ec
 	switch typeName + "." + field {
 
 	case "AuditLog.action":
-		if e.complexity.AuditLog.Action == nil {
+		if e.ComplexityRoot.AuditLog.Action == nil {
 			break
 		}
 
-		return e.complexity.AuditLog.Action(childComplexity), true
+		return e.ComplexityRoot.AuditLog.Action(childComplexity), true
 	case "AuditLog.actorId":
-		if e.complexity.AuditLog.ActorID == nil {
+		if e.ComplexityRoot.AuditLog.ActorID == nil {
 			break
 		}
 
-		return e.complexity.AuditLog.ActorID(childComplexity), true
+		return e.ComplexityRoot.AuditLog.ActorID(childComplexity), true
 	case "AuditLog.createdAt":
-		if e.complexity.AuditLog.CreatedAt == nil {
+		if e.ComplexityRoot.AuditLog.CreatedAt == nil {
 			break
 		}
 
-		return e.complexity.AuditLog.CreatedAt(childComplexity), true
+		return e.ComplexityRoot.AuditLog.CreatedAt(childComplexity), true
 	case "AuditLog.entity":
-		if e.complexity.AuditLog.Entity == nil {
+		if e.ComplexityRoot.AuditLog.Entity == nil {
 			break
 		}
 
-		return e.complexity.AuditLog.Entity(childComplexity), true
+		return e.ComplexityRoot.AuditLog.Entity(childComplexity), true
 	case "AuditLog.entityId":
-		if e.complexity.AuditLog.EntityID == nil {
+		if e.ComplexityRoot.AuditLog.EntityID == nil {
 			break
 		}
 
-		return e.complexity.AuditLog.EntityID(childComplexity), true
+		return e.ComplexityRoot.AuditLog.EntityID(childComplexity), true
 	case "AuditLog.id":
-		if e.complexity.AuditLog.ID == nil {
+		if e.ComplexityRoot.AuditLog.ID == nil {
 			break
 		}
 
-		return e.complexity.AuditLog.ID(childComplexity), true
+		return e.ComplexityRoot.AuditLog.ID(childComplexity), true
 
 	case "Experiment.environment":
-		if e.complexity.Experiment.Environment == nil {
+		if e.ComplexityRoot.Experiment.Environment == nil {
 			break
 		}
 
-		return e.complexity.Experiment.Environment(childComplexity), true
+		return e.ComplexityRoot.Experiment.Environment(childComplexity), true
 	case "Experiment.id":
-		if e.complexity.Experiment.ID == nil {
+		if e.ComplexityRoot.Experiment.ID == nil {
 			break
 		}
 
-		return e.complexity.Experiment.ID(childComplexity), true
+		return e.ComplexityRoot.Experiment.ID(childComplexity), true
 	case "Experiment.key":
-		if e.complexity.Experiment.Key == nil {
+		if e.ComplexityRoot.Experiment.Key == nil {
 			break
 		}
 
-		return e.complexity.Experiment.Key(childComplexity), true
+		return e.ComplexityRoot.Experiment.Key(childComplexity), true
 
 	case "ExperimentVariant.experimentId":
-		if e.complexity.ExperimentVariant.ExperimentID == nil {
+		if e.ComplexityRoot.ExperimentVariant.ExperimentID == nil {
 			break
 		}
 
-		return e.complexity.ExperimentVariant.ExperimentID(childComplexity), true
+		return e.ComplexityRoot.ExperimentVariant.ExperimentID(childComplexity), true
 	case "ExperimentVariant.id":
-		if e.complexity.ExperimentVariant.ID == nil {
+		if e.ComplexityRoot.ExperimentVariant.ID == nil {
 			break
 		}
 
-		return e.complexity.ExperimentVariant.ID(childComplexity), true
+		return e.ComplexityRoot.ExperimentVariant.ID(childComplexity), true
 	case "ExperimentVariant.name":
-		if e.complexity.ExperimentVariant.Name == nil {
+		if e.ComplexityRoot.ExperimentVariant.Name == nil {
 			break
 		}
 
-		return e.complexity.ExperimentVariant.Name(childComplexity), true
+		return e.ComplexityRoot.ExperimentVariant.Name(childComplexity), true
 	case "ExperimentVariant.weight":
-		if e.complexity.ExperimentVariant.Weight == nil {
+		if e.ComplexityRoot.ExperimentVariant.Weight == nil {
 			break
 		}
 
-		return e.complexity.ExperimentVariant.Weight(childComplexity), true
+		return e.ComplexityRoot.ExperimentVariant.Weight(childComplexity), true
 
 	case "FeatureFlag.description":
-		if e.complexity.FeatureFlag.Description == nil {
+		if e.ComplexityRoot.FeatureFlag.Description == nil {
 			break
 		}
 
-		return e.complexity.FeatureFlag.Description(childComplexity), true
+		return e.ComplexityRoot.FeatureFlag.Description(childComplexity), true
 	case "FeatureFlag.enabled":
-		if e.complexity.FeatureFlag.Enabled == nil {
+		if e.ComplexityRoot.FeatureFlag.Enabled == nil {
 			break
 		}
 
-		return e.complexity.FeatureFlag.Enabled(childComplexity), true
+		return e.ComplexityRoot.FeatureFlag.Enabled(childComplexity), true
 	case "FeatureFlag.environment":
-		if e.complexity.FeatureFlag.Environment == nil {
+		if e.ComplexityRoot.FeatureFlag.Environment == nil {
 			break
 		}
 
-		return e.complexity.FeatureFlag.Environment(childComplexity), true
+		return e.ComplexityRoot.FeatureFlag.Environment(childComplexity), true
 	case "FeatureFlag.id":
-		if e.complexity.FeatureFlag.ID == nil {
+		if e.ComplexityRoot.FeatureFlag.ID == nil {
 			break
 		}
 
-		return e.complexity.FeatureFlag.ID(childComplexity), true
+		return e.ComplexityRoot.FeatureFlag.ID(childComplexity), true
 	case "FeatureFlag.key":
-		if e.complexity.FeatureFlag.Key == nil {
+		if e.ComplexityRoot.FeatureFlag.Key == nil {
 			break
 		}
 
-		return e.complexity.FeatureFlag.Key(childComplexity), true
+		return e.ComplexityRoot.FeatureFlag.Key(childComplexity), true
 	case "FeatureFlag.rolloutStrategy":
-		if e.complexity.FeatureFlag.RolloutStrategy == nil {
+		if e.ComplexityRoot.FeatureFlag.RolloutStrategy == nil {
 			break
 		}
 
-		return e.complexity.FeatureFlag.RolloutStrategy(childComplexity), true
+		return e.ComplexityRoot.FeatureFlag.RolloutStrategy(childComplexity), true
 
 	case "LoginPayload.token":
-		if e.complexity.LoginPayload.Token == nil {
+		if e.ComplexityRoot.LoginPayload.Token == nil {
 			break
 		}
 
-		return e.complexity.LoginPayload.Token(childComplexity), true
+		return e.ComplexityRoot.LoginPayload.Token(childComplexity), true
 
 	case "Mutation.createExperiment":
-		if e.complexity.Mutation.CreateExperiment == nil {
+		if e.ComplexityRoot.Mutation.CreateExperiment == nil {
 			break
 		}
 
@@ -285,9 +269,9 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			return 0, false
 		}
 
-		return e.complexity.Mutation.CreateExperiment(childComplexity, args["input"].(model.CreateExperimentInput)), true
+		return e.ComplexityRoot.Mutation.CreateExperiment(childComplexity, args["input"].(model.CreateExperimentInput)), true
 	case "Mutation.createFlag":
-		if e.complexity.Mutation.CreateFlag == nil {
+		if e.ComplexityRoot.Mutation.CreateFlag == nil {
 			break
 		}
 
@@ -296,9 +280,9 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			return 0, false
 		}
 
-		return e.complexity.Mutation.CreateFlag(childComplexity, args["input"].(model.CreateFlagInput)), true
+		return e.ComplexityRoot.Mutation.CreateFlag(childComplexity, args["input"].(model.CreateFlagInput)), true
 	case "Mutation.createUser":
-		if e.complexity.Mutation.CreateUser == nil {
+		if e.ComplexityRoot.Mutation.CreateUser == nil {
 			break
 		}
 
@@ -307,9 +291,9 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			return 0, false
 		}
 
-		return e.complexity.Mutation.CreateUser(childComplexity, args["input"].(model.CreateUserInput)), true
+		return e.ComplexityRoot.Mutation.CreateUser(childComplexity, args["input"].(model.CreateUserInput)), true
 	case "Mutation.deleteFlag":
-		if e.complexity.Mutation.DeleteFlag == nil {
+		if e.ComplexityRoot.Mutation.DeleteFlag == nil {
 			break
 		}
 
@@ -318,9 +302,9 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			return 0, false
 		}
 
-		return e.complexity.Mutation.DeleteFlag(childComplexity, args["key"].(string), args["environment"].(string)), true
+		return e.ComplexityRoot.Mutation.DeleteFlag(childComplexity, args["key"].(string), args["environment"].(string)), true
 	case "Mutation.deleteUser":
-		if e.complexity.Mutation.DeleteUser == nil {
+		if e.ComplexityRoot.Mutation.DeleteUser == nil {
 			break
 		}
 
@@ -329,9 +313,9 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			return 0, false
 		}
 
-		return e.complexity.Mutation.DeleteUser(childComplexity, args["id"].(string)), true
+		return e.ComplexityRoot.Mutation.DeleteUser(childComplexity, args["id"].(string)), true
 	case "Mutation.login":
-		if e.complexity.Mutation.Login == nil {
+		if e.ComplexityRoot.Mutation.Login == nil {
 			break
 		}
 
@@ -340,9 +324,9 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			return 0, false
 		}
 
-		return e.complexity.Mutation.Login(childComplexity, args["input"].(model.LoginInput)), true
+		return e.ComplexityRoot.Mutation.Login(childComplexity, args["input"].(model.LoginInput)), true
 	case "Mutation.updateFlag":
-		if e.complexity.Mutation.UpdateFlag == nil {
+		if e.ComplexityRoot.Mutation.UpdateFlag == nil {
 			break
 		}
 
@@ -351,9 +335,9 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			return 0, false
 		}
 
-		return e.complexity.Mutation.UpdateFlag(childComplexity, args["input"].(model.UpdateFlagInput)), true
+		return e.ComplexityRoot.Mutation.UpdateFlag(childComplexity, args["input"].(model.UpdateFlagInput)), true
 	case "Mutation.updateUser":
-		if e.complexity.Mutation.UpdateUser == nil {
+		if e.ComplexityRoot.Mutation.UpdateUser == nil {
 			break
 		}
 
@@ -362,10 +346,10 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			return 0, false
 		}
 
-		return e.complexity.Mutation.UpdateUser(childComplexity, args["input"].(model.UpdateUserInput)), true
+		return e.ComplexityRoot.Mutation.UpdateUser(childComplexity, args["input"].(model.UpdateUserInput)), true
 
 	case "Query.auditLog":
-		if e.complexity.Query.AuditLog == nil {
+		if e.ComplexityRoot.Query.AuditLog == nil {
 			break
 		}
 
@@ -374,9 +358,9 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			return 0, false
 		}
 
-		return e.complexity.Query.AuditLog(childComplexity, args["id"].(string)), true
+		return e.ComplexityRoot.Query.AuditLog(childComplexity, args["id"].(string)), true
 	case "Query.auditLogs":
-		if e.complexity.Query.AuditLogs == nil {
+		if e.ComplexityRoot.Query.AuditLogs == nil {
 			break
 		}
 
@@ -385,9 +369,9 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			return 0, false
 		}
 
-		return e.complexity.Query.AuditLogs(childComplexity, args["filter"].(*model.AuditLogsFilterInput), args["limit"].(*int), args["offset"].(*int)), true
+		return e.ComplexityRoot.Query.AuditLogs(childComplexity, args["filter"].(*model.AuditLogsFilterInput), args["limit"].(*int), args["offset"].(*int)), true
 	case "Query.evaluateFlag":
-		if e.complexity.Query.EvaluateFlag == nil {
+		if e.ComplexityRoot.Query.EvaluateFlag == nil {
 			break
 		}
 
@@ -396,9 +380,9 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			return 0, false
 		}
 
-		return e.complexity.Query.EvaluateFlag(childComplexity, args["key"].(string), args["evaluationContext"].(model.EvaluationContextInput)), true
+		return e.ComplexityRoot.Query.EvaluateFlag(childComplexity, args["key"].(string), args["evaluationContext"].(model.EvaluationContextInput)), true
 	case "Query.experiment":
-		if e.complexity.Query.Experiment == nil {
+		if e.ComplexityRoot.Query.Experiment == nil {
 			break
 		}
 
@@ -407,9 +391,9 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			return 0, false
 		}
 
-		return e.complexity.Query.Experiment(childComplexity, args["key"].(string), args["environment"].(string)), true
+		return e.ComplexityRoot.Query.Experiment(childComplexity, args["key"].(string), args["environment"].(string)), true
 	case "Query.getAssignment":
-		if e.complexity.Query.GetAssignment == nil {
+		if e.ComplexityRoot.Query.GetAssignment == nil {
 			break
 		}
 
@@ -418,9 +402,10 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			return 0, false
 		}
 
-		return e.complexity.Query.GetAssignment(childComplexity, args["userId"].(string), args["experimentKey"].(string), args["environment"].(string)), true
+		return e.ComplexityRoot.Query.GetAssignment(childComplexity, args["userId"].(string), args["experimentKey"].(string), args["environment"].(string)), true
+
 	case "Query.user":
-		if e.complexity.Query.User == nil {
+		if e.ComplexityRoot.Query.User == nil {
 			break
 		}
 
@@ -429,9 +414,9 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			return 0, false
 		}
 
-		return e.complexity.Query.User(childComplexity, args["id"].(string)), true
+		return e.ComplexityRoot.Query.User(childComplexity, args["id"].(string)), true
 	case "Query.userByEmail":
-		if e.complexity.Query.UserByEmail == nil {
+		if e.ComplexityRoot.Query.UserByEmail == nil {
 			break
 		}
 
@@ -440,32 +425,32 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			return 0, false
 		}
 
-		return e.complexity.Query.UserByEmail(childComplexity, args["email"].(string)), true
+		return e.ComplexityRoot.Query.UserByEmail(childComplexity, args["email"].(string)), true
 
 	case "User.createdAt":
-		if e.complexity.User.CreatedAt == nil {
+		if e.ComplexityRoot.User.CreatedAt == nil {
 			break
 		}
 
-		return e.complexity.User.CreatedAt(childComplexity), true
+		return e.ComplexityRoot.User.CreatedAt(childComplexity), true
 	case "User.email":
-		if e.complexity.User.Email == nil {
+		if e.ComplexityRoot.User.Email == nil {
 			break
 		}
 
-		return e.complexity.User.Email(childComplexity), true
+		return e.ComplexityRoot.User.Email(childComplexity), true
 	case "User.id":
-		if e.complexity.User.ID == nil {
+		if e.ComplexityRoot.User.ID == nil {
 			break
 		}
 
-		return e.complexity.User.ID(childComplexity), true
+		return e.ComplexityRoot.User.ID(childComplexity), true
 	case "User.role":
-		if e.complexity.User.Role == nil {
+		if e.ComplexityRoot.User.Role == nil {
 			break
 		}
 
-		return e.complexity.User.Role(childComplexity), true
+		return e.ComplexityRoot.User.Role(childComplexity), true
 
 	}
 	return 0, false
@@ -473,7 +458,7 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 	opCtx := graphql.GetOperationContext(ctx)
-	ec := executionContext{opCtx, e, 0, 0, make(chan graphql.DeferredResult)}
+	ec := newExecutionContext(opCtx, e, make(chan graphql.DeferredResult))
 	inputUnmarshalMap := graphql.BuildUnmarshalerMap(
 		ec.unmarshalInputAuditLogsFilterInput,
 		ec.unmarshalInputCreateExperimentInput,
@@ -498,9 +483,9 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 				ctx = graphql.WithUnmarshalerMap(ctx, inputUnmarshalMap)
 				data = ec._Query(ctx, opCtx.Operation.SelectionSet)
 			} else {
-				if atomic.LoadInt32(&ec.pendingDeferred) > 0 {
-					result := <-ec.deferredResults
-					atomic.AddInt32(&ec.pendingDeferred, -1)
+				if atomic.LoadInt32(&ec.PendingDeferred) > 0 {
+					result := <-ec.DeferredResults
+					atomic.AddInt32(&ec.PendingDeferred, -1)
 					data = result.Result
 					response.Path = result.Path
 					response.Label = result.Label
@@ -512,8 +497,8 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 			var buf bytes.Buffer
 			data.MarshalGQL(&buf)
 			response.Data = buf.Bytes()
-			if atomic.LoadInt32(&ec.deferred) > 0 {
-				hasNext := atomic.LoadInt32(&ec.pendingDeferred) > 0
+			if atomic.LoadInt32(&ec.Deferred) > 0 {
+				hasNext := atomic.LoadInt32(&ec.PendingDeferred) > 0
 				response.HasNext = &hasNext
 			}
 
@@ -541,44 +526,22 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 }
 
 type executionContext struct {
-	*graphql.OperationContext
-	*executableSchema
-	deferred        int32
-	pendingDeferred int32
-	deferredResults chan graphql.DeferredResult
+	*graphql.ExecutionContextState[ResolverRoot, DirectiveRoot, ComplexityRoot]
 }
 
-func (ec *executionContext) processDeferredGroup(dg graphql.DeferredGroup) {
-	atomic.AddInt32(&ec.pendingDeferred, 1)
-	go func() {
-		ctx := graphql.WithFreshResponseContext(dg.Context)
-		dg.FieldSet.Dispatch(ctx)
-		ds := graphql.DeferredResult{
-			Path:   dg.Path,
-			Label:  dg.Label,
-			Result: dg.FieldSet,
-			Errors: graphql.GetErrors(ctx),
-		}
-		// null fields should bubble up
-		if dg.FieldSet.Invalids > 0 {
-			ds.Result = graphql.Null
-		}
-		ec.deferredResults <- ds
-	}()
-}
-
-func (ec *executionContext) introspectSchema() (*introspection.Schema, error) {
-	if ec.DisableIntrospection {
-		return nil, errors.New("introspection disabled")
+func newExecutionContext(
+	opCtx *graphql.OperationContext,
+	execSchema *executableSchema,
+	deferredResults chan graphql.DeferredResult,
+) executionContext {
+	return executionContext{
+		ExecutionContextState: graphql.NewExecutionContextState[ResolverRoot, DirectiveRoot, ComplexityRoot](
+			opCtx,
+			(*graphql.ExecutableSchemaState[ResolverRoot, DirectiveRoot, ComplexityRoot])(execSchema),
+			parsedSchema,
+			deferredResults,
+		),
 	}
-	return introspection.WrapSchema(ec.Schema()), nil
-}
-
-func (ec *executionContext) introspectType(name string) (*introspection.Type, error) {
-	if ec.DisableIntrospection {
-		return nil, errors.New("introspection disabled")
-	}
-	return introspection.WrapTypeFromDef(ec.Schema(), ec.Schema().Types[name]), nil
 }
 
 //go:embed "schema/audit.graphqls" "schema/auth.graphqls" "schema/experiments.graphqls" "schema/flags.graphqls" "schema/users.graphqls"
@@ -1456,7 +1419,7 @@ func (ec *executionContext) _Mutation_createFlag(ctx context.Context, field grap
 		ec.fieldContext_Mutation_createFlag,
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.resolvers.Mutation().CreateFlag(ctx, fc.Args["input"].(model.CreateFlagInput))
+			return ec.Resolvers.Mutation().CreateFlag(ctx, fc.Args["input"].(model.CreateFlagInput))
 		},
 		nil,
 		ec.marshalNFeatureFlag2ᚖgithubᚗcomᚋhavlinjᚋfeatureflagᚑapiᚋgraphᚋmodelᚐFeatureFlag,
@@ -1511,7 +1474,7 @@ func (ec *executionContext) _Mutation_updateFlag(ctx context.Context, field grap
 		ec.fieldContext_Mutation_updateFlag,
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.resolvers.Mutation().UpdateFlag(ctx, fc.Args["input"].(model.UpdateFlagInput))
+			return ec.Resolvers.Mutation().UpdateFlag(ctx, fc.Args["input"].(model.UpdateFlagInput))
 		},
 		nil,
 		ec.marshalNFeatureFlag2ᚖgithubᚗcomᚋhavlinjᚋfeatureflagᚑapiᚋgraphᚋmodelᚐFeatureFlag,
@@ -1566,7 +1529,7 @@ func (ec *executionContext) _Mutation_deleteFlag(ctx context.Context, field grap
 		ec.fieldContext_Mutation_deleteFlag,
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.resolvers.Mutation().DeleteFlag(ctx, fc.Args["key"].(string), fc.Args["environment"].(string))
+			return ec.Resolvers.Mutation().DeleteFlag(ctx, fc.Args["key"].(string), fc.Args["environment"].(string))
 		},
 		nil,
 		ec.marshalNBoolean2bool,
@@ -1607,7 +1570,7 @@ func (ec *executionContext) _Mutation_login(ctx context.Context, field graphql.C
 		ec.fieldContext_Mutation_login,
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.resolvers.Mutation().Login(ctx, fc.Args["input"].(model.LoginInput))
+			return ec.Resolvers.Mutation().Login(ctx, fc.Args["input"].(model.LoginInput))
 		},
 		nil,
 		ec.marshalNLoginPayload2ᚖgithubᚗcomᚋhavlinjᚋfeatureflagᚑapiᚋgraphᚋmodelᚐLoginPayload,
@@ -1652,7 +1615,7 @@ func (ec *executionContext) _Mutation_createExperiment(ctx context.Context, fiel
 		ec.fieldContext_Mutation_createExperiment,
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.resolvers.Mutation().CreateExperiment(ctx, fc.Args["input"].(model.CreateExperimentInput))
+			return ec.Resolvers.Mutation().CreateExperiment(ctx, fc.Args["input"].(model.CreateExperimentInput))
 		},
 		nil,
 		ec.marshalNExperiment2ᚖgithubᚗcomᚋhavlinjᚋfeatureflagᚑapiᚋgraphᚋmodelᚐExperiment,
@@ -1701,7 +1664,7 @@ func (ec *executionContext) _Mutation_createUser(ctx context.Context, field grap
 		ec.fieldContext_Mutation_createUser,
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.resolvers.Mutation().CreateUser(ctx, fc.Args["input"].(model.CreateUserInput))
+			return ec.Resolvers.Mutation().CreateUser(ctx, fc.Args["input"].(model.CreateUserInput))
 		},
 		nil,
 		ec.marshalNUser2ᚖgithubᚗcomᚋhavlinjᚋfeatureflagᚑapiᚋgraphᚋmodelᚐUser,
@@ -1752,7 +1715,7 @@ func (ec *executionContext) _Mutation_updateUser(ctx context.Context, field grap
 		ec.fieldContext_Mutation_updateUser,
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.resolvers.Mutation().UpdateUser(ctx, fc.Args["input"].(model.UpdateUserInput))
+			return ec.Resolvers.Mutation().UpdateUser(ctx, fc.Args["input"].(model.UpdateUserInput))
 		},
 		nil,
 		ec.marshalNUser2ᚖgithubᚗcomᚋhavlinjᚋfeatureflagᚑapiᚋgraphᚋmodelᚐUser,
@@ -1803,7 +1766,7 @@ func (ec *executionContext) _Mutation_deleteUser(ctx context.Context, field grap
 		ec.fieldContext_Mutation_deleteUser,
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.resolvers.Mutation().DeleteUser(ctx, fc.Args["id"].(string))
+			return ec.Resolvers.Mutation().DeleteUser(ctx, fc.Args["id"].(string))
 		},
 		nil,
 		ec.marshalNBoolean2bool,
@@ -1844,7 +1807,7 @@ func (ec *executionContext) _Query_evaluateFlag(ctx context.Context, field graph
 		ec.fieldContext_Query_evaluateFlag,
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.resolvers.Query().EvaluateFlag(ctx, fc.Args["key"].(string), fc.Args["evaluationContext"].(model.EvaluationContextInput))
+			return ec.Resolvers.Query().EvaluateFlag(ctx, fc.Args["key"].(string), fc.Args["evaluationContext"].(model.EvaluationContextInput))
 		},
 		nil,
 		ec.marshalNBoolean2bool,
@@ -1885,7 +1848,7 @@ func (ec *executionContext) _Query_auditLog(ctx context.Context, field graphql.C
 		ec.fieldContext_Query_auditLog,
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.resolvers.Query().AuditLog(ctx, fc.Args["id"].(string))
+			return ec.Resolvers.Query().AuditLog(ctx, fc.Args["id"].(string))
 		},
 		nil,
 		ec.marshalOAuditLog2ᚖgithubᚗcomᚋhavlinjᚋfeatureflagᚑapiᚋgraphᚋmodelᚐAuditLog,
@@ -1940,7 +1903,7 @@ func (ec *executionContext) _Query_auditLogs(ctx context.Context, field graphql.
 		ec.fieldContext_Query_auditLogs,
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.resolvers.Query().AuditLogs(ctx, fc.Args["filter"].(*model.AuditLogsFilterInput), fc.Args["limit"].(*int), fc.Args["offset"].(*int))
+			return ec.Resolvers.Query().AuditLogs(ctx, fc.Args["filter"].(*model.AuditLogsFilterInput), fc.Args["limit"].(*int), fc.Args["offset"].(*int))
 		},
 		nil,
 		ec.marshalNAuditLog2ᚕᚖgithubᚗcomᚋhavlinjᚋfeatureflagᚑapiᚋgraphᚋmodelᚐAuditLogᚄ,
@@ -1995,7 +1958,7 @@ func (ec *executionContext) _Query_experiment(ctx context.Context, field graphql
 		ec.fieldContext_Query_experiment,
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.resolvers.Query().Experiment(ctx, fc.Args["key"].(string), fc.Args["environment"].(string))
+			return ec.Resolvers.Query().Experiment(ctx, fc.Args["key"].(string), fc.Args["environment"].(string))
 		},
 		nil,
 		ec.marshalOExperiment2ᚖgithubᚗcomᚋhavlinjᚋfeatureflagᚑapiᚋgraphᚋmodelᚐExperiment,
@@ -2044,7 +2007,7 @@ func (ec *executionContext) _Query_getAssignment(ctx context.Context, field grap
 		ec.fieldContext_Query_getAssignment,
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.resolvers.Query().GetAssignment(ctx, fc.Args["userId"].(string), fc.Args["experimentKey"].(string), fc.Args["environment"].(string))
+			return ec.Resolvers.Query().GetAssignment(ctx, fc.Args["userId"].(string), fc.Args["experimentKey"].(string), fc.Args["environment"].(string))
 		},
 		nil,
 		ec.marshalOExperimentVariant2ᚖgithubᚗcomᚋhavlinjᚋfeatureflagᚑapiᚋgraphᚋmodelᚐExperimentVariant,
@@ -2095,7 +2058,7 @@ func (ec *executionContext) _Query_user(ctx context.Context, field graphql.Colle
 		ec.fieldContext_Query_user,
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.resolvers.Query().User(ctx, fc.Args["id"].(string))
+			return ec.Resolvers.Query().User(ctx, fc.Args["id"].(string))
 		},
 		nil,
 		ec.marshalOUser2ᚖgithubᚗcomᚋhavlinjᚋfeatureflagᚑapiᚋgraphᚋmodelᚐUser,
@@ -2146,7 +2109,7 @@ func (ec *executionContext) _Query_userByEmail(ctx context.Context, field graphq
 		ec.fieldContext_Query_userByEmail,
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.resolvers.Query().UserByEmail(ctx, fc.Args["email"].(string))
+			return ec.Resolvers.Query().UserByEmail(ctx, fc.Args["email"].(string))
 		},
 		nil,
 		ec.marshalOUser2ᚖgithubᚗcomᚋhavlinjᚋfeatureflagᚑapiᚋgraphᚋmodelᚐUser,
@@ -2197,7 +2160,7 @@ func (ec *executionContext) _Query___type(ctx context.Context, field graphql.Col
 		ec.fieldContext_Query___type,
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.introspectType(fc.Args["name"].(string))
+			return ec.IntrospectType(fc.Args["name"].(string))
 		},
 		nil,
 		ec.marshalO__Type2ᚖgithubᚗcomᚋ99designsᚋgqlgenᚋgraphqlᚋintrospectionᚐType,
@@ -2261,7 +2224,7 @@ func (ec *executionContext) _Query___schema(ctx context.Context, field graphql.C
 		field,
 		ec.fieldContext_Query___schema,
 		func(ctx context.Context) (any, error) {
-			return ec.introspectSchema()
+			return ec.IntrospectSchema()
 		},
 		nil,
 		ec.marshalO__Schema2ᚖgithubᚗcomᚋ99designsᚋgqlgenᚋgraphqlᚋintrospectionᚐSchema,
@@ -3861,6 +3824,10 @@ func (ec *executionContext) fieldContext___Type_isOneOf(_ context.Context, field
 
 func (ec *executionContext) unmarshalInputAuditLogsFilterInput(ctx context.Context, obj any) (model.AuditLogsFilterInput, error) {
 	var it model.AuditLogsFilterInput
+	if obj == nil {
+		return it, nil
+	}
+
 	asMap := map[string]any{}
 	for k, v := range obj.(map[string]any) {
 		asMap[k] = v
@@ -3896,12 +3863,15 @@ func (ec *executionContext) unmarshalInputAuditLogsFilterInput(ctx context.Conte
 			it.ActorID = data
 		}
 	}
-
 	return it, nil
 }
 
 func (ec *executionContext) unmarshalInputCreateExperimentInput(ctx context.Context, obj any) (model.CreateExperimentInput, error) {
 	var it model.CreateExperimentInput
+	if obj == nil {
+		return it, nil
+	}
+
 	asMap := map[string]any{}
 	for k, v := range obj.(map[string]any) {
 		asMap[k] = v
@@ -3937,12 +3907,15 @@ func (ec *executionContext) unmarshalInputCreateExperimentInput(ctx context.Cont
 			it.Variants = data
 		}
 	}
-
 	return it, nil
 }
 
 func (ec *executionContext) unmarshalInputCreateFlagInput(ctx context.Context, obj any) (model.CreateFlagInput, error) {
 	var it model.CreateFlagInput
+	if obj == nil {
+		return it, nil
+	}
+
 	asMap := map[string]any{}
 	for k, v := range obj.(map[string]any) {
 		asMap[k] = v
@@ -3992,12 +3965,15 @@ func (ec *executionContext) unmarshalInputCreateFlagInput(ctx context.Context, o
 			it.Rules = data
 		}
 	}
-
 	return it, nil
 }
 
 func (ec *executionContext) unmarshalInputCreateUserInput(ctx context.Context, obj any) (model.CreateUserInput, error) {
 	var it model.CreateUserInput
+	if obj == nil {
+		return it, nil
+	}
+
 	asMap := map[string]any{}
 	for k, v := range obj.(map[string]any) {
 		asMap[k] = v
@@ -4033,12 +4009,15 @@ func (ec *executionContext) unmarshalInputCreateUserInput(ctx context.Context, o
 			it.Password = data
 		}
 	}
-
 	return it, nil
 }
 
 func (ec *executionContext) unmarshalInputEvaluationContextInput(ctx context.Context, obj any) (model.EvaluationContextInput, error) {
 	var it model.EvaluationContextInput
+	if obj == nil {
+		return it, nil
+	}
+
 	asMap := map[string]any{}
 	for k, v := range obj.(map[string]any) {
 		asMap[k] = v
@@ -4067,12 +4046,15 @@ func (ec *executionContext) unmarshalInputEvaluationContextInput(ctx context.Con
 			it.Email = data
 		}
 	}
-
 	return it, nil
 }
 
 func (ec *executionContext) unmarshalInputExperimentVariantInput(ctx context.Context, obj any) (model.ExperimentVariantInput, error) {
 	var it model.ExperimentVariantInput
+	if obj == nil {
+		return it, nil
+	}
+
 	asMap := map[string]any{}
 	for k, v := range obj.(map[string]any) {
 		asMap[k] = v
@@ -4101,12 +4083,15 @@ func (ec *executionContext) unmarshalInputExperimentVariantInput(ctx context.Con
 			it.Weight = data
 		}
 	}
-
 	return it, nil
 }
 
 func (ec *executionContext) unmarshalInputLoginInput(ctx context.Context, obj any) (model.LoginInput, error) {
 	var it model.LoginInput
+	if obj == nil {
+		return it, nil
+	}
+
 	asMap := map[string]any{}
 	for k, v := range obj.(map[string]any) {
 		asMap[k] = v
@@ -4135,12 +4120,15 @@ func (ec *executionContext) unmarshalInputLoginInput(ctx context.Context, obj an
 			it.Password = data
 		}
 	}
-
 	return it, nil
 }
 
 func (ec *executionContext) unmarshalInputRuleInput(ctx context.Context, obj any) (model.RuleInput, error) {
 	var it model.RuleInput
+	if obj == nil {
+		return it, nil
+	}
+
 	asMap := map[string]any{}
 	for k, v := range obj.(map[string]any) {
 		asMap[k] = v
@@ -4169,12 +4157,15 @@ func (ec *executionContext) unmarshalInputRuleInput(ctx context.Context, obj any
 			it.Value = data
 		}
 	}
-
 	return it, nil
 }
 
 func (ec *executionContext) unmarshalInputUpdateFlagInput(ctx context.Context, obj any) (model.UpdateFlagInput, error) {
 	var it model.UpdateFlagInput
+	if obj == nil {
+		return it, nil
+	}
+
 	asMap := map[string]any{}
 	for k, v := range obj.(map[string]any) {
 		asMap[k] = v
@@ -4210,12 +4201,15 @@ func (ec *executionContext) unmarshalInputUpdateFlagInput(ctx context.Context, o
 			it.Rules = data
 		}
 	}
-
 	return it, nil
 }
 
 func (ec *executionContext) unmarshalInputUpdateUserInput(ctx context.Context, obj any) (model.UpdateUserInput, error) {
 	var it model.UpdateUserInput
+	if obj == nil {
+		return it, nil
+	}
+
 	asMap := map[string]any{}
 	for k, v := range obj.(map[string]any) {
 		asMap[k] = v
@@ -4258,7 +4252,6 @@ func (ec *executionContext) unmarshalInputUpdateUserInput(ctx context.Context, o
 			it.Password = data
 		}
 	}
-
 	return it, nil
 }
 
@@ -4320,10 +4313,10 @@ func (ec *executionContext) _AuditLog(ctx context.Context, sel ast.SelectionSet,
 		return graphql.Null
 	}
 
-	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
 
 	for label, dfs := range deferred {
-		ec.processDeferredGroup(graphql.DeferredGroup{
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
 			Label:    label,
 			Path:     graphql.GetPath(ctx),
 			FieldSet: dfs,
@@ -4369,10 +4362,10 @@ func (ec *executionContext) _Experiment(ctx context.Context, sel ast.SelectionSe
 		return graphql.Null
 	}
 
-	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
 
 	for label, dfs := range deferred {
-		ec.processDeferredGroup(graphql.DeferredGroup{
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
 			Label:    label,
 			Path:     graphql.GetPath(ctx),
 			FieldSet: dfs,
@@ -4423,10 +4416,10 @@ func (ec *executionContext) _ExperimentVariant(ctx context.Context, sel ast.Sele
 		return graphql.Null
 	}
 
-	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
 
 	for label, dfs := range deferred {
-		ec.processDeferredGroup(graphql.DeferredGroup{
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
 			Label:    label,
 			Path:     graphql.GetPath(ctx),
 			FieldSet: dfs,
@@ -4484,10 +4477,10 @@ func (ec *executionContext) _FeatureFlag(ctx context.Context, sel ast.SelectionS
 		return graphql.Null
 	}
 
-	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
 
 	for label, dfs := range deferred {
-		ec.processDeferredGroup(graphql.DeferredGroup{
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
 			Label:    label,
 			Path:     graphql.GetPath(ctx),
 			FieldSet: dfs,
@@ -4523,10 +4516,10 @@ func (ec *executionContext) _LoginPayload(ctx context.Context, sel ast.Selection
 		return graphql.Null
 	}
 
-	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
 
 	for label, dfs := range deferred {
-		ec.processDeferredGroup(graphql.DeferredGroup{
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
 			Label:    label,
 			Path:     graphql.GetPath(ctx),
 			FieldSet: dfs,
@@ -4621,10 +4614,10 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 		return graphql.Null
 	}
 
-	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
 
 	for label, dfs := range deferred {
-		ec.processDeferredGroup(graphql.DeferredGroup{
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
 			Label:    label,
 			Path:     graphql.GetPath(ctx),
 			FieldSet: dfs,
@@ -4810,10 +4803,10 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 		return graphql.Null
 	}
 
-	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
 
 	for label, dfs := range deferred {
-		ec.processDeferredGroup(graphql.DeferredGroup{
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
 			Label:    label,
 			Path:     graphql.GetPath(ctx),
 			FieldSet: dfs,
@@ -4864,10 +4857,10 @@ func (ec *executionContext) _User(ctx context.Context, sel ast.SelectionSet, obj
 		return graphql.Null
 	}
 
-	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
 
 	for label, dfs := range deferred {
-		ec.processDeferredGroup(graphql.DeferredGroup{
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
 			Label:    label,
 			Path:     graphql.GetPath(ctx),
 			FieldSet: dfs,
@@ -4920,10 +4913,10 @@ func (ec *executionContext) ___Directive(ctx context.Context, sel ast.SelectionS
 		return graphql.Null
 	}
 
-	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
 
 	for label, dfs := range deferred {
-		ec.processDeferredGroup(graphql.DeferredGroup{
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
 			Label:    label,
 			Path:     graphql.GetPath(ctx),
 			FieldSet: dfs,
@@ -4968,10 +4961,10 @@ func (ec *executionContext) ___EnumValue(ctx context.Context, sel ast.SelectionS
 		return graphql.Null
 	}
 
-	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
 
 	for label, dfs := range deferred {
-		ec.processDeferredGroup(graphql.DeferredGroup{
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
 			Label:    label,
 			Path:     graphql.GetPath(ctx),
 			FieldSet: dfs,
@@ -5026,10 +5019,10 @@ func (ec *executionContext) ___Field(ctx context.Context, sel ast.SelectionSet, 
 		return graphql.Null
 	}
 
-	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
 
 	for label, dfs := range deferred {
-		ec.processDeferredGroup(graphql.DeferredGroup{
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
 			Label:    label,
 			Path:     graphql.GetPath(ctx),
 			FieldSet: dfs,
@@ -5081,10 +5074,10 @@ func (ec *executionContext) ___InputValue(ctx context.Context, sel ast.Selection
 		return graphql.Null
 	}
 
-	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
 
 	for label, dfs := range deferred {
-		ec.processDeferredGroup(graphql.DeferredGroup{
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
 			Label:    label,
 			Path:     graphql.GetPath(ctx),
 			FieldSet: dfs,
@@ -5136,10 +5129,10 @@ func (ec *executionContext) ___Schema(ctx context.Context, sel ast.SelectionSet,
 		return graphql.Null
 	}
 
-	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
 
 	for label, dfs := range deferred {
-		ec.processDeferredGroup(graphql.DeferredGroup{
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
 			Label:    label,
 			Path:     graphql.GetPath(ctx),
 			FieldSet: dfs,
@@ -5195,10 +5188,10 @@ func (ec *executionContext) ___Type(ctx context.Context, sel ast.SelectionSet, o
 		return graphql.Null
 	}
 
-	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
 
 	for label, dfs := range deferred {
-		ec.processDeferredGroup(graphql.DeferredGroup{
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
 			Label:    label,
 			Path:     graphql.GetPath(ctx),
 			FieldSet: dfs,
@@ -5214,39 +5207,11 @@ func (ec *executionContext) ___Type(ctx context.Context, sel ast.SelectionSet, o
 // region    ***************************** type.gotpl *****************************
 
 func (ec *executionContext) marshalNAuditLog2ᚕᚖgithubᚗcomᚋhavlinjᚋfeatureflagᚑapiᚋgraphᚋmodelᚐAuditLogᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.AuditLog) graphql.Marshaler {
-	ret := make(graphql.Array, len(v))
-	var wg sync.WaitGroup
-	isLen1 := len(v) == 1
-	if !isLen1 {
-		wg.Add(len(v))
-	}
-	for i := range v {
-		i := i
-		fc := &graphql.FieldContext{
-			Index:  &i,
-			Result: &v[i],
-		}
-		ctx := graphql.WithFieldContext(ctx, fc)
-		f := func(i int) {
-			defer func() {
-				if r := recover(); r != nil {
-					ec.Error(ctx, ec.Recover(ctx, r))
-					ret = nil
-				}
-			}()
-			if !isLen1 {
-				defer wg.Done()
-			}
-			ret[i] = ec.marshalNAuditLog2ᚖgithubᚗcomᚋhavlinjᚋfeatureflagᚑapiᚋgraphᚋmodelᚐAuditLog(ctx, sel, v[i])
-		}
-		if isLen1 {
-			f(i)
-		} else {
-			go f(i)
-		}
-
-	}
-	wg.Wait()
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNAuditLog2ᚖgithubᚗcomᚋhavlinjᚋfeatureflagᚑapiᚋgraphᚋmodelᚐAuditLog(ctx, sel, v[i])
+	})
 
 	for _, e := range ret {
 		if e == graphql.Null {
@@ -5482,39 +5447,11 @@ func (ec *executionContext) marshalN__Directive2githubᚗcomᚋ99designsᚋgqlge
 }
 
 func (ec *executionContext) marshalN__Directive2ᚕgithubᚗcomᚋ99designsᚋgqlgenᚋgraphqlᚋintrospectionᚐDirectiveᚄ(ctx context.Context, sel ast.SelectionSet, v []introspection.Directive) graphql.Marshaler {
-	ret := make(graphql.Array, len(v))
-	var wg sync.WaitGroup
-	isLen1 := len(v) == 1
-	if !isLen1 {
-		wg.Add(len(v))
-	}
-	for i := range v {
-		i := i
-		fc := &graphql.FieldContext{
-			Index:  &i,
-			Result: &v[i],
-		}
-		ctx := graphql.WithFieldContext(ctx, fc)
-		f := func(i int) {
-			defer func() {
-				if r := recover(); r != nil {
-					ec.Error(ctx, ec.Recover(ctx, r))
-					ret = nil
-				}
-			}()
-			if !isLen1 {
-				defer wg.Done()
-			}
-			ret[i] = ec.marshalN__Directive2githubᚗcomᚋ99designsᚋgqlgenᚋgraphqlᚋintrospectionᚐDirective(ctx, sel, v[i])
-		}
-		if isLen1 {
-			f(i)
-		} else {
-			go f(i)
-		}
-
-	}
-	wg.Wait()
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalN__Directive2githubᚗcomᚋ99designsᚋgqlgenᚋgraphqlᚋintrospectionᚐDirective(ctx, sel, v[i])
+	})
 
 	for _, e := range ret {
 		if e == graphql.Null {
@@ -5557,39 +5494,11 @@ func (ec *executionContext) unmarshalN__DirectiveLocation2ᚕstringᚄ(ctx conte
 }
 
 func (ec *executionContext) marshalN__DirectiveLocation2ᚕstringᚄ(ctx context.Context, sel ast.SelectionSet, v []string) graphql.Marshaler {
-	ret := make(graphql.Array, len(v))
-	var wg sync.WaitGroup
-	isLen1 := len(v) == 1
-	if !isLen1 {
-		wg.Add(len(v))
-	}
-	for i := range v {
-		i := i
-		fc := &graphql.FieldContext{
-			Index:  &i,
-			Result: &v[i],
-		}
-		ctx := graphql.WithFieldContext(ctx, fc)
-		f := func(i int) {
-			defer func() {
-				if r := recover(); r != nil {
-					ec.Error(ctx, ec.Recover(ctx, r))
-					ret = nil
-				}
-			}()
-			if !isLen1 {
-				defer wg.Done()
-			}
-			ret[i] = ec.marshalN__DirectiveLocation2string(ctx, sel, v[i])
-		}
-		if isLen1 {
-			f(i)
-		} else {
-			go f(i)
-		}
-
-	}
-	wg.Wait()
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalN__DirectiveLocation2string(ctx, sel, v[i])
+	})
 
 	for _, e := range ret {
 		if e == graphql.Null {
@@ -5613,39 +5522,11 @@ func (ec *executionContext) marshalN__InputValue2githubᚗcomᚋ99designsᚋgqlg
 }
 
 func (ec *executionContext) marshalN__InputValue2ᚕgithubᚗcomᚋ99designsᚋgqlgenᚋgraphqlᚋintrospectionᚐInputValueᚄ(ctx context.Context, sel ast.SelectionSet, v []introspection.InputValue) graphql.Marshaler {
-	ret := make(graphql.Array, len(v))
-	var wg sync.WaitGroup
-	isLen1 := len(v) == 1
-	if !isLen1 {
-		wg.Add(len(v))
-	}
-	for i := range v {
-		i := i
-		fc := &graphql.FieldContext{
-			Index:  &i,
-			Result: &v[i],
-		}
-		ctx := graphql.WithFieldContext(ctx, fc)
-		f := func(i int) {
-			defer func() {
-				if r := recover(); r != nil {
-					ec.Error(ctx, ec.Recover(ctx, r))
-					ret = nil
-				}
-			}()
-			if !isLen1 {
-				defer wg.Done()
-			}
-			ret[i] = ec.marshalN__InputValue2githubᚗcomᚋ99designsᚋgqlgenᚋgraphqlᚋintrospectionᚐInputValue(ctx, sel, v[i])
-		}
-		if isLen1 {
-			f(i)
-		} else {
-			go f(i)
-		}
-
-	}
-	wg.Wait()
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalN__InputValue2githubᚗcomᚋ99designsᚋgqlgenᚋgraphqlᚋintrospectionᚐInputValue(ctx, sel, v[i])
+	})
 
 	for _, e := range ret {
 		if e == graphql.Null {
@@ -5661,39 +5542,11 @@ func (ec *executionContext) marshalN__Type2githubᚗcomᚋ99designsᚋgqlgenᚋg
 }
 
 func (ec *executionContext) marshalN__Type2ᚕgithubᚗcomᚋ99designsᚋgqlgenᚋgraphqlᚋintrospectionᚐTypeᚄ(ctx context.Context, sel ast.SelectionSet, v []introspection.Type) graphql.Marshaler {
-	ret := make(graphql.Array, len(v))
-	var wg sync.WaitGroup
-	isLen1 := len(v) == 1
-	if !isLen1 {
-		wg.Add(len(v))
-	}
-	for i := range v {
-		i := i
-		fc := &graphql.FieldContext{
-			Index:  &i,
-			Result: &v[i],
-		}
-		ctx := graphql.WithFieldContext(ctx, fc)
-		f := func(i int) {
-			defer func() {
-				if r := recover(); r != nil {
-					ec.Error(ctx, ec.Recover(ctx, r))
-					ret = nil
-				}
-			}()
-			if !isLen1 {
-				defer wg.Done()
-			}
-			ret[i] = ec.marshalN__Type2githubᚗcomᚋ99designsᚋgqlgenᚋgraphqlᚋintrospectionᚐType(ctx, sel, v[i])
-		}
-		if isLen1 {
-			f(i)
-		} else {
-			go f(i)
-		}
-
-	}
-	wg.Wait()
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalN__Type2githubᚗcomᚋ99designsᚋgqlgenᚋgraphqlᚋintrospectionᚐType(ctx, sel, v[i])
+	})
 
 	for _, e := range ret {
 		if e == graphql.Null {
@@ -5904,39 +5757,11 @@ func (ec *executionContext) marshalO__EnumValue2ᚕgithubᚗcomᚋ99designsᚋgq
 	if v == nil {
 		return graphql.Null
 	}
-	ret := make(graphql.Array, len(v))
-	var wg sync.WaitGroup
-	isLen1 := len(v) == 1
-	if !isLen1 {
-		wg.Add(len(v))
-	}
-	for i := range v {
-		i := i
-		fc := &graphql.FieldContext{
-			Index:  &i,
-			Result: &v[i],
-		}
-		ctx := graphql.WithFieldContext(ctx, fc)
-		f := func(i int) {
-			defer func() {
-				if r := recover(); r != nil {
-					ec.Error(ctx, ec.Recover(ctx, r))
-					ret = nil
-				}
-			}()
-			if !isLen1 {
-				defer wg.Done()
-			}
-			ret[i] = ec.marshalN__EnumValue2githubᚗcomᚋ99designsᚋgqlgenᚋgraphqlᚋintrospectionᚐEnumValue(ctx, sel, v[i])
-		}
-		if isLen1 {
-			f(i)
-		} else {
-			go f(i)
-		}
-
-	}
-	wg.Wait()
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalN__EnumValue2githubᚗcomᚋ99designsᚋgqlgenᚋgraphqlᚋintrospectionᚐEnumValue(ctx, sel, v[i])
+	})
 
 	for _, e := range ret {
 		if e == graphql.Null {
@@ -5951,39 +5776,11 @@ func (ec *executionContext) marshalO__Field2ᚕgithubᚗcomᚋ99designsᚋgqlgen
 	if v == nil {
 		return graphql.Null
 	}
-	ret := make(graphql.Array, len(v))
-	var wg sync.WaitGroup
-	isLen1 := len(v) == 1
-	if !isLen1 {
-		wg.Add(len(v))
-	}
-	for i := range v {
-		i := i
-		fc := &graphql.FieldContext{
-			Index:  &i,
-			Result: &v[i],
-		}
-		ctx := graphql.WithFieldContext(ctx, fc)
-		f := func(i int) {
-			defer func() {
-				if r := recover(); r != nil {
-					ec.Error(ctx, ec.Recover(ctx, r))
-					ret = nil
-				}
-			}()
-			if !isLen1 {
-				defer wg.Done()
-			}
-			ret[i] = ec.marshalN__Field2githubᚗcomᚋ99designsᚋgqlgenᚋgraphqlᚋintrospectionᚐField(ctx, sel, v[i])
-		}
-		if isLen1 {
-			f(i)
-		} else {
-			go f(i)
-		}
-
-	}
-	wg.Wait()
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalN__Field2githubᚗcomᚋ99designsᚋgqlgenᚋgraphqlᚋintrospectionᚐField(ctx, sel, v[i])
+	})
 
 	for _, e := range ret {
 		if e == graphql.Null {
@@ -5998,39 +5795,11 @@ func (ec *executionContext) marshalO__InputValue2ᚕgithubᚗcomᚋ99designsᚋg
 	if v == nil {
 		return graphql.Null
 	}
-	ret := make(graphql.Array, len(v))
-	var wg sync.WaitGroup
-	isLen1 := len(v) == 1
-	if !isLen1 {
-		wg.Add(len(v))
-	}
-	for i := range v {
-		i := i
-		fc := &graphql.FieldContext{
-			Index:  &i,
-			Result: &v[i],
-		}
-		ctx := graphql.WithFieldContext(ctx, fc)
-		f := func(i int) {
-			defer func() {
-				if r := recover(); r != nil {
-					ec.Error(ctx, ec.Recover(ctx, r))
-					ret = nil
-				}
-			}()
-			if !isLen1 {
-				defer wg.Done()
-			}
-			ret[i] = ec.marshalN__InputValue2githubᚗcomᚋ99designsᚋgqlgenᚋgraphqlᚋintrospectionᚐInputValue(ctx, sel, v[i])
-		}
-		if isLen1 {
-			f(i)
-		} else {
-			go f(i)
-		}
-
-	}
-	wg.Wait()
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalN__InputValue2githubᚗcomᚋ99designsᚋgqlgenᚋgraphqlᚋintrospectionᚐInputValue(ctx, sel, v[i])
+	})
 
 	for _, e := range ret {
 		if e == graphql.Null {
@@ -6052,39 +5821,11 @@ func (ec *executionContext) marshalO__Type2ᚕgithubᚗcomᚋ99designsᚋgqlgen�
 	if v == nil {
 		return graphql.Null
 	}
-	ret := make(graphql.Array, len(v))
-	var wg sync.WaitGroup
-	isLen1 := len(v) == 1
-	if !isLen1 {
-		wg.Add(len(v))
-	}
-	for i := range v {
-		i := i
-		fc := &graphql.FieldContext{
-			Index:  &i,
-			Result: &v[i],
-		}
-		ctx := graphql.WithFieldContext(ctx, fc)
-		f := func(i int) {
-			defer func() {
-				if r := recover(); r != nil {
-					ec.Error(ctx, ec.Recover(ctx, r))
-					ret = nil
-				}
-			}()
-			if !isLen1 {
-				defer wg.Done()
-			}
-			ret[i] = ec.marshalN__Type2githubᚗcomᚋ99designsᚋgqlgenᚋgraphqlᚋintrospectionᚐType(ctx, sel, v[i])
-		}
-		if isLen1 {
-			f(i)
-		} else {
-			go f(i)
-		}
-
-	}
-	wg.Wait()
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalN__Type2githubᚗcomᚋ99designsᚋgqlgenᚋgraphqlᚋintrospectionᚐType(ctx, sel, v[i])
+	})
 
 	for _, e := range ret {
 		if e == graphql.Null {
