@@ -74,6 +74,9 @@ func TestService_CreateFlag_happy_path(t *testing.T) {
 	if store.CreateCalls[0].Flag.Key != "test-flag" || store.CreateCalls[0].Flag.Enabled != false {
 		t.Errorf("Create called with wrong flag: %+v", store.CreateCalls[0].Flag)
 	}
+	if got.RolloutStrategy != model.RolloutStrategyNone {
+		t.Errorf("expected RolloutStrategy NONE on create without rules, got %v", got.RolloutStrategy)
+	}
 }
 
 func TestService_CreateFlag_already_exists_returns_ErrDuplicateKey(t *testing.T) {
@@ -637,6 +640,30 @@ func TestService_EvaluateFlagInEnvironment_uses_provided_environment(t *testing.
 	}
 }
 
+func TestService_EvaluateFlagInEnvironment_evaluates_rules_in_that_environment(t *testing.T) {
+	ctx := context.Background()
+	store := &mock.Store{}
+	store.GetByKeyAndEnvironmentReturns = []mock.GetByKeyResult{
+		{Flag: &flags.Flag{ID: "f1", Key: "rollout", Enabled: true, Environment: flags.DeploymentStage("staging"), RolloutStrategy: flags.RolloutStrategyPercentage}, Err: nil},
+	}
+	store.GetRulesByFlagIDReturns = []mock.GetRulesResult{
+		{Rules: []*flags.Rule{{Type: flags.RuleTypePercentage, Value: "100"}}, Err: nil},
+	}
+	svc := flags.NewService(store)
+
+	enabled, err := svc.EvaluateFlagInEnvironment(ctx, "rollout", flags.DeploymentStage("staging"), evalCtx("any-user"))
+
+	if err != nil {
+		t.Fatalf("EvaluateFlagInEnvironment: %v", err)
+	}
+	if !enabled {
+		t.Fatal("expected true for 100% in staging")
+	}
+	if len(store.GetByKeyAndEnvironmentCalls) != 1 || store.GetByKeyAndEnvironmentCalls[0].Env != flags.DeploymentStage("staging") {
+		t.Fatalf("unexpected store calls: %+v", store.GetByKeyAndEnvironmentCalls)
+	}
+}
+
 func TestService_CreateFlag_with_rules_sets_strategy_and_replaces_rules(t *testing.T) {
 	ctx := context.Background()
 	store := &mock.Store{}
@@ -669,6 +696,64 @@ func TestService_CreateFlag_with_rules_sets_strategy_and_replaces_rules(t *testi
 	}
 	if len(store.ReplaceRulesByFlagIDCalls) != 1 || store.ReplaceRulesByFlagIDCalls[0].FlagID != "id-1" {
 		t.Errorf("ReplaceRulesByFlagID calls: %+v", store.ReplaceRulesByFlagIDCalls)
+	}
+	if got.RolloutStrategy != model.RolloutStrategyPercentage {
+		t.Errorf("expected RolloutStrategy PERCENTAGE, got %v", got.RolloutStrategy)
+	}
+}
+
+func TestService_CreateFlag_attribute_rules_maps_rollout_strategy_attribute(t *testing.T) {
+	ctx := context.Background()
+	store := &mock.Store{}
+	store.GetByKeyAndEnvironmentReturns = []mock.GetByKeyResult{
+		{Flag: nil, Err: nil},
+	}
+	created := &flags.Flag{
+		ID: "id-attr", Key: "attr-key", Environment: flags.DeploymentStageDev, RolloutStrategy: flags.RolloutStrategyAttribute,
+		CreatedAt: time.Now(),
+	}
+	store.CreateReturns = []mock.CreateResult{{Flag: created, Err: nil}}
+	store.ReplaceRulesByFlagIDReturns = []error{nil}
+	svc := flags.NewService(store)
+	input := model.CreateFlagInput{
+		Key: "attr-key", Environment: "dev",
+		Rules: []*model.RuleInput{
+			{Type: model.RolloutRuleTypeAttribute, Value: `{"attribute":"userId","op":"in","values":["u1"]}`},
+		},
+	}
+
+	got, err := svc.CreateFlag(ctx, input)
+
+	if err != nil {
+		t.Fatalf("CreateFlag: %v", err)
+	}
+	if got.RolloutStrategy != model.RolloutStrategyAttribute {
+		t.Errorf("expected RolloutStrategy ATTRIBUTE, got %v", got.RolloutStrategy)
+	}
+}
+
+func TestService_CreateFlag_explicit_rollout_without_rules_uses_input_strategy(t *testing.T) {
+	ctx := context.Background()
+	store := &mock.Store{}
+	store.GetByKeyAndEnvironmentReturns = []mock.GetByKeyResult{{Flag: nil, Err: nil}}
+	rs := model.RolloutStrategyPercentage
+	created := &flags.Flag{
+		ID: "id-pct", Key: "pct-only", Environment: flags.DeploymentStageStaging, RolloutStrategy: flags.RolloutStrategyPercentage,
+		CreatedAt: time.Now(),
+	}
+	store.CreateReturns = []mock.CreateResult{{Flag: created, Err: nil}}
+	svc := flags.NewService(store)
+	input := model.CreateFlagInput{
+		Key: "pct-only", Environment: "staging", RolloutStrategy: &rs,
+	}
+
+	got, err := svc.CreateFlag(ctx, input)
+
+	if err != nil {
+		t.Fatalf("CreateFlag: %v", err)
+	}
+	if got.RolloutStrategy != model.RolloutStrategyPercentage || got.Environment != "staging" {
+		t.Errorf("got %+v", got)
 	}
 }
 
@@ -860,6 +945,119 @@ func TestService_EvaluateFlag_attribute_rule_invalid_json_returns_InvalidRuleErr
 	}
 }
 
+func TestService_EvaluateFlag_rollout_none_ignores_rules_returns_true(t *testing.T) {
+	ctx := context.Background()
+	store := &mock.Store{}
+	store.GetByKeyAndEnvironmentReturns = []mock.GetByKeyResult{
+		{Flag: &flags.Flag{ID: "f1", Key: "none-strat", Enabled: true, Environment: flags.DeploymentStageDev, RolloutStrategy: flags.RolloutStrategyNone}, Err: nil},
+	}
+	store.GetRulesByFlagIDReturns = []mock.GetRulesResult{
+		{Rules: []*flags.Rule{{Type: flags.RuleTypePercentage, Value: "0"}}, Err: nil},
+	}
+	svc := flags.NewService(store)
+
+	enabled, err := svc.EvaluateFlag(ctx, "none-strat", evalCtx("user-1"))
+
+	if err != nil {
+		t.Fatalf("EvaluateFlag: %v", err)
+	}
+	if !enabled {
+		t.Fatal("with rollout_strategy none, evaluation is always true when flag is enabled")
+	}
+}
+
+func TestService_EvaluateFlag_percentage_skips_non_percentage_rules(t *testing.T) {
+	ctx := context.Background()
+	store := &mock.Store{}
+	store.GetByKeyAndEnvironmentReturns = []mock.GetByKeyResult{
+		{Flag: &flags.Flag{ID: "f1", Key: "mixed-pct", Enabled: true, Environment: flags.DeploymentStageDev, RolloutStrategy: flags.RolloutStrategyPercentage}, Err: nil},
+	}
+	store.GetRulesByFlagIDReturns = []mock.GetRulesResult{
+		{Rules: []*flags.Rule{
+			{Type: flags.RuleTypeAttribute, Value: `{"attribute":"userId","op":"in","values":["other"]}`},
+			{Type: flags.RuleTypePercentage, Value: "100"},
+		}, Err: nil},
+	}
+	svc := flags.NewService(store)
+
+	enabled, err := svc.EvaluateFlag(ctx, "mixed-pct", evalCtx("user-1"))
+
+	if err != nil {
+		t.Fatalf("EvaluateFlag: %v", err)
+	}
+	if !enabled {
+		t.Fatal("expected first applicable percentage rule (100%) to win")
+	}
+}
+
+func TestService_EvaluateFlag_attribute_skips_percentage_rules(t *testing.T) {
+	ctx := context.Background()
+	store := &mock.Store{}
+	store.GetByKeyAndEnvironmentReturns = []mock.GetByKeyResult{
+		{Flag: &flags.Flag{ID: "f1", Key: "mixed-attr", Enabled: true, Environment: flags.DeploymentStageDev, RolloutStrategy: flags.RolloutStrategyAttribute}, Err: nil},
+	}
+	store.GetRulesByFlagIDReturns = []mock.GetRulesResult{
+		{Rules: []*flags.Rule{
+			{Type: flags.RuleTypePercentage, Value: "0"},
+			{Type: flags.RuleTypeAttribute, Value: `{"attribute":"userId","op":"in","values":["user-1"]}`},
+		}, Err: nil},
+	}
+	svc := flags.NewService(store)
+
+	enabled, err := svc.EvaluateFlag(ctx, "mixed-attr", evalCtx("user-1"))
+
+	if err != nil {
+		t.Fatalf("EvaluateFlag: %v", err)
+	}
+	if !enabled {
+		t.Fatal("expected attribute rule to apply after skipping percentage rows")
+	}
+}
+
+func TestService_EvaluateFlag_percentage_negative_returns_InvalidRuleError(t *testing.T) {
+	ctx := context.Background()
+	store := &mock.Store{}
+	store.GetByKeyAndEnvironmentReturns = []mock.GetByKeyResult{
+		{Flag: &flags.Flag{ID: "f1", Key: "neg", Enabled: true, Environment: flags.DeploymentStageDev, RolloutStrategy: flags.RolloutStrategyPercentage}, Err: nil},
+	}
+	store.GetRulesByFlagIDReturns = []mock.GetRulesResult{
+		{Rules: []*flags.Rule{{Type: flags.RuleTypePercentage, Value: "-1"}}, Err: nil},
+	}
+	svc := flags.NewService(store)
+
+	_, err := svc.EvaluateFlag(ctx, "neg", evalCtx("user-1"))
+
+	var e *flags.InvalidRuleError
+	if !errors.As(err, &e) {
+		t.Fatalf("expected *InvalidRuleError, got %v", err)
+	}
+	if e.Reason != "must be 0-100" {
+		t.Errorf("expected Reason=must be 0-100, got %q", e.Reason)
+	}
+}
+
+func TestService_EvaluateFlag_percentage_not_a_number_returns_InvalidRuleError(t *testing.T) {
+	ctx := context.Background()
+	store := &mock.Store{}
+	store.GetByKeyAndEnvironmentReturns = []mock.GetByKeyResult{
+		{Flag: &flags.Flag{ID: "f1", Key: "nan", Enabled: true, Environment: flags.DeploymentStageDev, RolloutStrategy: flags.RolloutStrategyPercentage}, Err: nil},
+	}
+	store.GetRulesByFlagIDReturns = []mock.GetRulesResult{
+		{Rules: []*flags.Rule{{Type: flags.RuleTypePercentage, Value: "forty-two"}}, Err: nil},
+	}
+	svc := flags.NewService(store)
+
+	_, err := svc.EvaluateFlag(ctx, "nan", evalCtx("user-1"))
+
+	var e *flags.InvalidRuleError
+	if !errors.As(err, &e) {
+		t.Fatalf("expected *InvalidRuleError, got %v", err)
+	}
+	if e.Reason != "not a number" || e.Value != "forty-two" {
+		t.Errorf("expected Value=forty-two Reason=not a number, got Value=%q Reason=%q", e.Value, e.Reason)
+	}
+}
+
 func TestService_CreateFlag_rolloutStrategy_mismatch_with_rules_returns_ErrRulesStrategyMismatch(t *testing.T) {
 	ctx := context.Background()
 	store := &mock.Store{}
@@ -1023,6 +1221,33 @@ func TestService_UpdateFlag_rules_strategy_mismatch_returns_ErrRulesStrategyMism
 	}
 	if len(store.ReplaceRulesByFlagIDCalls) != 0 {
 		t.Error("ReplaceRulesByFlagID should not be called when strategy mismatch")
+	}
+}
+
+func TestService_UpdateFlag_existing_attribute_rollout_percentage_rules_returns_strategy_mismatch(t *testing.T) {
+	ctx := context.Background()
+	store := &mock.Store{}
+	store.GetByKeyAndEnvironmentReturns = []mock.GetByKeyResult{
+		{Flag: &flags.Flag{ID: "f1", Key: "f", Enabled: true, Environment: flags.DeploymentStageDev, RolloutStrategy: flags.RolloutStrategyAttribute}, Err: nil},
+	}
+	svc := flags.NewService(store)
+	input := model.UpdateFlagInput{
+		Key:     "f",
+		Enabled: true,
+		Rules:   []*model.RuleInput{{Type: model.RolloutRuleTypePercentage, Value: "50"}},
+	}
+
+	got, err := svc.UpdateFlag(ctx, input)
+
+	if got != nil {
+		t.Errorf("expected nil, got %+v", got)
+	}
+	var e *flags.RulesStrategyMismatchError
+	if !errors.As(err, &e) {
+		t.Errorf("expected *RulesStrategyMismatchError, got %v", err)
+	}
+	if e.CurrentStrategy != "attribute" {
+		t.Errorf("expected CurrentStrategy=attribute, got %q", e.CurrentStrategy)
 	}
 }
 

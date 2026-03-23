@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/havlinj/featureflag-api/graph/model"
 	"github.com/havlinj/featureflag-api/internal/audit"
@@ -134,6 +135,27 @@ func TestService_GetUser_not_found_returns_nil_nil(t *testing.T) {
 	}
 	if got != nil {
 		t.Errorf("expected nil, got %+v", got)
+	}
+}
+
+func TestService_GetUser_found_returns_model_with_created_at(t *testing.T) {
+	ctx := context.Background()
+	store := &mock.Store{}
+	createdAt := time.Date(2024, 6, 15, 9, 30, 0, 0, time.UTC)
+	u := &users.User{ID: "u-found", Email: "found@example.com", Role: users.RoleDeveloper, CreatedAt: createdAt}
+	store.GetByIDReturns = []mock.GetByIDResult{{User: u, Err: nil}}
+	svc := users.NewService(store)
+
+	got, err := svc.GetUser(ctx, "u-found")
+
+	if err != nil {
+		t.Fatalf("GetUser: %v", err)
+	}
+	if got == nil || got.Email != "found@example.com" || got.Role != model.RoleDeveloper {
+		t.Fatalf("got %+v", got)
+	}
+	if got.CreatedAt != "2024-06-15T09:30:00Z" {
+		t.Errorf("CreatedAt: want 2024-06-15T09:30:00Z, got %q", got.CreatedAt)
 	}
 }
 

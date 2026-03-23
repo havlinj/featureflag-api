@@ -365,6 +365,78 @@ func TestService_GetAssignment_experiment_not_found_returns_ErrExperimentNotFoun
 	}
 }
 
+func TestService_GetAssignment_experiment_lookup_store_error_returns_wrapped(t *testing.T) {
+	ctx := context.Background()
+	store := &mock.Store{}
+	wantErr := errors.New("db read failed")
+	store.GetExperimentByKeyAndEnvironmentReturns = []mock.GetExperimentResult{{Exp: nil, Err: wantErr}}
+	svc := experiments.NewService(store)
+
+	_, err := svc.GetAssignment(ctx, "user-1", "exp-key", "dev")
+
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("expected wrapped %v, got %v", wantErr, err)
+	}
+	var opErr *experiments.OperationError
+	if !errors.As(err, &opErr) {
+		t.Fatalf("expected *experiments.OperationError, got %T", err)
+	}
+	if opErr.Op != "experiments.service.get_experiment_or_err.store_get_by_key_and_environment" {
+		t.Fatalf("unexpected op %q", opErr.Op)
+	}
+	if opErr.Key != "exp-key" || opErr.Environment != "dev" {
+		t.Fatalf("unexpected context: %+v", opErr)
+	}
+}
+
+func TestService_GetAssignment_get_variants_store_error_returns_wrapped(t *testing.T) {
+	ctx := context.Background()
+	store := &mock.Store{}
+	exp := &experiments.Experiment{ID: "exp-1", Key: "vk", Environment: "dev"}
+	wantErr := errors.New("variants query failed")
+	store.GetExperimentByKeyAndEnvironmentReturns = []mock.GetExperimentResult{{Exp: exp, Err: nil}}
+	store.GetVariantsByExperimentIDReturns = []mock.GetVariantsResult{{Variants: nil, Err: wantErr}}
+	svc := experiments.NewService(store)
+
+	_, err := svc.GetAssignment(ctx, "user-1", "vk", "dev")
+
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("expected wrapped %v, got %v", wantErr, err)
+	}
+	var opErr *experiments.OperationError
+	if !errors.As(err, &opErr) {
+		t.Fatalf("expected *experiments.OperationError, got %T", err)
+	}
+	if opErr.Op != "experiments.service.get_assignment.store_get_variants_by_experiment_id" {
+		t.Fatalf("unexpected op %q", opErr.Op)
+	}
+}
+
+func TestService_GetAssignment_get_assignment_store_error_returns_wrapped(t *testing.T) {
+	ctx := context.Background()
+	store := &mock.Store{}
+	exp := &experiments.Experiment{ID: "exp-1", Key: "ga-err", Environment: "dev"}
+	variants := []*experiments.Variant{{ID: "v1", ExperimentID: "exp-1", Name: "A", Weight: 100}}
+	wantErr := errors.New("assignment read failed")
+	store.GetExperimentByKeyAndEnvironmentReturns = []mock.GetExperimentResult{{Exp: exp, Err: nil}}
+	store.GetVariantsByExperimentIDReturns = []mock.GetVariantsResult{{Variants: variants, Err: nil}}
+	store.GetAssignmentReturns = []mock.GetAssignmentResult{{A: nil, Err: wantErr}}
+	svc := experiments.NewService(store)
+
+	_, err := svc.GetAssignment(ctx, "user-1", "ga-err", "dev")
+
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("expected wrapped %v, got %v", wantErr, err)
+	}
+	var opErr *experiments.OperationError
+	if !errors.As(err, &opErr) {
+		t.Fatalf("expected *experiments.OperationError, got %T", err)
+	}
+	if opErr.Op != "experiments.service.get_assignment.store_get_assignment" {
+		t.Fatalf("unexpected op %q", opErr.Op)
+	}
+}
+
 func TestService_GetAssignment_stored_assignment_unknown_variant_returns_ErrVariantNotFound(t *testing.T) {
 	ctx := context.Background()
 	store := &mock.Store{}
