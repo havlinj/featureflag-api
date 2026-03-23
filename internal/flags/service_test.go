@@ -2,11 +2,14 @@ package flags_test
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"testing"
 	"time"
 
 	"github.com/havlinj/featureflag-api/graph/model"
+	"github.com/havlinj/featureflag-api/internal/audit"
+	"github.com/havlinj/featureflag-api/internal/auth"
 	"github.com/havlinj/featureflag-api/internal/flags"
 	"github.com/havlinj/featureflag-api/internal/flags/mock"
 )
@@ -815,5 +818,106 @@ func TestService_DeleteFlag_StoreDelete_error_returns_wrapped_error(t *testing.T
 	}
 	if !errors.Is(err, wantErr) {
 		t.Errorf("expected wrapped %v, got %v", wantErr, err)
+	}
+}
+
+type auditTxStarterFlagsMock struct {
+	beginErr error
+}
+
+func (s *auditTxStarterFlagsMock) Create(ctx context.Context, entry *audit.Entry) error {
+	return nil
+}
+
+func (s *auditTxStarterFlagsMock) GetByID(ctx context.Context, id string) (*audit.Entry, error) {
+	return nil, nil
+}
+
+func (s *auditTxStarterFlagsMock) List(ctx context.Context, filter audit.ListFilter, limit, offset int) ([]*audit.Entry, error) {
+	return nil, nil
+}
+
+func (s *auditTxStarterFlagsMock) BeginTx(ctx context.Context) (*sql.Tx, error) {
+	return nil, s.beginErr
+}
+
+type auditTxAwareFlagsMock struct {
+	auditTxStarterFlagsMock
+}
+
+func (s *auditTxAwareFlagsMock) WithTx(tx *sql.Tx) audit.Store {
+	return s
+}
+
+type txAwareFlagsStoreMock struct {
+	inner flags.Store
+}
+
+func (s *txAwareFlagsStoreMock) Create(ctx context.Context, flag *flags.Flag) (*flags.Flag, error) {
+	return s.inner.Create(ctx, flag)
+}
+
+func (s *txAwareFlagsStoreMock) GetByKeyAndEnvironment(ctx context.Context, key string, env flags.DeploymentStage) (*flags.Flag, error) {
+	return s.inner.GetByKeyAndEnvironment(ctx, key, env)
+}
+
+func (s *txAwareFlagsStoreMock) Update(ctx context.Context, flag *flags.Flag) error {
+	return s.inner.Update(ctx, flag)
+}
+
+func (s *txAwareFlagsStoreMock) Delete(ctx context.Context, id string) error {
+	return s.inner.Delete(ctx, id)
+}
+
+func (s *txAwareFlagsStoreMock) GetRulesByFlagID(ctx context.Context, flagID string) ([]*flags.Rule, error) {
+	return s.inner.GetRulesByFlagID(ctx, flagID)
+}
+
+func (s *txAwareFlagsStoreMock) ReplaceRulesByFlagID(ctx context.Context, flagID string, rules []*flags.Rule) error {
+	return s.inner.ReplaceRulesByFlagID(ctx, flagID, rules)
+}
+
+func (s *txAwareFlagsStoreMock) WithTx(tx *sql.Tx) flags.Store {
+	return s
+}
+
+func TestService_CreateFlag_withAudit_missingActor_returns_error(t *testing.T) {
+	store := &txAwareFlagsStoreMock{inner: &mock.Store{}}
+	svc := flags.NewServiceWithAudit(store, &auditTxAwareFlagsMock{})
+	input := model.CreateFlagInput{Key: "a", Environment: "dev"}
+
+	_, err := svc.CreateFlag(context.Background(), input)
+
+	if err == nil || err.Error() != "audit: missing actor id in context" {
+		t.Fatalf("expected missing actor error, got %v", err)
+	}
+}
+
+func TestService_CreateFlag_withAudit_notTxAwareAuditStore_returns_error(t *testing.T) {
+	store := &txAwareFlagsStoreMock{inner: &mock.Store{}}
+	svc := flags.NewServiceWithAudit(store, &auditTxStarterFlagsMock{})
+	input := model.CreateFlagInput{Key: "a", Environment: "dev"}
+	ctx := auth.WithActorID(context.Background(), "u1")
+
+	_, err := svc.CreateFlag(ctx, input)
+
+	if err == nil || err.Error() != "audit: audit store is not tx-aware" {
+		t.Fatalf("expected tx-aware audit store error, got %v", err)
+	}
+}
+
+func TestService_CreateFlag_withAudit_beginTx_error_is_returned(t *testing.T) {
+	store := &txAwareFlagsStoreMock{inner: &mock.Store{}}
+	wantErr := errors.New("begin tx failed")
+	svc := flags.NewServiceWithAudit(store, &auditTxAwareFlagsMock{
+		auditTxStarterFlagsMock: auditTxStarterFlagsMock{beginErr: wantErr},
+	})
+	input := model.CreateFlagInput{Key: "a", Environment: "dev"}
+	ctx := auth.WithActorID(context.Background(), "u1")
+
+	_, err := svc.CreateFlag(ctx, input)
+
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("expected %v, got %v", wantErr, err)
 	}
 }

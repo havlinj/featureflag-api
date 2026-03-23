@@ -34,6 +34,7 @@ func TestService_GetByID_delegates_to_store(t *testing.T) {
 	svc := audit.NewService(store)
 
 	got, err := svc.GetByID(ctx, "a1")
+
 	if err != nil {
 		t.Fatalf("GetByID: %v", err)
 	}
@@ -56,6 +57,7 @@ func TestService_List_returns_error_from_store(t *testing.T) {
 	svc := audit.NewService(store)
 
 	_, err := svc.List(ctx, audit.ListFilter{}, 50, 0)
+
 	if !errors.Is(err, wantErr) {
 		t.Fatalf("expected %v, got %v", wantErr, err)
 	}

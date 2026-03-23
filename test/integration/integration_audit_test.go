@@ -18,6 +18,7 @@ func TestAuditLogsAPI_createFlag_writes_and_reads_audit_entry(t *testing.T) {
 	adminToken := testutil.SeedAdminAndLogin(t, database, client, "admin@test.com", "adminpass")
 	client.SetToken(adminToken)
 
+	// 1) createFlag mutation
 	createResp, err := client.DoRequest(`
 		mutation CreateFlag($input: CreateFlagInput!) {
 			createFlag(input: $input) { id key }
@@ -39,6 +40,7 @@ func TestAuditLogsAPI_createFlag_writes_and_reads_audit_entry(t *testing.T) {
 		t.Fatal("expected created flag id")
 	}
 
+	// 2) query seeded admin ID (for actorId assertion)
 	userResp, err := client.DoRequest(`
 		query UserByEmail($email: String!) {
 			userByEmail(email: $email) { id }
@@ -54,6 +56,7 @@ func TestAuditLogsAPI_createFlag_writes_and_reads_audit_entry(t *testing.T) {
 		t.Fatal("expected admin id")
 	}
 
+	// 3) auditLogs query (filter: feature_flag/create)
 	queryResp, err := client.DoRequest(`
 		query AuditLogs($filter: AuditLogsFilterInput, $limit: Int, $offset: Int) {
 			auditLogs(filter: $filter, limit: $limit, offset: $offset) {
@@ -113,3 +116,4 @@ func TestAuditLogsAPI_negative_offset_returns_error(t *testing.T) {
 	}
 	requireGraphQLErrors(t, resp)
 }
+

@@ -2,10 +2,13 @@ package experiments_test
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"testing"
 
 	"github.com/havlinj/featureflag-api/graph/model"
+	"github.com/havlinj/featureflag-api/internal/audit"
+	"github.com/havlinj/featureflag-api/internal/auth"
 	"github.com/havlinj/featureflag-api/internal/experiments"
 	"github.com/havlinj/featureflag-api/internal/experiments/mock"
 )
@@ -465,5 +468,122 @@ func TestService_GetAssignment_deterministic_same_user_same_variant(t *testing.T
 	}
 	if got1.Name != got2.Name {
 		t.Errorf("deterministic: same user should get same variant, got %q and %q", got1.Name, got2.Name)
+	}
+}
+
+type auditTxStarterExperimentsMock struct {
+	beginErr error
+}
+
+func (s *auditTxStarterExperimentsMock) Create(ctx context.Context, entry *audit.Entry) error {
+	return nil
+}
+
+func (s *auditTxStarterExperimentsMock) GetByID(ctx context.Context, id string) (*audit.Entry, error) {
+	return nil, nil
+}
+
+func (s *auditTxStarterExperimentsMock) List(ctx context.Context, filter audit.ListFilter, limit, offset int) ([]*audit.Entry, error) {
+	return nil, nil
+}
+
+func (s *auditTxStarterExperimentsMock) BeginTx(ctx context.Context) (*sql.Tx, error) {
+	return nil, s.beginErr
+}
+
+type auditTxAwareExperimentsMock struct {
+	auditTxStarterExperimentsMock
+}
+
+func (s *auditTxAwareExperimentsMock) WithTx(tx *sql.Tx) audit.Store {
+	return s
+}
+
+type txAwareExperimentsStoreMock struct {
+	inner experiments.Store
+}
+
+func (s *txAwareExperimentsStoreMock) CreateExperiment(ctx context.Context, exp *experiments.Experiment) (*experiments.Experiment, error) {
+	return s.inner.CreateExperiment(ctx, exp)
+}
+
+func (s *txAwareExperimentsStoreMock) GetExperimentByKeyAndEnvironment(ctx context.Context, key, environment string) (*experiments.Experiment, error) {
+	return s.inner.GetExperimentByKeyAndEnvironment(ctx, key, environment)
+}
+
+func (s *txAwareExperimentsStoreMock) GetExperimentByID(ctx context.Context, id string) (*experiments.Experiment, error) {
+	return s.inner.GetExperimentByID(ctx, id)
+}
+
+func (s *txAwareExperimentsStoreMock) CreateVariant(ctx context.Context, v *experiments.Variant) (*experiments.Variant, error) {
+	return s.inner.CreateVariant(ctx, v)
+}
+
+func (s *txAwareExperimentsStoreMock) GetVariantsByExperimentID(ctx context.Context, experimentID string) ([]*experiments.Variant, error) {
+	return s.inner.GetVariantsByExperimentID(ctx, experimentID)
+}
+
+func (s *txAwareExperimentsStoreMock) GetAssignment(ctx context.Context, userID, experimentID string) (*experiments.Assignment, error) {
+	return s.inner.GetAssignment(ctx, userID, experimentID)
+}
+
+func (s *txAwareExperimentsStoreMock) UpsertAssignment(ctx context.Context, a *experiments.Assignment) error {
+	return s.inner.UpsertAssignment(ctx, a)
+}
+
+func (s *txAwareExperimentsStoreMock) WithTx(tx *sql.Tx) experiments.Store {
+	return s
+}
+
+func TestService_CreateExperiment_withAudit_missingActor_returns_error(t *testing.T) {
+	store := &txAwareExperimentsStoreMock{inner: &mock.Store{}}
+	svc := experiments.NewServiceWithAudit(store, &auditTxAwareExperimentsMock{})
+	input := model.CreateExperimentInput{
+		Key:         "ab-test",
+		Environment: "dev",
+		Variants:    variants50_50(),
+	}
+
+	_, err := svc.CreateExperiment(context.Background(), input)
+
+	if err == nil || err.Error() != "audit: missing actor id in context" {
+		t.Fatalf("expected missing actor error, got %v", err)
+	}
+}
+
+func TestService_CreateExperiment_withAudit_notTxAwareAuditStore_returns_error(t *testing.T) {
+	store := &txAwareExperimentsStoreMock{inner: &mock.Store{}}
+	svc := experiments.NewServiceWithAudit(store, &auditTxStarterExperimentsMock{})
+	input := model.CreateExperimentInput{
+		Key:         "ab-test",
+		Environment: "dev",
+		Variants:    variants50_50(),
+	}
+	ctx := auth.WithActorID(context.Background(), "u1")
+
+	_, err := svc.CreateExperiment(ctx, input)
+
+	if err == nil || err.Error() != "audit: audit store is not tx-aware" {
+		t.Fatalf("expected tx-aware audit store error, got %v", err)
+	}
+}
+
+func TestService_CreateExperiment_withAudit_beginTx_error_is_returned(t *testing.T) {
+	store := &txAwareExperimentsStoreMock{inner: &mock.Store{}}
+	wantErr := errors.New("begin tx failed")
+	svc := experiments.NewServiceWithAudit(store, &auditTxAwareExperimentsMock{
+		auditTxStarterExperimentsMock: auditTxStarterExperimentsMock{beginErr: wantErr},
+	})
+	input := model.CreateExperimentInput{
+		Key:         "ab-test",
+		Environment: "dev",
+		Variants:    variants50_50(),
+	}
+	ctx := auth.WithActorID(context.Background(), "u1")
+
+	_, err := svc.CreateExperiment(ctx, input)
+
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("expected %v, got %v", wantErr, err)
 	}
 }

@@ -2,10 +2,12 @@ package users_test
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"testing"
 
 	"github.com/havlinj/featureflag-api/graph/model"
+	"github.com/havlinj/featureflag-api/internal/audit"
 	"github.com/havlinj/featureflag-api/internal/auth"
 	"github.com/havlinj/featureflag-api/internal/users"
 	"github.com/havlinj/featureflag-api/internal/users/mock"
@@ -366,4 +368,100 @@ func mustHash(t *testing.T, password string) string {
 		t.Fatalf("HashPassword: %v", err)
 	}
 	return hash
+}
+
+type auditTxStarterUsersMock struct {
+	beginErr error
+}
+
+func (s *auditTxStarterUsersMock) Create(ctx context.Context, entry *audit.Entry) error {
+	return nil
+}
+
+func (s *auditTxStarterUsersMock) GetByID(ctx context.Context, id string) (*audit.Entry, error) {
+	return nil, nil
+}
+
+func (s *auditTxStarterUsersMock) List(ctx context.Context, filter audit.ListFilter, limit, offset int) ([]*audit.Entry, error) {
+	return nil, nil
+}
+
+func (s *auditTxStarterUsersMock) BeginTx(ctx context.Context) (*sql.Tx, error) {
+	return nil, s.beginErr
+}
+
+type auditTxAwareUsersMock struct {
+	auditTxStarterUsersMock
+}
+
+func (s *auditTxAwareUsersMock) WithTx(tx *sql.Tx) audit.Store {
+	return s
+}
+
+type txAwareUsersStoreMock struct {
+	inner users.Store
+}
+
+func (s *txAwareUsersStoreMock) Create(ctx context.Context, user *users.User) (*users.User, error) {
+	return s.inner.Create(ctx, user)
+}
+
+func (s *txAwareUsersStoreMock) GetByID(ctx context.Context, id string) (*users.User, error) {
+	return s.inner.GetByID(ctx, id)
+}
+
+func (s *txAwareUsersStoreMock) GetByEmail(ctx context.Context, email string) (*users.User, error) {
+	return s.inner.GetByEmail(ctx, email)
+}
+
+func (s *txAwareUsersStoreMock) Update(ctx context.Context, user *users.User) error {
+	return s.inner.Update(ctx, user)
+}
+
+func (s *txAwareUsersStoreMock) Delete(ctx context.Context, id string) error {
+	return s.inner.Delete(ctx, id)
+}
+
+func (s *txAwareUsersStoreMock) WithTx(tx *sql.Tx) users.Store {
+	return s
+}
+
+func TestService_CreateUser_withAudit_missingActor_returns_error(t *testing.T) {
+	store := &txAwareUsersStoreMock{inner: &mock.Store{}}
+	svc := users.NewServiceWithAudit(store, &auditTxAwareUsersMock{})
+	input := model.CreateUserInput{Email: "a@b.com", Role: model.RoleAdmin}
+
+	_, err := svc.CreateUser(context.Background(), input)
+
+	if err == nil || err.Error() != "audit: missing actor id in context" {
+		t.Fatalf("expected missing actor error, got %v", err)
+	}
+}
+
+func TestService_UpdateUser_withAudit_notTxAwareAuditStore_returns_error(t *testing.T) {
+	store := &txAwareUsersStoreMock{inner: &mock.Store{}}
+	svc := users.NewServiceWithAudit(store, &auditTxStarterUsersMock{})
+	input := model.UpdateUserInput{ID: "u1"}
+	ctx := auth.WithActorID(context.Background(), "u1")
+
+	_, err := svc.UpdateUser(ctx, input)
+
+	if err == nil || err.Error() != "audit: audit store is not tx-aware" {
+		t.Fatalf("expected tx-aware audit store error, got %v", err)
+	}
+}
+
+func TestService_DeleteUser_withAudit_beginTx_error_is_returned(t *testing.T) {
+	store := &txAwareUsersStoreMock{inner: &mock.Store{}}
+	wantErr := errors.New("begin tx failed")
+	svc := users.NewServiceWithAudit(store, &auditTxAwareUsersMock{
+		auditTxStarterUsersMock: auditTxStarterUsersMock{beginErr: wantErr},
+	})
+	ctx := auth.WithActorID(context.Background(), "u1")
+
+	_, err := svc.DeleteUser(ctx, "u1")
+
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("expected %v, got %v", wantErr, err)
+	}
 }

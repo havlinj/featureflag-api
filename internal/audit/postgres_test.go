@@ -97,3 +97,41 @@ func TestPostgresStore_List_filters_by_entity(t *testing.T) {
 		t.Fatalf("unexpected entity: %s", list[0].Entity)
 	}
 }
+
+func TestPostgresStore_Create_nil_entry_returns_error(t *testing.T) {
+	store := &audit.PostgresStore{}
+	err := store.Create(context.Background(), nil)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if err.Error() != "audit store: entry is nil" {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestPostgresStore_BeginTx_on_tx_scoped_store_returns_error(t *testing.T) {
+	database, cleanup := testutil.PostgresForIntegration(t)
+	defer cleanup()
+	testutil.TruncateAll(t, database)
+
+	ctx := context.Background()
+	tx, err := database.Conn().BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatalf("begin tx: %v", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	root := audit.NewPostgresStore(database.Conn())
+	txStore, ok := root.WithTx(tx).(*audit.PostgresStore)
+	if !ok {
+		t.Fatal("expected tx-scoped *audit.PostgresStore")
+	}
+	_, err = txStore.BeginTx(ctx)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if err.Error() != "audit store: BeginTx not supported on tx-scoped store" {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
