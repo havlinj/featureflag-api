@@ -44,4 +44,12 @@ var schemaSQL = []string{
 		variant_id UUID NOT NULL REFERENCES experiment_variants(id) ON DELETE CASCADE,
 		PRIMARY KEY (user_id, experiment_id)
 	)`,
+	`CREATE TABLE IF NOT EXISTS audit_logs (
+		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+		entity TEXT NOT NULL,
+		entity_id TEXT NOT NULL,
+		action TEXT NOT NULL,
+		actor_id UUID NOT NULL,
+		created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+	)`,
 }

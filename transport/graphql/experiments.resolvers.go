@@ -16,9 +16,11 @@ import (
 
 // CreateExperiment is the resolver for the createExperiment field.
 func (r *mutationResolver) CreateExperiment(ctx context.Context, input model.CreateExperimentInput) (*model.Experiment, error) {
-	if _, err := auth.RequireRole(ctx, "admin", "developer"); err != nil {
+	actorID, err := auth.RequireRole(ctx, "admin", "developer")
+	if err != nil {
 		return nil, err
 	}
+	ctx = auth.WithActorID(ctx, actorID)
 	if r.Experiments == nil {
 		return nil, errors.New("experiments service not configured")
 	}

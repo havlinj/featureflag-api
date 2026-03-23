@@ -5,6 +5,7 @@ import "context"
 type contextKey string
 
 const claimsKey contextKey = "auth_claims"
+const actorIDKey contextKey = "auth_actor_id"
 
 // Claims holds JWT payload data (sub = user ID, role, exp).
 type Claims struct {
@@ -38,4 +39,15 @@ func RequireRole(ctx context.Context, allowedRoles ...string) (userID string, er
 		}
 	}
 	return "", &ForbiddenError{Role: claims.Role, AllowedRoles: allowedRoles}
+}
+
+// WithActorID stores the actor/user ID for auditing purposes.
+func WithActorID(ctx context.Context, actorID string) context.Context {
+	return context.WithValue(ctx, actorIDKey, actorID)
+}
+
+// ActorIDFromContext returns the actor/user ID stored for auditing.
+func ActorIDFromContext(ctx context.Context) (string, bool) {
+	actorID, ok := ctx.Value(actorIDKey).(string)
+	return actorID, ok && actorID != ""
 }

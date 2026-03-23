@@ -14,25 +14,31 @@ import (
 
 // CreateUser is the resolver for the createUser field.
 func (r *mutationResolver) CreateUser(ctx context.Context, input model.CreateUserInput) (*model.User, error) {
-	if _, err := auth.RequireRole(ctx, "admin"); err != nil {
+	actorID, err := auth.RequireRole(ctx, "admin")
+	if err != nil {
 		return nil, err
 	}
+	ctx = auth.WithActorID(ctx, actorID)
 	return r.Users.CreateUser(ctx, input)
 }
 
 // UpdateUser is the resolver for the updateUser field.
 func (r *mutationResolver) UpdateUser(ctx context.Context, input model.UpdateUserInput) (*model.User, error) {
-	if _, err := auth.RequireRole(ctx, "admin"); err != nil {
+	actorID, err := auth.RequireRole(ctx, "admin")
+	if err != nil {
 		return nil, err
 	}
+	ctx = auth.WithActorID(ctx, actorID)
 	return r.Users.UpdateUser(ctx, input)
 }
 
 // DeleteUser is the resolver for the deleteUser field.
 func (r *mutationResolver) DeleteUser(ctx context.Context, id string) (bool, error) {
-	if _, err := auth.RequireRole(ctx, "admin"); err != nil {
+	actorID, err := auth.RequireRole(ctx, "admin")
+	if err != nil {
 		return false, err
 	}
+	ctx = auth.WithActorID(ctx, actorID)
 	return r.Users.DeleteUser(ctx, id)
 }
 

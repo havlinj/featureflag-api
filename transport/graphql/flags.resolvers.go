@@ -16,25 +16,31 @@ import (
 
 // CreateFlag is the resolver for the createFlag field.
 func (r *mutationResolver) CreateFlag(ctx context.Context, input model.CreateFlagInput) (*model.FeatureFlag, error) {
-	if _, err := auth.RequireRole(ctx, "admin", "developer"); err != nil {
+	actorID, err := auth.RequireRole(ctx, "admin", "developer")
+	if err != nil {
 		return nil, err
 	}
+	ctx = auth.WithActorID(ctx, actorID)
 	return r.Flags.CreateFlag(ctx, input)
 }
 
 // UpdateFlag is the resolver for the updateFlag field.
 func (r *mutationResolver) UpdateFlag(ctx context.Context, input model.UpdateFlagInput) (*model.FeatureFlag, error) {
-	if _, err := auth.RequireRole(ctx, "admin", "developer"); err != nil {
+	actorID, err := auth.RequireRole(ctx, "admin", "developer")
+	if err != nil {
 		return nil, err
 	}
+	ctx = auth.WithActorID(ctx, actorID)
 	return r.Flags.UpdateFlag(ctx, input)
 }
 
 // DeleteFlag is the resolver for the deleteFlag field.
 func (r *mutationResolver) DeleteFlag(ctx context.Context, key string, environment string) (bool, error) {
-	if _, err := auth.RequireRole(ctx, "admin", "developer"); err != nil {
+	actorID, err := auth.RequireRole(ctx, "admin", "developer")
+	if err != nil {
 		return false, err
 	}
+	ctx = auth.WithActorID(ctx, actorID)
 	return r.Flags.DeleteFlag(ctx, key, flags.DeploymentStage(environment))
 }
 

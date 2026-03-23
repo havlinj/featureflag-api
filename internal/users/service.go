@@ -6,12 +6,14 @@ import (
 	"fmt"
 
 	"github.com/havlinj/featureflag-api/graph/model"
+	"github.com/havlinj/featureflag-api/internal/audit"
 	"github.com/havlinj/featureflag-api/internal/auth"
 )
 
 // Service holds business logic for users. It depends on Store so it can be mocked in tests.
 type Service struct {
 	Store Store
+	Audit audit.Store
 }
 
 // NewService returns a users service that uses the given store.
@@ -19,20 +21,82 @@ func NewService(store Store) *Service {
 	return &Service{Store: store}
 }
 
+// NewServiceWithAudit returns a users service that writes audit logs for critical mutations.
+func NewServiceWithAudit(store Store, auditStore audit.Store) *Service {
+	return &Service{Store: store, Audit: auditStore}
+}
+
 // CreateUser creates a new user. Returns ErrDuplicateEmail if email already exists.
 func (s *Service) CreateUser(ctx context.Context, input model.CreateUserInput) (*model.User, error) {
-	if err := s.ensureUniqueEmail(ctx, input.Email); err != nil {
+	if s.Audit == nil {
+		created, err := s.createUserWithStore(ctx, s.Store, input)
+		if err != nil {
+			return nil, err
+		}
+		return userToModel(created), nil
+	}
+
+	actorID, ok := auth.ActorIDFromContext(ctx)
+	if !ok {
+		return nil, errors.New("audit: missing actor id in context")
+	}
+	storeTx, ok := s.Store.(TxAwareStore)
+	if !ok {
+		return nil, errors.New("audit: users store is not tx-aware")
+	}
+	auditTxStarter, ok := s.Audit.(audit.TxStarter)
+	if !ok {
+		return nil, errors.New("audit: audit store cannot start transactions")
+	}
+	auditTxAware, ok := s.Audit.(audit.TxAwareStore)
+	if !ok {
+		return nil, errors.New("audit: audit store is not tx-aware")
+	}
+
+	tx, err := auditTxStarter.BeginTx(ctx)
+	if err != nil {
+		return nil, err
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			_ = tx.Rollback()
+		}
+	}()
+
+	created, err := s.createUserWithStore(ctx, storeTx.WithTx(tx), input)
+	if err != nil {
+		return nil, err
+	}
+	if err := auditTxAware.WithTx(tx).Create(ctx, &audit.Entry{
+		Entity:   "user",
+		EntityID: created.ID,
+		Action:   "create",
+		ActorID:  actorID,
+	}); err != nil {
+		return nil, fmt.Errorf("audit create entry: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	committed = true
+
+	return userToModel(created), nil
+}
+
+func (s *Service) createUserWithStore(ctx context.Context, store Store, input model.CreateUserInput) (*User, error) {
+	if err := s.ensureUniqueEmailWithStore(ctx, store, input.Email); err != nil {
 		return nil, err
 	}
 	user := &User{Email: input.Email, Role: roleFromModel(input.Role)}
 	if err := setPasswordIfProvided(user, input.Password); err != nil {
 		return nil, err
 	}
-	created, err := s.Store.Create(ctx, user)
+	created, err := store.Create(ctx, user)
 	if err != nil {
 		return nil, fmt.Errorf("create user: %w", err)
 	}
-	return userToModel(created), nil
+	return created, nil
 }
 
 // GetUser returns the user by ID, or nil if not found.
@@ -77,7 +141,64 @@ func (s *Service) Login(ctx context.Context, email, password string) (userID, ro
 
 // UpdateUser updates an existing user. Returns ErrNotFound if user does not exist.
 func (s *Service) UpdateUser(ctx context.Context, input model.UpdateUserInput) (*model.User, error) {
-	u, err := s.Store.GetByID(ctx, input.ID)
+	if s.Audit == nil {
+		updated, err := s.updateUserWithStore(ctx, s.Store, input)
+		if err != nil {
+			return nil, err
+		}
+		return userToModel(updated), nil
+	}
+
+	actorID, ok := auth.ActorIDFromContext(ctx)
+	if !ok {
+		return nil, errors.New("audit: missing actor id in context")
+	}
+	storeTx, ok := s.Store.(TxAwareStore)
+	if !ok {
+		return nil, errors.New("audit: users store is not tx-aware")
+	}
+	auditTxStarter, ok := s.Audit.(audit.TxStarter)
+	if !ok {
+		return nil, errors.New("audit: audit store cannot start transactions")
+	}
+	auditTxAware, ok := s.Audit.(audit.TxAwareStore)
+	if !ok {
+		return nil, errors.New("audit: audit store is not tx-aware")
+	}
+
+	tx, err := auditTxStarter.BeginTx(ctx)
+	if err != nil {
+		return nil, err
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			_ = tx.Rollback()
+		}
+	}()
+
+	updated, err := s.updateUserWithStore(ctx, storeTx.WithTx(tx), input)
+	if err != nil {
+		return nil, err
+	}
+	if err := auditTxAware.WithTx(tx).Create(ctx, &audit.Entry{
+		Entity:   "user",
+		EntityID: updated.ID,
+		Action:   "update",
+		ActorID:  actorID,
+	}); err != nil {
+		return nil, fmt.Errorf("audit create entry: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	committed = true
+
+	return userToModel(updated), nil
+}
+
+func (s *Service) updateUserWithStore(ctx context.Context, store Store, input model.UpdateUserInput) (*User, error) {
+	u, err := store.GetByID(ctx, input.ID)
 	if err != nil {
 		return nil, fmt.Errorf("get user: %w", err)
 	}
@@ -87,10 +208,10 @@ func (s *Service) UpdateUser(ctx context.Context, input model.UpdateUserInput) (
 	if err := applyUpdateFieldsToUser(u, input); err != nil {
 		return nil, err
 	}
-	if err := s.Store.Update(ctx, u); err != nil {
+	if err := store.Update(ctx, u); err != nil {
 		return nil, fmt.Errorf("update user: %w", err)
 	}
-	return userToModel(u), nil
+	return u, nil
 }
 
 func applyUpdateFieldsToUser(u *User, input model.UpdateUserInput) error {
@@ -121,7 +242,64 @@ func setPasswordIfProvided(u *User, password *string) error {
 
 // DeleteUser removes a user by ID. Returns ErrNotFound if user does not exist.
 func (s *Service) DeleteUser(ctx context.Context, id string) (bool, error) {
-	if err := s.Store.Delete(ctx, id); err != nil {
+	if s.Audit == nil {
+		return s.deleteUserWithStore(ctx, s.Store, id)
+	}
+
+	actorID, ok := auth.ActorIDFromContext(ctx)
+	if !ok {
+		return false, errors.New("audit: missing actor id in context")
+	}
+	storeTx, ok := s.Store.(TxAwareStore)
+	if !ok {
+		return false, errors.New("audit: users store is not tx-aware")
+	}
+	auditTxStarter, ok := s.Audit.(audit.TxStarter)
+	if !ok {
+		return false, errors.New("audit: audit store cannot start transactions")
+	}
+	auditTxAware, ok := s.Audit.(audit.TxAwareStore)
+	if !ok {
+		return false, errors.New("audit: audit store is not tx-aware")
+	}
+
+	tx, err := auditTxStarter.BeginTx(ctx)
+	if err != nil {
+		return false, err
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			_ = tx.Rollback()
+		}
+	}()
+
+	deleted, err := s.deleteUserWithStore(ctx, storeTx.WithTx(tx), id)
+	if err != nil {
+		return false, err
+	}
+	if !deleted {
+		// Nothing was changed; no audit entry should be written.
+		return false, nil
+	}
+	if err := auditTxAware.WithTx(tx).Create(ctx, &audit.Entry{
+		Entity:   "user",
+		EntityID: id,
+		Action:   "delete",
+		ActorID:  actorID,
+	}); err != nil {
+		return false, fmt.Errorf("audit create entry: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return false, err
+	}
+	committed = true
+
+	return true, nil
+}
+
+func (s *Service) deleteUserWithStore(ctx context.Context, store Store, id string) (bool, error) {
+	if err := store.Delete(ctx, id); err != nil {
 		var e *NotFoundError
 		if errors.As(err, &e) {
 			return false, nil
@@ -132,7 +310,11 @@ func (s *Service) DeleteUser(ctx context.Context, id string) (bool, error) {
 }
 
 func (s *Service) ensureUniqueEmail(ctx context.Context, email string) error {
-	existing, err := s.Store.GetByEmail(ctx, email)
+	return s.ensureUniqueEmailWithStore(ctx, s.Store, email)
+}
+
+func (s *Service) ensureUniqueEmailWithStore(ctx context.Context, store Store, email string) error {
+	existing, err := store.GetByEmail(ctx, email)
 	if err != nil {
 		return fmt.Errorf("check existing email: %w", err)
 	}

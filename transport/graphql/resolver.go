@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/havlinj/featureflag-api/graph/model"
+	"github.com/havlinj/featureflag-api/internal/audit"
 	"github.com/havlinj/featureflag-api/internal/experiments"
 	"github.com/havlinj/featureflag-api/internal/flags"
 	"github.com/havlinj/featureflag-api/internal/users"
@@ -27,6 +28,7 @@ type Resolver struct {
 	Flags       *flags.Service
 	Users       *users.Service
 	Experiments ExperimentsService
+	Audit       *audit.Service
 	JWTSecret   []byte
 	JWTExpiry   time.Duration
 }

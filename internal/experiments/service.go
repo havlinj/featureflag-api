@@ -2,10 +2,13 @@ package experiments
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"hash/fnv"
 
 	"github.com/havlinj/featureflag-api/graph/model"
+	"github.com/havlinj/featureflag-api/internal/audit"
+	"github.com/havlinj/featureflag-api/internal/auth"
 )
 
 const weightSum = 100
@@ -14,6 +17,7 @@ const weightSum = 100
 // persistence so that the latter can be mocked in unit tests.
 type Service struct {
 	Store Store
+	Audit audit.Store
 }
 
 // NewService returns an experiments service that uses the given store.
@@ -21,24 +25,85 @@ func NewService(store Store) *Service {
 	return &Service{Store: store}
 }
 
+// NewServiceWithAudit returns an experiments service that writes audit logs for critical mutations.
+func NewServiceWithAudit(store Store, auditStore audit.Store) *Service {
+	return &Service{Store: store, Audit: auditStore}
+}
+
 // CreateExperiment creates a new experiment with the given variants.
 // Variant weights must sum to 100; otherwise returns *InvalidWeightsError.
 func (s *Service) CreateExperiment(ctx context.Context, input model.CreateExperimentInput) (*model.Experiment, error) {
+	if s.Audit == nil {
+		created, err := s.createExperimentWithStore(ctx, s.Store, input)
+		if err != nil {
+			return nil, err
+		}
+		return experimentToModel(created), nil
+	}
+
+	actorID, ok := auth.ActorIDFromContext(ctx)
+	if !ok {
+		return nil, errors.New("audit: missing actor id in context")
+	}
+	storeTx, ok := s.Store.(TxAwareStore)
+	if !ok {
+		return nil, errors.New("audit: experiments store is not tx-aware")
+	}
+	auditTxStarter, ok := s.Audit.(audit.TxStarter)
+	if !ok {
+		return nil, errors.New("audit: audit store cannot start transactions")
+	}
+	auditTxAware, ok := s.Audit.(audit.TxAwareStore)
+	if !ok {
+		return nil, errors.New("audit: audit store is not tx-aware")
+	}
+
+	tx, err := auditTxStarter.BeginTx(ctx)
+	if err != nil {
+		return nil, err
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			_ = tx.Rollback()
+		}
+	}()
+
+	created, err := s.createExperimentWithStore(ctx, storeTx.WithTx(tx), input)
+	if err != nil {
+		return nil, err
+	}
+	if err := auditTxAware.WithTx(tx).Create(ctx, &audit.Entry{
+		Entity:   "experiment",
+		EntityID: created.ID,
+		Action:   "create",
+		ActorID:  actorID,
+	}); err != nil {
+		return nil, fmt.Errorf("audit create entry: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	committed = true
+	return experimentToModel(created), nil
+}
+
+func (s *Service) createExperimentWithStore(ctx context.Context, store Store, input model.CreateExperimentInput) (*Experiment, error) {
 	if err := validateVariantWeights(input.Variants); err != nil {
 		return nil, err
 	}
-	if err := s.ensureUniqueExperiment(ctx, input.Key, input.Environment); err != nil {
+	if err := s.ensureUniqueExperimentWithStore(ctx, store, input.Key, input.Environment); err != nil {
 		return nil, err
 	}
 	exp := &Experiment{Key: input.Key, Environment: input.Environment}
-	created, err := s.Store.CreateExperiment(ctx, exp)
+	created, err := store.CreateExperiment(ctx, exp)
 	if err != nil {
 		return nil, fmt.Errorf("create experiment: %w", err)
 	}
-	if err := s.persistVariants(ctx, created.ID, input.Variants); err != nil {
+	if err := s.persistVariantsWithStore(ctx, store, created.ID, input.Variants); err != nil {
 		return nil, err
 	}
-	return experimentToModel(created), nil
+	return created, nil
 }
 
 func validateVariantWeights(variants []*model.ExperimentVariantInput) error {
@@ -62,7 +127,11 @@ func validateVariantWeights(variants []*model.ExperimentVariantInput) error {
 }
 
 func (s *Service) ensureUniqueExperiment(ctx context.Context, key, environment string) error {
-	existing, err := s.Store.GetExperimentByKeyAndEnvironment(ctx, key, environment)
+	return s.ensureUniqueExperimentWithStore(ctx, s.Store, key, environment)
+}
+
+func (s *Service) ensureUniqueExperimentWithStore(ctx context.Context, store Store, key, environment string) error {
+	existing, err := store.GetExperimentByKeyAndEnvironment(ctx, key, environment)
 	if err != nil {
 		return fmt.Errorf("check existing experiment: %w", err)
 	}
@@ -73,9 +142,13 @@ func (s *Service) ensureUniqueExperiment(ctx context.Context, key, environment s
 }
 
 func (s *Service) persistVariants(ctx context.Context, experimentID string, inputs []*model.ExperimentVariantInput) error {
+	return s.persistVariantsWithStore(ctx, s.Store, experimentID, inputs)
+}
+
+func (s *Service) persistVariantsWithStore(ctx context.Context, store Store, experimentID string, inputs []*model.ExperimentVariantInput) error {
 	for _, in := range inputs {
 		v := &Variant{ExperimentID: experimentID, Name: in.Name, Weight: in.Weight}
-		_, err := s.Store.CreateVariant(ctx, v)
+		_, err := store.CreateVariant(ctx, v)
 		if err != nil {
 			return fmt.Errorf("create variant %q: %w", in.Name, err)
 		}

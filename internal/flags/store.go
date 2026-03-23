@@ -1,6 +1,9 @@
 package flags
 
-import "context"
+import (
+	"context"
+	"database/sql"
+)
 
 // Store is the persistence interface for the flags domain. It is implemented by
 // a real DB client (e.g. Postgres) and by a mock for unit tests.
@@ -34,4 +37,10 @@ type Store interface {
 
 	// ReplaceRulesByFlagID replaces all rules for the flag (delete existing, insert new).
 	ReplaceRulesByFlagID(ctx context.Context, flagID string, rules []*Rule) error
+}
+
+// TxAwareStore is an optional interface for stores that can execute operations inside a provided sql.Tx.
+type TxAwareStore interface {
+	Store
+	WithTx(tx *sql.Tx) Store
 }

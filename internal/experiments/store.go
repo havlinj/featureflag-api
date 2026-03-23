@@ -1,6 +1,9 @@
 package experiments
 
-import "context"
+import (
+	"context"
+	"database/sql"
+)
 
 // Store is the persistence interface for the experiments domain.
 // Implemented by PostgresStore and by a mock for unit tests.
@@ -26,4 +29,10 @@ type Store interface {
 
 	// UpsertAssignment sets or updates the user's variant assignment for an experiment.
 	UpsertAssignment(ctx context.Context, a *Assignment) error
+}
+
+// TxAwareStore is an optional interface for stores that can execute operations inside a provided sql.Tx.
+type TxAwareStore interface {
+	Store
+	WithTx(tx *sql.Tx) Store
 }

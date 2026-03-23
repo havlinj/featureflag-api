@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/havlinj/featureflag-api/internal/app"
+	"github.com/havlinj/featureflag-api/internal/audit"
 	"github.com/havlinj/featureflag-api/internal/db"
 	"github.com/havlinj/featureflag-api/internal/experiments"
 	"github.com/havlinj/featureflag-api/internal/flags"
@@ -19,23 +20,23 @@ import (
 )
 
 // storesFromDB creates all domain stores from the same DB connection (mirrors production wiring).
-func storesFromDB(database *db.DB) (flags.Store, users.Store, experiments.Store) {
+func storesFromDB(database *db.DB) (flags.Store, users.Store, experiments.Store, audit.Store) {
 	conn := database.Conn()
-	return flags.NewPostgresStore(conn), users.NewPostgresStore(conn), experiments.NewPostgresStore(conn)
+	return flags.NewPostgresStore(conn), users.NewPostgresStore(conn), experiments.NewPostgresStore(conn), audit.NewPostgresStore(conn)
 }
 
 // startAppWithDB starts the app with the given database, runs the server in a goroutine,
 // and returns the app, a GraphQL client, and a shutdown function. Caller must call defer shutdown().
 func startAppWithDB(t *testing.T, database *db.DB) (*app.App, *testutil.GraphQLClient, func()) {
 	t.Helper()
-	flagsStore, usersStore, experimentsStore := storesFromDB(database)
+	flagsStore, usersStore, experimentsStore, auditStore := storesFromDB(database)
 	addr := testutil.MakeFreeSocketAddr()
 	tlsConfig, err := testutil.NewTLSConfigForServer()
 	if err != nil {
 		t.Fatalf("create TLS config: %v", err)
 	}
 	jwtSecret := []byte("test-jwt-secret")
-	a := app.NewApp(tlsConfig, flagsStore, usersStore, experimentsStore, jwtSecret)
+	a := app.NewApp(tlsConfig, flagsStore, usersStore, experimentsStore, auditStore, jwtSecret)
 	go func() {
 		if err := a.Run(addr); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("server error: %v", err)

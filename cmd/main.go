@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/havlinj/featureflag-api/internal/app"
+	"github.com/havlinj/featureflag-api/internal/audit"
 	"github.com/havlinj/featureflag-api/internal/config"
 	"github.com/havlinj/featureflag-api/internal/db"
 	"github.com/havlinj/featureflag-api/internal/experiments"
@@ -45,7 +46,8 @@ func main() {
 	flagsStore := flags.NewPostgresStore(database.Conn())
 	usersStore := users.NewPostgresStore(database.Conn())
 	experimentsStore := experiments.NewPostgresStore(database.Conn())
-	a := app.NewApp(tlsConfig, flagsStore, usersStore, experimentsStore, []byte(jwtSecret))
+	auditStore := audit.NewPostgresStore(database.Conn())
+	a := app.NewApp(tlsConfig, flagsStore, usersStore, experimentsStore, auditStore, []byte(jwtSecret))
 
 	go func() {
 		if err := a.Run(listenAddr); err != nil && err != http.ErrServerClosed {

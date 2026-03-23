@@ -11,12 +11,27 @@ import (
 
 // PostgresStore is the real persistence implementation using PostgreSQL.
 type PostgresStore struct {
-	conn *sql.DB
+	exec execQuerier
+}
+
+type execQuerier interface {
+	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
+	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
+	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
 }
 
 // NewPostgresStore returns a Store that uses the given *sql.DB.
 func NewPostgresStore(conn *sql.DB) *PostgresStore {
-	return &PostgresStore{conn: conn}
+	return &PostgresStore{exec: conn}
+}
+
+func newPostgresStoreWithTx(tx *sql.Tx) *PostgresStore {
+	return &PostgresStore{exec: tx}
+}
+
+// WithTx returns a tx-scoped Store.
+func (p *PostgresStore) WithTx(tx *sql.Tx) Store {
+	return newPostgresStoreWithTx(tx)
 }
 
 // Create persists a new user. Email and Role must be set; ID and CreatedAt are set by the DB.
@@ -24,7 +39,7 @@ func NewPostgresStore(conn *sql.DB) *PostgresStore {
 func (p *PostgresStore) Create(ctx context.Context, user *User) (*User, error) {
 	var id string
 	var createdAt time.Time
-	err := p.conn.QueryRowContext(ctx,
+	err := p.exec.QueryRowContext(ctx,
 		`INSERT INTO users (email, role, password_hash) VALUES ($1, $2, $3) RETURNING id, created_at`,
 		user.Email, user.Role, nullString(user.PasswordHash),
 	).Scan(&id, &createdAt)
@@ -59,7 +74,7 @@ func scanNullString(s *sql.NullString) *string {
 func (p *PostgresStore) GetByID(ctx context.Context, id string) (*User, error) {
 	var u User
 	var ph sql.NullString
-	err := p.conn.QueryRowContext(ctx,
+	err := p.exec.QueryRowContext(ctx,
 		`SELECT id, email, role, password_hash, created_at FROM users WHERE id = $1`,
 		id,
 	).Scan(&u.ID, &u.Email, &u.Role, &ph, &u.CreatedAt)
@@ -77,7 +92,7 @@ func (p *PostgresStore) GetByID(ctx context.Context, id string) (*User, error) {
 func (p *PostgresStore) GetByEmail(ctx context.Context, email string) (*User, error) {
 	var u User
 	var ph sql.NullString
-	err := p.conn.QueryRowContext(ctx,
+	err := p.exec.QueryRowContext(ctx,
 		`SELECT id, email, role, password_hash, created_at FROM users WHERE email = $1`,
 		email,
 	).Scan(&u.ID, &u.Email, &u.Role, &ph, &u.CreatedAt)
@@ -93,7 +108,7 @@ func (p *PostgresStore) GetByEmail(ctx context.Context, email string) (*User, er
 
 // Update updates an existing user by ID. Returns *NotFoundError if no row was updated.
 func (p *PostgresStore) Update(ctx context.Context, user *User) error {
-	res, err := p.conn.ExecContext(ctx,
+	res, err := p.exec.ExecContext(ctx,
 		`UPDATE users SET email = $1, role = $2, password_hash = $4 WHERE id = $3`,
 		user.Email, user.Role, user.ID, nullString(user.PasswordHash),
 	)
@@ -109,7 +124,7 @@ func (p *PostgresStore) Update(ctx context.Context, user *User) error {
 
 // Delete removes a user by ID. Returns *NotFoundError if no row was deleted.
 func (p *PostgresStore) Delete(ctx context.Context, id string) error {
-	res, err := p.conn.ExecContext(ctx, `DELETE FROM users WHERE id = $1`, id)
+	res, err := p.exec.ExecContext(ctx, `DELETE FROM users WHERE id = $1`, id)
 	if err != nil {
 		return err
 	}

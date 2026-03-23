@@ -9,6 +9,21 @@ import (
 	"strconv"
 )
 
+type AuditLog struct {
+	ID        string `json:"id"`
+	Entity    string `json:"entity"`
+	EntityID  string `json:"entityId"`
+	Action    string `json:"action"`
+	ActorID   string `json:"actorId"`
+	CreatedAt string `json:"createdAt"`
+}
+
+type AuditLogsFilterInput struct {
+	Entity  *string `json:"entity,omitempty"`
+	Action  *string `json:"action,omitempty"`
+	ActorID *string `json:"actorId,omitempty"`
+}
+
 type CreateExperimentInput struct {
 	Key         string                    `json:"key"`
 	Environment string                    `json:"environment"`

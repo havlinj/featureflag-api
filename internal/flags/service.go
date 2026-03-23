@@ -2,11 +2,14 @@ package flags
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"hash/fnv"
 	"strconv"
 
 	"github.com/havlinj/featureflag-api/graph/model"
+	"github.com/havlinj/featureflag-api/internal/audit"
+	"github.com/havlinj/featureflag-api/internal/auth"
 )
 
 const defaultEnvironment = DeploymentStageDev
@@ -15,6 +18,7 @@ const defaultEnvironment = DeploymentStageDev
 // persistence so that the latter can be mocked in unit tests.
 type Service struct {
 	Store Store
+	Audit audit.Store
 }
 
 // NewService returns a flags service that uses the given store.
@@ -22,10 +26,71 @@ func NewService(store Store) *Service {
 	return &Service{Store: store}
 }
 
+// NewServiceWithAudit returns a flags service that writes audit logs for critical mutations.
+func NewServiceWithAudit(store Store, auditStore audit.Store) *Service {
+	return &Service{Store: store, Audit: auditStore}
+}
+
 // CreateFlag creates a new feature flag. Optional rules set rollout strategy; all rules must be same type.
 func (s *Service) CreateFlag(ctx context.Context, input model.CreateFlagInput) (*model.FeatureFlag, error) {
+	if s.Audit == nil {
+		created, err := s.createFlagWithStore(ctx, s.Store, input)
+		if err != nil {
+			return nil, err
+		}
+		return flagToModel(created), nil
+	}
+
+	actorID, ok := auth.ActorIDFromContext(ctx)
+	if !ok {
+		return nil, errors.New("audit: missing actor id in context")
+	}
+	storeTx, ok := s.Store.(TxAwareStore)
+	if !ok {
+		return nil, errors.New("audit: flags store is not tx-aware")
+	}
+	auditTxStarter, ok := s.Audit.(audit.TxStarter)
+	if !ok {
+		return nil, errors.New("audit: audit store cannot start transactions")
+	}
+	auditTxAware, ok := s.Audit.(audit.TxAwareStore)
+	if !ok {
+		return nil, errors.New("audit: audit store is not tx-aware")
+	}
+
+	tx, err := auditTxStarter.BeginTx(ctx)
+	if err != nil {
+		return nil, err
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			_ = tx.Rollback()
+		}
+	}()
+
+	created, err := s.createFlagWithStore(ctx, storeTx.WithTx(tx), input)
+	if err != nil {
+		return nil, err
+	}
+	if err := auditTxAware.WithTx(tx).Create(ctx, &audit.Entry{
+		Entity:   "feature_flag",
+		EntityID: created.ID,
+		Action:   "create",
+		ActorID:  actorID,
+	}); err != nil {
+		return nil, fmt.Errorf("audit create entry: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	committed = true
+	return flagToModel(created), nil
+}
+
+func (s *Service) createFlagWithStore(ctx context.Context, store Store, input model.CreateFlagInput) (*Flag, error) {
 	env := DeploymentStage(input.Environment)
-	if err := s.ensureUniqueFlag(ctx, input.Key, env); err != nil {
+	if err := s.ensureUniqueFlagWithStore(ctx, store, input.Key, env); err != nil {
 		return nil, err
 	}
 	strategy, err := resolveStrategyForCreate(input)
@@ -39,14 +104,14 @@ func (s *Service) CreateFlag(ctx context.Context, input model.CreateFlagInput) (
 		Environment:     env,
 		RolloutStrategy: strategy,
 	}
-	created, err := s.Store.Create(ctx, flag)
+	created, err := store.Create(ctx, flag)
 	if err != nil {
 		return nil, fmt.Errorf("create flag: %w", err)
 	}
-	if err := persistRulesForNewFlag(ctx, s.Store, created.ID, input.Rules); err != nil {
+	if err := persistRulesForNewFlag(ctx, store, created.ID, input.Rules); err != nil {
 		return nil, err
 	}
-	return flagToModel(created), nil
+	return created, nil
 }
 
 func resolveStrategyForCreate(input model.CreateFlagInput) (RolloutStrategy, error) {
@@ -76,22 +141,82 @@ func persistRulesForNewFlag(ctx context.Context, store Store, flagID string, rul
 
 // UpdateFlag updates an existing feature flag. If Rules is present, replaces all rules and updates strategy.
 func (s *Service) UpdateFlag(ctx context.Context, input model.UpdateFlagInput) (*model.FeatureFlag, error) {
-	flag, err := s.getFlagOrErr(ctx, input.Key, defaultEnvironment)
+	if s.Audit == nil {
+		updated, err := s.updateFlagWithStore(ctx, s.Store, input)
+		if err != nil {
+			return nil, err
+		}
+		return flagToModel(updated), nil
+	}
+
+	actorID, ok := auth.ActorIDFromContext(ctx)
+	if !ok {
+		return nil, errors.New("audit: missing actor id in context")
+	}
+	storeTx, ok := s.Store.(TxAwareStore)
+	if !ok {
+		return nil, errors.New("audit: flags store is not tx-aware")
+	}
+	auditTxStarter, ok := s.Audit.(audit.TxStarter)
+	if !ok {
+		return nil, errors.New("audit: audit store cannot start transactions")
+	}
+	auditTxAware, ok := s.Audit.(audit.TxAwareStore)
+	if !ok {
+		return nil, errors.New("audit: audit store is not tx-aware")
+	}
+
+	tx, err := auditTxStarter.BeginTx(ctx)
+	if err != nil {
+		return nil, err
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			_ = tx.Rollback()
+		}
+	}()
+
+	updated, err := s.updateFlagWithStore(ctx, storeTx.WithTx(tx), input)
+	if err != nil {
+		return nil, err
+	}
+	if err := auditTxAware.WithTx(tx).Create(ctx, &audit.Entry{
+		Entity:   "feature_flag",
+		EntityID: updated.ID,
+		Action:   "update",
+		ActorID:  actorID,
+	}); err != nil {
+		return nil, fmt.Errorf("audit create entry: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	committed = true
+	return flagToModel(updated), nil
+}
+
+func (s *Service) updateFlagWithStore(ctx context.Context, store Store, input model.UpdateFlagInput) (*Flag, error) {
+	flag, err := s.getFlagOrErrWithStore(ctx, store, input.Key, defaultEnvironment)
 	if err != nil {
 		return nil, err
 	}
 	flag.Enabled = input.Enabled
-	if err := s.applyRulesUpdate(ctx, flag, input.Rules); err != nil {
+	if err := s.applyRulesUpdateWithStore(ctx, store, flag, input.Rules); err != nil {
 		return nil, err
 	}
-	if err := s.Store.Update(ctx, flag); err != nil {
+	if err := store.Update(ctx, flag); err != nil {
 		return nil, fmt.Errorf("update flag: %w", err)
 	}
-	return flagToModel(flag), nil
+	return flag, nil
 }
 
 func (s *Service) getFlagOrErr(ctx context.Context, key string, env DeploymentStage) (*Flag, error) {
-	flag, err := s.Store.GetByKeyAndEnvironment(ctx, key, env)
+	return s.getFlagOrErrWithStore(ctx, s.Store, key, env)
+}
+
+func (s *Service) getFlagOrErrWithStore(ctx context.Context, store Store, key string, env DeploymentStage) (*Flag, error) {
+	flag, err := store.GetByKeyAndEnvironment(ctx, key, env)
 	if err != nil {
 		return nil, fmt.Errorf("get flag: %w", err)
 	}
@@ -102,12 +227,16 @@ func (s *Service) getFlagOrErr(ctx context.Context, key string, env DeploymentSt
 }
 
 func (s *Service) applyRulesUpdate(ctx context.Context, flag *Flag, rules []*model.RuleInput) error {
+	return s.applyRulesUpdateWithStore(ctx, s.Store, flag, rules)
+}
+
+func (s *Service) applyRulesUpdateWithStore(ctx context.Context, store Store, flag *Flag, rules []*model.RuleInput) error {
 	if rules == nil {
 		return nil
 	}
 	if len(rules) == 0 {
 		flag.RolloutStrategy = RolloutStrategyNone
-		if err := s.Store.ReplaceRulesByFlagID(ctx, flag.ID, nil); err != nil {
+		if err := store.ReplaceRulesByFlagID(ctx, flag.ID, nil); err != nil {
 			return fmt.Errorf("update flag rules: %w", err)
 		}
 		return nil
@@ -120,7 +249,7 @@ func (s *Service) applyRulesUpdate(ctx context.Context, flag *Flag, rules []*mod
 		return strategyMismatchError(flag.RolloutStrategy)
 	}
 	flag.RolloutStrategy = ruleTypeToStrategy(ruleType)
-	if err := s.Store.ReplaceRulesByFlagID(ctx, flag.ID, ruleInputsToRules(flag.ID, rules)); err != nil {
+	if err := store.ReplaceRulesByFlagID(ctx, flag.ID, ruleInputsToRules(flag.ID, rules)); err != nil {
 		return fmt.Errorf("update flag rules: %w", err)
 	}
 	return nil
@@ -153,18 +282,75 @@ func (s *Service) EvaluateFlag(ctx context.Context, key string, evalCtx model.Ev
 
 // DeleteFlag removes a flag by key and deployment stage. Rules are removed by DB CASCADE.
 func (s *Service) DeleteFlag(ctx context.Context, key string, env DeploymentStage) (bool, error) {
-	flag, err := s.getFlagOrErr(ctx, key, env)
+	if s.Audit == nil {
+		ok, _, err := s.deleteFlagWithStoreAndID(ctx, s.Store, key, env)
+		return ok, err
+	}
+
+	actorID, ok := auth.ActorIDFromContext(ctx)
+	if !ok {
+		return false, errors.New("audit: missing actor id in context")
+	}
+	storeTx, ok := s.Store.(TxAwareStore)
+	if !ok {
+		return false, errors.New("audit: flags store is not tx-aware")
+	}
+	auditTxStarter, ok := s.Audit.(audit.TxStarter)
+	if !ok {
+		return false, errors.New("audit: audit store cannot start transactions")
+	}
+	auditTxAware, ok := s.Audit.(audit.TxAwareStore)
+	if !ok {
+		return false, errors.New("audit: audit store is not tx-aware")
+	}
+
+	tx, err := auditTxStarter.BeginTx(ctx)
 	if err != nil {
 		return false, err
 	}
-	if err := s.Store.Delete(ctx, flag.ID); err != nil {
-		return false, fmt.Errorf("delete flag: %w", err)
+	committed := false
+	defer func() {
+		if !committed {
+			_ = tx.Rollback()
+		}
+	}()
+
+	deleted, entityID, err := s.deleteFlagWithStoreAndID(ctx, storeTx.WithTx(tx), key, env)
+	if err != nil {
+		return false, err
 	}
-	return true, nil
+	if err := auditTxAware.WithTx(tx).Create(ctx, &audit.Entry{
+		Entity:   "feature_flag",
+		EntityID: entityID,
+		Action:   "delete",
+		ActorID:  actorID,
+	}); err != nil {
+		return false, fmt.Errorf("audit create entry: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return false, err
+	}
+	committed = true
+	return deleted, nil
+}
+
+func (s *Service) deleteFlagWithStoreAndID(ctx context.Context, store Store, key string, env DeploymentStage) (bool, string, error) {
+	flag, err := s.getFlagOrErrWithStore(ctx, store, key, env)
+	if err != nil {
+		return false, "", err
+	}
+	if err := store.Delete(ctx, flag.ID); err != nil {
+		return false, "", fmt.Errorf("delete flag: %w", err)
+	}
+	return true, flag.ID, nil
 }
 
 func (s *Service) ensureUniqueFlag(ctx context.Context, key string, env DeploymentStage) error {
-	existing, err := s.Store.GetByKeyAndEnvironment(ctx, key, env)
+	return s.ensureUniqueFlagWithStore(ctx, s.Store, key, env)
+}
+
+func (s *Service) ensureUniqueFlagWithStore(ctx context.Context, store Store, key string, env DeploymentStage) error {
+	existing, err := store.GetByKeyAndEnvironment(ctx, key, env)
 	if err != nil {
 		return fmt.Errorf("check existing flag: %w", err)
 	}

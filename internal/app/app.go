@@ -8,6 +8,7 @@ import (
 
 	"github.com/99designs/gqlgen/graphql/handler"
 	"github.com/havlinj/featureflag-api/graph"
+	"github.com/havlinj/featureflag-api/internal/audit"
 	"github.com/havlinj/featureflag-api/internal/experiments"
 	"github.com/havlinj/featureflag-api/internal/flags"
 	"github.com/havlinj/featureflag-api/internal/users"
@@ -22,11 +23,19 @@ type App struct {
 // NewApp builds the application. Pass non-nil tlsConfig to serve over HTTPS.
 // flagsStore, usersStore, and experimentsStore are persistence layers (e.g. PostgresStore; use mocks in tests).
 // jwtSecret is used to sign and verify JWTs; must be non-empty for login and protected routes.
-func NewApp(tlsConfig *tls.Config, flagsStore flags.Store, usersStore users.Store, experimentsStore experiments.Store, jwtSecret []byte) *App {
+func NewApp(
+	tlsConfig *tls.Config,
+	flagsStore flags.Store,
+	usersStore users.Store,
+	experimentsStore experiments.Store,
+	auditStore audit.Store,
+	jwtSecret []byte,
+) *App {
 	resolver := &graphql.Resolver{
-		Flags:       flags.NewService(flagsStore),
-		Users:       users.NewService(usersStore),
-		Experiments: experiments.NewService(experimentsStore),
+		Flags:       flags.NewServiceWithAudit(flagsStore, auditStore),
+		Users:       users.NewServiceWithAudit(usersStore, auditStore),
+		Experiments: experiments.NewServiceWithAudit(experimentsStore, auditStore),
+		Audit:       audit.NewService(auditStore),
 		JWTSecret:   jwtSecret,
 		JWTExpiry:   24 * time.Hour,
 	}

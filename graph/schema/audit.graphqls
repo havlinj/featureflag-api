@@ -1,0 +1,20 @@
+type AuditLog {
+  id: ID!
+  entity: String!
+  entityId: ID!
+  action: String!
+  actorId: ID!
+  createdAt: String!
+}
+
+input AuditLogsFilterInput {
+  entity: String
+  action: String
+  actorId: ID
+}
+
+extend type Query {
+  auditLog(id: ID!): AuditLog
+  auditLogs(filter: AuditLogsFilterInput, limit: Int, offset: Int): [AuditLog!]!
+}
+

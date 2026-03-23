@@ -11,12 +11,32 @@ import (
 
 // PostgresStore is the real persistence implementation using PostgreSQL.
 type PostgresStore struct {
-	conn *sql.DB
+	exec  execQuerier
+	begin beginTxer // optional; used only by non-tx instances
+}
+
+type execQuerier interface {
+	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
+	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
+	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
+}
+
+type beginTxer interface {
+	BeginTx(ctx context.Context, opts *sql.TxOptions) (*sql.Tx, error)
 }
 
 // NewPostgresStore returns a Store that uses the given *sql.DB (e.g. from db.DB.Conn()).
 func NewPostgresStore(conn *sql.DB) *PostgresStore {
-	return &PostgresStore{conn: conn}
+	return &PostgresStore{exec: conn, begin: conn}
+}
+
+func newPostgresStoreWithTx(tx *sql.Tx) *PostgresStore {
+	return &PostgresStore{exec: tx}
+}
+
+// WithTx returns a tx-scoped Store.
+func (p *PostgresStore) WithTx(tx *sql.Tx) Store {
+	return newPostgresStoreWithTx(tx)
 }
 
 // Create creates a new flag in the database. Key, Description, Enabled, Environment,
@@ -25,7 +45,7 @@ func NewPostgresStore(conn *sql.DB) *PostgresStore {
 func (p *PostgresStore) Create(ctx context.Context, flag *Flag) (*Flag, error) {
 	var id string
 	var createdAt time.Time
-	err := p.conn.QueryRowContext(ctx,
+	err := p.exec.QueryRowContext(ctx,
 		`INSERT INTO feature_flags (key, description, enabled, environment, rollout_strategy)
 		 VALUES ($1, $2, $3, $4, $5)
 		 RETURNING id, created_at`,
@@ -50,7 +70,7 @@ func (p *PostgresStore) GetByKeyAndEnvironment(ctx context.Context, key string, 
 	var f Flag
 	var desc sql.NullString
 	var strategy string
-	err := p.conn.QueryRowContext(ctx,
+	err := p.exec.QueryRowContext(ctx,
 		`SELECT id, key, description, enabled, environment, rollout_strategy, created_at
 		 FROM feature_flags WHERE key = $1 AND environment = $2`,
 		key, env,
@@ -70,7 +90,7 @@ func (p *PostgresStore) GetByKeyAndEnvironment(ctx context.Context, key string, 
 
 // Update updates an existing flag by ID. Returns *NotFoundError if no row was updated.
 func (p *PostgresStore) Update(ctx context.Context, flag *Flag) error {
-	res, err := p.conn.ExecContext(ctx,
+	res, err := p.exec.ExecContext(ctx,
 		`UPDATE feature_flags SET key = $1, description = $2, enabled = $3, environment = $4, rollout_strategy = $5 WHERE id = $6`,
 		flag.Key, flag.Description, flag.Enabled, flag.Environment, flag.RolloutStrategy, flag.ID,
 	)
@@ -86,7 +106,7 @@ func (p *PostgresStore) Update(ctx context.Context, flag *Flag) error {
 
 // GetRulesByFlagID returns all rules for the given flag, or nil if none (no error).
 func (p *PostgresStore) GetRulesByFlagID(ctx context.Context, flagID string) ([]*Rule, error) {
-	rows, err := p.conn.QueryContext(ctx,
+	rows, err := p.exec.QueryContext(ctx,
 		`SELECT id, flag_id, type, value FROM flag_rules WHERE flag_id = $1 ORDER BY id`,
 		flagID,
 	)
@@ -111,7 +131,7 @@ func (p *PostgresStore) GetRulesByFlagID(ctx context.Context, flagID string) ([]
 // Delete removes a flag by ID. Rules are removed by DB ON DELETE CASCADE.
 // Returns *NotFoundError if no row was deleted.
 func (p *PostgresStore) Delete(ctx context.Context, id string) error {
-	res, err := p.conn.ExecContext(ctx, `DELETE FROM feature_flags WHERE id = $1`, id)
+	res, err := p.exec.ExecContext(ctx, `DELETE FROM feature_flags WHERE id = $1`, id)
 	if err != nil {
 		return err
 	}
@@ -124,25 +144,43 @@ func (p *PostgresStore) Delete(ctx context.Context, id string) error {
 
 // ReplaceRulesByFlagID replaces all rules for the flag: deletes existing rules, then inserts new ones.
 func (p *PostgresStore) ReplaceRulesByFlagID(ctx context.Context, flagID string, rules []*Rule) error {
-	tx, err := p.conn.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = tx.Rollback() }()
-	_, err = tx.ExecContext(ctx, `DELETE FROM flag_rules WHERE flag_id = $1`, flagID)
-	if err != nil {
-		return err
-	}
-	for _, r := range rules {
-		_, err = tx.ExecContext(ctx,
-			`INSERT INTO flag_rules (flag_id, type, value) VALUES ($1, $2, $3)`,
-			flagID, r.Type, r.Value,
-		)
-		if err != nil {
+	// If this store is tx-scoped (begin == nil), we must not start a nested transaction.
+	if p.begin == nil {
+		if _, err := p.exec.ExecContext(ctx, `DELETE FROM flag_rules WHERE flag_id = $1`, flagID); err != nil {
 			return err
 		}
+		for _, r := range rules {
+			if _, err := p.exec.ExecContext(ctx,
+				`INSERT INTO flag_rules (flag_id, type, value) VALUES ($1, $2, $3)`,
+				flagID, r.Type, r.Value,
+			); err != nil {
+				return err
+			}
+		}
+		return nil
 	}
-	return tx.Commit()
+
+	// Otherwise, start a transaction (standalone usage).
+	tx, err := p.begin.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			_ = tx.Rollback()
+		}
+	}()
+
+	txStore := newPostgresStoreWithTx(tx)
+	if err := txStore.ReplaceRulesByFlagID(ctx, flagID, rules); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	committed = true
+	return nil
 }
 
 // Ensure PostgresStore implements Store at compile time.
