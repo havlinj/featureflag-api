@@ -14,13 +14,20 @@ import (
 	"github.com/havlinj/featureflag-api/internal/auth"
 )
 
-// AuditLog is the resolver for the auditLog field.
-func (r *queryResolver) AuditLog(ctx context.Context, id string) (*model.AuditLog, error) {
+func (r *queryResolver) requireAuditReadAccess(ctx context.Context) error {
 	if _, err := auth.RequireRole(ctx, "admin"); err != nil {
-		return nil, err
+		return err
 	}
 	if r.Audit == nil {
-		return nil, errors.New("audit service not configured")
+		return errors.New("audit service not configured")
+	}
+	return nil
+}
+
+// AuditLog is the resolver for the auditLog field.
+func (r *queryResolver) AuditLog(ctx context.Context, id string) (*model.AuditLog, error) {
+	if err := r.requireAuditReadAccess(ctx); err != nil {
+		return nil, err
 	}
 	entry, err := r.Audit.GetByID(ctx, id)
 	if err != nil {
@@ -31,22 +38,22 @@ func (r *queryResolver) AuditLog(ctx context.Context, id string) (*model.AuditLo
 
 // AuditLogs is the resolver for the auditLogs field.
 func (r *queryResolver) AuditLogs(ctx context.Context, filter *model.AuditLogsFilterInput, limit *int, offset *int) ([]*model.AuditLog, error) {
-	if _, err := auth.RequireRole(ctx, "admin"); err != nil {
+	if err := r.requireAuditReadAccess(ctx); err != nil {
 		return nil, err
 	}
-	if r.Audit == nil {
-		return nil, errors.New("audit service not configured")
-	}
-	resolvedLimit := 50
+	resolvedLimit := audit.DefaultListLimit
 	if limit != nil {
 		resolvedLimit = *limit
+	}
+	if resolvedLimit > audit.MaxListLimit {
+		resolvedLimit = audit.MaxListLimit
 	}
 	resolvedOffset := 0
 	if offset != nil {
 		resolvedOffset = *offset
 	}
 	if resolvedOffset < 0 {
-		return nil, errors.New("offset must be >= 0")
+		return nil, audit.ErrNegativeOffset
 	}
 
 	var f audit.ListFilter

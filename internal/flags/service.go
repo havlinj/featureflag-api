@@ -2,6 +2,7 @@ package flags
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"hash/fnv"
@@ -9,7 +10,6 @@ import (
 
 	"github.com/havlinj/featureflag-api/graph/model"
 	"github.com/havlinj/featureflag-api/internal/audit"
-	"github.com/havlinj/featureflag-api/internal/auth"
 )
 
 const defaultEnvironment = DeploymentStageDev
@@ -19,6 +19,13 @@ const defaultEnvironment = DeploymentStageDev
 type Service struct {
 	Store Store
 	Audit audit.Store
+}
+
+type auditTxContext struct {
+	actorID string
+	tx      *sql.Tx
+	store   Store
+	audit   audit.Store
 }
 
 // NewService returns a flags service that uses the given store.
@@ -41,47 +48,30 @@ func (s *Service) CreateFlag(ctx context.Context, input model.CreateFlagInput) (
 		return flagToModel(created), nil
 	}
 
-	actorID, ok := auth.ActorIDFromContext(ctx)
-	if !ok {
-		return nil, errors.New("audit: missing actor id in context")
-	}
-	storeTx, ok := s.Store.(TxAwareStore)
-	if !ok {
-		return nil, errors.New("audit: flags store is not tx-aware")
-	}
-	auditTxStarter, ok := s.Audit.(audit.TxStarter)
-	if !ok {
-		return nil, errors.New("audit: audit store cannot start transactions")
-	}
-	auditTxAware, ok := s.Audit.(audit.TxAwareStore)
-	if !ok {
-		return nil, errors.New("audit: audit store is not tx-aware")
-	}
-
-	tx, err := auditTxStarter.BeginTx(ctx)
+	auditCtx, err := s.prepareAuditTx(ctx)
 	if err != nil {
 		return nil, err
 	}
 	committed := false
 	defer func() {
 		if !committed {
-			_ = tx.Rollback()
+			_ = auditCtx.tx.Rollback()
 		}
 	}()
 
-	created, err := s.createFlagWithStore(ctx, storeTx.WithTx(tx), input)
+	created, err := s.createFlagWithStore(ctx, auditCtx.store, input)
 	if err != nil {
 		return nil, err
 	}
-	if err := auditTxAware.WithTx(tx).Create(ctx, &audit.Entry{
-		Entity:   "feature_flag",
+	if err := auditCtx.audit.Create(ctx, &audit.Entry{
+		Entity:   audit.EntityFeatureFlag,
 		EntityID: created.ID,
-		Action:   "create",
-		ActorID:  actorID,
+		Action:   audit.ActionCreate,
+		ActorID:  auditCtx.actorID,
 	}); err != nil {
 		return nil, fmt.Errorf("audit create entry: %w", err)
 	}
-	if err := tx.Commit(); err != nil {
+	if err := auditCtx.tx.Commit(); err != nil {
 		return nil, err
 	}
 	committed = true
@@ -149,47 +139,30 @@ func (s *Service) UpdateFlag(ctx context.Context, input model.UpdateFlagInput) (
 		return flagToModel(updated), nil
 	}
 
-	actorID, ok := auth.ActorIDFromContext(ctx)
-	if !ok {
-		return nil, errors.New("audit: missing actor id in context")
-	}
-	storeTx, ok := s.Store.(TxAwareStore)
-	if !ok {
-		return nil, errors.New("audit: flags store is not tx-aware")
-	}
-	auditTxStarter, ok := s.Audit.(audit.TxStarter)
-	if !ok {
-		return nil, errors.New("audit: audit store cannot start transactions")
-	}
-	auditTxAware, ok := s.Audit.(audit.TxAwareStore)
-	if !ok {
-		return nil, errors.New("audit: audit store is not tx-aware")
-	}
-
-	tx, err := auditTxStarter.BeginTx(ctx)
+	auditCtx, err := s.prepareAuditTx(ctx)
 	if err != nil {
 		return nil, err
 	}
 	committed := false
 	defer func() {
 		if !committed {
-			_ = tx.Rollback()
+			_ = auditCtx.tx.Rollback()
 		}
 	}()
 
-	updated, err := s.updateFlagWithStore(ctx, storeTx.WithTx(tx), input)
+	updated, err := s.updateFlagWithStore(ctx, auditCtx.store, input)
 	if err != nil {
 		return nil, err
 	}
-	if err := auditTxAware.WithTx(tx).Create(ctx, &audit.Entry{
-		Entity:   "feature_flag",
+	if err := auditCtx.audit.Create(ctx, &audit.Entry{
+		Entity:   audit.EntityFeatureFlag,
 		EntityID: updated.ID,
-		Action:   "update",
-		ActorID:  actorID,
+		Action:   audit.ActionUpdate,
+		ActorID:  auditCtx.actorID,
 	}); err != nil {
 		return nil, fmt.Errorf("audit create entry: %w", err)
 	}
-	if err := tx.Commit(); err != nil {
+	if err := auditCtx.tx.Commit(); err != nil {
 		return nil, err
 	}
 	committed = true
@@ -287,47 +260,30 @@ func (s *Service) DeleteFlag(ctx context.Context, key string, env DeploymentStag
 		return ok, err
 	}
 
-	actorID, ok := auth.ActorIDFromContext(ctx)
-	if !ok {
-		return false, errors.New("audit: missing actor id in context")
-	}
-	storeTx, ok := s.Store.(TxAwareStore)
-	if !ok {
-		return false, errors.New("audit: flags store is not tx-aware")
-	}
-	auditTxStarter, ok := s.Audit.(audit.TxStarter)
-	if !ok {
-		return false, errors.New("audit: audit store cannot start transactions")
-	}
-	auditTxAware, ok := s.Audit.(audit.TxAwareStore)
-	if !ok {
-		return false, errors.New("audit: audit store is not tx-aware")
-	}
-
-	tx, err := auditTxStarter.BeginTx(ctx)
+	auditCtx, err := s.prepareAuditTx(ctx)
 	if err != nil {
 		return false, err
 	}
 	committed := false
 	defer func() {
 		if !committed {
-			_ = tx.Rollback()
+			_ = auditCtx.tx.Rollback()
 		}
 	}()
 
-	deleted, entityID, err := s.deleteFlagWithStoreAndID(ctx, storeTx.WithTx(tx), key, env)
+	deleted, entityID, err := s.deleteFlagWithStoreAndID(ctx, auditCtx.store, key, env)
 	if err != nil {
 		return false, err
 	}
-	if err := auditTxAware.WithTx(tx).Create(ctx, &audit.Entry{
-		Entity:   "feature_flag",
+	if err := auditCtx.audit.Create(ctx, &audit.Entry{
+		Entity:   audit.EntityFeatureFlag,
 		EntityID: entityID,
-		Action:   "delete",
-		ActorID:  actorID,
+		Action:   audit.ActionDelete,
+		ActorID:  auditCtx.actorID,
 	}); err != nil {
 		return false, fmt.Errorf("audit create entry: %w", err)
 	}
-	if err := tx.Commit(); err != nil {
+	if err := auditCtx.tx.Commit(); err != nil {
 		return false, err
 	}
 	committed = true
@@ -347,6 +303,24 @@ func (s *Service) deleteFlagWithStoreAndID(ctx context.Context, store Store, key
 
 func (s *Service) ensureUniqueFlag(ctx context.Context, key string, env DeploymentStage) error {
 	return s.ensureUniqueFlagWithStore(ctx, s.Store, key, env)
+}
+
+func (s *Service) prepareAuditTx(ctx context.Context) (*auditTxContext, error) {
+	storeTxAware, ok := s.Store.(TxAwareStore)
+	if !ok {
+		return nil, errors.New("audit: flags store is not tx-aware")
+	}
+
+	actorID, tx, auditTxStore, err := audit.PrepareWriteTx(ctx, s.Audit)
+	if err != nil {
+		return nil, err
+	}
+	return &auditTxContext{
+		actorID: actorID,
+		tx:      tx,
+		store:   storeTxAware.WithTx(tx),
+		audit:   auditTxStore,
+	}, nil
 }
 
 func (s *Service) ensureUniqueFlagWithStore(ctx context.Context, store Store, key string, env DeploymentStage) error {

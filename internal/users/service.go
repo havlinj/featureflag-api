@@ -2,6 +2,7 @@ package users
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 
@@ -14,6 +15,13 @@ import (
 type Service struct {
 	Store Store
 	Audit audit.Store
+}
+
+type auditTxContext struct {
+	actorID string
+	tx      *sql.Tx
+	store   Store
+	audit   audit.Store
 }
 
 // NewService returns a users service that uses the given store.
@@ -36,47 +44,30 @@ func (s *Service) CreateUser(ctx context.Context, input model.CreateUserInput) (
 		return userToModel(created), nil
 	}
 
-	actorID, ok := auth.ActorIDFromContext(ctx)
-	if !ok {
-		return nil, errors.New("audit: missing actor id in context")
-	}
-	storeTx, ok := s.Store.(TxAwareStore)
-	if !ok {
-		return nil, errors.New("audit: users store is not tx-aware")
-	}
-	auditTxStarter, ok := s.Audit.(audit.TxStarter)
-	if !ok {
-		return nil, errors.New("audit: audit store cannot start transactions")
-	}
-	auditTxAware, ok := s.Audit.(audit.TxAwareStore)
-	if !ok {
-		return nil, errors.New("audit: audit store is not tx-aware")
-	}
-
-	tx, err := auditTxStarter.BeginTx(ctx)
+	auditCtx, err := s.prepareAuditTx(ctx)
 	if err != nil {
 		return nil, err
 	}
 	committed := false
 	defer func() {
 		if !committed {
-			_ = tx.Rollback()
+			_ = auditCtx.tx.Rollback()
 		}
 	}()
 
-	created, err := s.createUserWithStore(ctx, storeTx.WithTx(tx), input)
+	created, err := s.createUserWithStore(ctx, auditCtx.store, input)
 	if err != nil {
 		return nil, err
 	}
-	if err := auditTxAware.WithTx(tx).Create(ctx, &audit.Entry{
-		Entity:   "user",
+	if err := auditCtx.audit.Create(ctx, &audit.Entry{
+		Entity:   audit.EntityUser,
 		EntityID: created.ID,
-		Action:   "create",
-		ActorID:  actorID,
+		Action:   audit.ActionCreate,
+		ActorID:  auditCtx.actorID,
 	}); err != nil {
 		return nil, fmt.Errorf("audit create entry: %w", err)
 	}
-	if err := tx.Commit(); err != nil {
+	if err := auditCtx.tx.Commit(); err != nil {
 		return nil, err
 	}
 	committed = true
@@ -149,47 +140,30 @@ func (s *Service) UpdateUser(ctx context.Context, input model.UpdateUserInput) (
 		return userToModel(updated), nil
 	}
 
-	actorID, ok := auth.ActorIDFromContext(ctx)
-	if !ok {
-		return nil, errors.New("audit: missing actor id in context")
-	}
-	storeTx, ok := s.Store.(TxAwareStore)
-	if !ok {
-		return nil, errors.New("audit: users store is not tx-aware")
-	}
-	auditTxStarter, ok := s.Audit.(audit.TxStarter)
-	if !ok {
-		return nil, errors.New("audit: audit store cannot start transactions")
-	}
-	auditTxAware, ok := s.Audit.(audit.TxAwareStore)
-	if !ok {
-		return nil, errors.New("audit: audit store is not tx-aware")
-	}
-
-	tx, err := auditTxStarter.BeginTx(ctx)
+	auditCtx, err := s.prepareAuditTx(ctx)
 	if err != nil {
 		return nil, err
 	}
 	committed := false
 	defer func() {
 		if !committed {
-			_ = tx.Rollback()
+			_ = auditCtx.tx.Rollback()
 		}
 	}()
 
-	updated, err := s.updateUserWithStore(ctx, storeTx.WithTx(tx), input)
+	updated, err := s.updateUserWithStore(ctx, auditCtx.store, input)
 	if err != nil {
 		return nil, err
 	}
-	if err := auditTxAware.WithTx(tx).Create(ctx, &audit.Entry{
-		Entity:   "user",
+	if err := auditCtx.audit.Create(ctx, &audit.Entry{
+		Entity:   audit.EntityUser,
 		EntityID: updated.ID,
-		Action:   "update",
-		ActorID:  actorID,
+		Action:   audit.ActionUpdate,
+		ActorID:  auditCtx.actorID,
 	}); err != nil {
 		return nil, fmt.Errorf("audit create entry: %w", err)
 	}
-	if err := tx.Commit(); err != nil {
+	if err := auditCtx.tx.Commit(); err != nil {
 		return nil, err
 	}
 	committed = true
@@ -246,35 +220,18 @@ func (s *Service) DeleteUser(ctx context.Context, id string) (bool, error) {
 		return s.deleteUserWithStore(ctx, s.Store, id)
 	}
 
-	actorID, ok := auth.ActorIDFromContext(ctx)
-	if !ok {
-		return false, errors.New("audit: missing actor id in context")
-	}
-	storeTx, ok := s.Store.(TxAwareStore)
-	if !ok {
-		return false, errors.New("audit: users store is not tx-aware")
-	}
-	auditTxStarter, ok := s.Audit.(audit.TxStarter)
-	if !ok {
-		return false, errors.New("audit: audit store cannot start transactions")
-	}
-	auditTxAware, ok := s.Audit.(audit.TxAwareStore)
-	if !ok {
-		return false, errors.New("audit: audit store is not tx-aware")
-	}
-
-	tx, err := auditTxStarter.BeginTx(ctx)
+	auditCtx, err := s.prepareAuditTx(ctx)
 	if err != nil {
 		return false, err
 	}
 	committed := false
 	defer func() {
 		if !committed {
-			_ = tx.Rollback()
+			_ = auditCtx.tx.Rollback()
 		}
 	}()
 
-	deleted, err := s.deleteUserWithStore(ctx, storeTx.WithTx(tx), id)
+	deleted, err := s.deleteUserWithStore(ctx, auditCtx.store, id)
 	if err != nil {
 		return false, err
 	}
@@ -282,15 +239,15 @@ func (s *Service) DeleteUser(ctx context.Context, id string) (bool, error) {
 		// Nothing was changed; no audit entry should be written.
 		return false, nil
 	}
-	if err := auditTxAware.WithTx(tx).Create(ctx, &audit.Entry{
-		Entity:   "user",
+	if err := auditCtx.audit.Create(ctx, &audit.Entry{
+		Entity:   audit.EntityUser,
 		EntityID: id,
-		Action:   "delete",
-		ActorID:  actorID,
+		Action:   audit.ActionDelete,
+		ActorID:  auditCtx.actorID,
 	}); err != nil {
 		return false, fmt.Errorf("audit create entry: %w", err)
 	}
-	if err := tx.Commit(); err != nil {
+	if err := auditCtx.tx.Commit(); err != nil {
 		return false, err
 	}
 	committed = true
@@ -311,6 +268,24 @@ func (s *Service) deleteUserWithStore(ctx context.Context, store Store, id strin
 
 func (s *Service) ensureUniqueEmail(ctx context.Context, email string) error {
 	return s.ensureUniqueEmailWithStore(ctx, s.Store, email)
+}
+
+func (s *Service) prepareAuditTx(ctx context.Context) (*auditTxContext, error) {
+	storeTxAware, ok := s.Store.(TxAwareStore)
+	if !ok {
+		return nil, errors.New("audit: users store is not tx-aware")
+	}
+
+	actorID, tx, auditTxStore, err := audit.PrepareWriteTx(ctx, s.Audit)
+	if err != nil {
+		return nil, err
+	}
+	return &auditTxContext{
+		actorID: actorID,
+		tx:      tx,
+		store:   storeTxAware.WithTx(tx),
+		audit:   auditTxStore,
+	}, nil
 }
 
 func (s *Service) ensureUniqueEmailWithStore(ctx context.Context, store Store, email string) error {

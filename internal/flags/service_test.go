@@ -8,10 +8,10 @@ import (
 	"time"
 
 	"github.com/havlinj/featureflag-api/graph/model"
-	"github.com/havlinj/featureflag-api/internal/audit"
 	"github.com/havlinj/featureflag-api/internal/auth"
 	"github.com/havlinj/featureflag-api/internal/flags"
 	"github.com/havlinj/featureflag-api/internal/flags/mock"
+	"github.com/havlinj/featureflag-api/internal/testutil/auditmock"
 )
 
 func stringPtr(s string) *string { return &s }
@@ -821,34 +821,6 @@ func TestService_DeleteFlag_StoreDelete_error_returns_wrapped_error(t *testing.T
 	}
 }
 
-type auditTxStarterFlagsMock struct {
-	beginErr error
-}
-
-func (s *auditTxStarterFlagsMock) Create(ctx context.Context, entry *audit.Entry) error {
-	return nil
-}
-
-func (s *auditTxStarterFlagsMock) GetByID(ctx context.Context, id string) (*audit.Entry, error) {
-	return nil, nil
-}
-
-func (s *auditTxStarterFlagsMock) List(ctx context.Context, filter audit.ListFilter, limit, offset int) ([]*audit.Entry, error) {
-	return nil, nil
-}
-
-func (s *auditTxStarterFlagsMock) BeginTx(ctx context.Context) (*sql.Tx, error) {
-	return nil, s.beginErr
-}
-
-type auditTxAwareFlagsMock struct {
-	auditTxStarterFlagsMock
-}
-
-func (s *auditTxAwareFlagsMock) WithTx(tx *sql.Tx) audit.Store {
-	return s
-}
-
 type txAwareFlagsStoreMock struct {
 	inner flags.Store
 }
@@ -883,7 +855,7 @@ func (s *txAwareFlagsStoreMock) WithTx(tx *sql.Tx) flags.Store {
 
 func TestService_CreateFlag_withAudit_missingActor_returns_error(t *testing.T) {
 	store := &txAwareFlagsStoreMock{inner: &mock.Store{}}
-	svc := flags.NewServiceWithAudit(store, &auditTxAwareFlagsMock{})
+	svc := flags.NewServiceWithAudit(store, &auditmock.TxAware{})
 	input := model.CreateFlagInput{Key: "a", Environment: "dev"}
 
 	_, err := svc.CreateFlag(context.Background(), input)
@@ -895,7 +867,7 @@ func TestService_CreateFlag_withAudit_missingActor_returns_error(t *testing.T) {
 
 func TestService_CreateFlag_withAudit_notTxAwareAuditStore_returns_error(t *testing.T) {
 	store := &txAwareFlagsStoreMock{inner: &mock.Store{}}
-	svc := flags.NewServiceWithAudit(store, &auditTxStarterFlagsMock{})
+	svc := flags.NewServiceWithAudit(store, &auditmock.TxStarter{})
 	input := model.CreateFlagInput{Key: "a", Environment: "dev"}
 	ctx := auth.WithActorID(context.Background(), "u1")
 
@@ -909,8 +881,8 @@ func TestService_CreateFlag_withAudit_notTxAwareAuditStore_returns_error(t *test
 func TestService_CreateFlag_withAudit_beginTx_error_is_returned(t *testing.T) {
 	store := &txAwareFlagsStoreMock{inner: &mock.Store{}}
 	wantErr := errors.New("begin tx failed")
-	svc := flags.NewServiceWithAudit(store, &auditTxAwareFlagsMock{
-		auditTxStarterFlagsMock: auditTxStarterFlagsMock{beginErr: wantErr},
+	svc := flags.NewServiceWithAudit(store, &auditmock.TxAware{
+		TxStarter: auditmock.TxStarter{BeginErr: wantErr},
 	})
 	input := model.CreateFlagInput{Key: "a", Environment: "dev"}
 	ctx := auth.WithActorID(context.Background(), "u1")

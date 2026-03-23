@@ -7,10 +7,10 @@ import (
 	"testing"
 
 	"github.com/havlinj/featureflag-api/graph/model"
-	"github.com/havlinj/featureflag-api/internal/audit"
 	"github.com/havlinj/featureflag-api/internal/auth"
 	"github.com/havlinj/featureflag-api/internal/experiments"
 	"github.com/havlinj/featureflag-api/internal/experiments/mock"
+	"github.com/havlinj/featureflag-api/internal/testutil/auditmock"
 )
 
 func variants50_50() []*model.ExperimentVariantInput {
@@ -471,34 +471,6 @@ func TestService_GetAssignment_deterministic_same_user_same_variant(t *testing.T
 	}
 }
 
-type auditTxStarterExperimentsMock struct {
-	beginErr error
-}
-
-func (s *auditTxStarterExperimentsMock) Create(ctx context.Context, entry *audit.Entry) error {
-	return nil
-}
-
-func (s *auditTxStarterExperimentsMock) GetByID(ctx context.Context, id string) (*audit.Entry, error) {
-	return nil, nil
-}
-
-func (s *auditTxStarterExperimentsMock) List(ctx context.Context, filter audit.ListFilter, limit, offset int) ([]*audit.Entry, error) {
-	return nil, nil
-}
-
-func (s *auditTxStarterExperimentsMock) BeginTx(ctx context.Context) (*sql.Tx, error) {
-	return nil, s.beginErr
-}
-
-type auditTxAwareExperimentsMock struct {
-	auditTxStarterExperimentsMock
-}
-
-func (s *auditTxAwareExperimentsMock) WithTx(tx *sql.Tx) audit.Store {
-	return s
-}
-
 type txAwareExperimentsStoreMock struct {
 	inner experiments.Store
 }
@@ -537,7 +509,7 @@ func (s *txAwareExperimentsStoreMock) WithTx(tx *sql.Tx) experiments.Store {
 
 func TestService_CreateExperiment_withAudit_missingActor_returns_error(t *testing.T) {
 	store := &txAwareExperimentsStoreMock{inner: &mock.Store{}}
-	svc := experiments.NewServiceWithAudit(store, &auditTxAwareExperimentsMock{})
+	svc := experiments.NewServiceWithAudit(store, &auditmock.TxAware{})
 	input := model.CreateExperimentInput{
 		Key:         "ab-test",
 		Environment: "dev",
@@ -553,7 +525,7 @@ func TestService_CreateExperiment_withAudit_missingActor_returns_error(t *testin
 
 func TestService_CreateExperiment_withAudit_notTxAwareAuditStore_returns_error(t *testing.T) {
 	store := &txAwareExperimentsStoreMock{inner: &mock.Store{}}
-	svc := experiments.NewServiceWithAudit(store, &auditTxStarterExperimentsMock{})
+	svc := experiments.NewServiceWithAudit(store, &auditmock.TxStarter{})
 	input := model.CreateExperimentInput{
 		Key:         "ab-test",
 		Environment: "dev",
@@ -571,8 +543,8 @@ func TestService_CreateExperiment_withAudit_notTxAwareAuditStore_returns_error(t
 func TestService_CreateExperiment_withAudit_beginTx_error_is_returned(t *testing.T) {
 	store := &txAwareExperimentsStoreMock{inner: &mock.Store{}}
 	wantErr := errors.New("begin tx failed")
-	svc := experiments.NewServiceWithAudit(store, &auditTxAwareExperimentsMock{
-		auditTxStarterExperimentsMock: auditTxStarterExperimentsMock{beginErr: wantErr},
+	svc := experiments.NewServiceWithAudit(store, &auditmock.TxAware{
+		TxStarter: auditmock.TxStarter{BeginErr: wantErr},
 	})
 	input := model.CreateExperimentInput{
 		Key:         "ab-test",

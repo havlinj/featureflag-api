@@ -2,13 +2,13 @@ package experiments
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"hash/fnv"
 
 	"github.com/havlinj/featureflag-api/graph/model"
 	"github.com/havlinj/featureflag-api/internal/audit"
-	"github.com/havlinj/featureflag-api/internal/auth"
 )
 
 const weightSum = 100
@@ -18,6 +18,13 @@ const weightSum = 100
 type Service struct {
 	Store Store
 	Audit audit.Store
+}
+
+type auditTxContext struct {
+	actorID string
+	tx      *sql.Tx
+	store   Store
+	audit   audit.Store
 }
 
 // NewService returns an experiments service that uses the given store.
@@ -41,47 +48,30 @@ func (s *Service) CreateExperiment(ctx context.Context, input model.CreateExperi
 		return experimentToModel(created), nil
 	}
 
-	actorID, ok := auth.ActorIDFromContext(ctx)
-	if !ok {
-		return nil, errors.New("audit: missing actor id in context")
-	}
-	storeTx, ok := s.Store.(TxAwareStore)
-	if !ok {
-		return nil, errors.New("audit: experiments store is not tx-aware")
-	}
-	auditTxStarter, ok := s.Audit.(audit.TxStarter)
-	if !ok {
-		return nil, errors.New("audit: audit store cannot start transactions")
-	}
-	auditTxAware, ok := s.Audit.(audit.TxAwareStore)
-	if !ok {
-		return nil, errors.New("audit: audit store is not tx-aware")
-	}
-
-	tx, err := auditTxStarter.BeginTx(ctx)
+	auditCtx, err := s.prepareAuditTx(ctx)
 	if err != nil {
 		return nil, err
 	}
 	committed := false
 	defer func() {
 		if !committed {
-			_ = tx.Rollback()
+			_ = auditCtx.tx.Rollback()
 		}
 	}()
 
-	created, err := s.createExperimentWithStore(ctx, storeTx.WithTx(tx), input)
+	created, err := s.createExperimentWithStore(ctx, auditCtx.store, input)
 	if err != nil {
 		return nil, err
 	}
-	if err := auditTxAware.WithTx(tx).Create(ctx, &audit.Entry{
-		Entity:   "experiment",
+	if err := auditCtx.audit.Create(ctx, &audit.Entry{
+		Entity:   audit.EntityExperiment,
 		EntityID: created.ID,
-		Action:   "create",
-		ActorID:  actorID,
+		Action:   audit.ActionCreate,
+		ActorID:  auditCtx.actorID,
 	}); err != nil {
 		return nil, fmt.Errorf("audit create entry: %w", err)
 	}
-	if err := tx.Commit(); err != nil {
+	if err := auditCtx.tx.Commit(); err != nil {
 		return nil, err
 	}
 	committed = true
@@ -128,6 +118,24 @@ func validateVariantWeights(variants []*model.ExperimentVariantInput) error {
 
 func (s *Service) ensureUniqueExperiment(ctx context.Context, key, environment string) error {
 	return s.ensureUniqueExperimentWithStore(ctx, s.Store, key, environment)
+}
+
+func (s *Service) prepareAuditTx(ctx context.Context) (*auditTxContext, error) {
+	storeTxAware, ok := s.Store.(TxAwareStore)
+	if !ok {
+		return nil, errors.New("audit: experiments store is not tx-aware")
+	}
+
+	actorID, tx, auditTxStore, err := audit.PrepareWriteTx(ctx, s.Audit)
+	if err != nil {
+		return nil, err
+	}
+	return &auditTxContext{
+		actorID: actorID,
+		tx:      tx,
+		store:   storeTxAware.WithTx(tx),
+		audit:   auditTxStore,
+	}, nil
 }
 
 func (s *Service) ensureUniqueExperimentWithStore(ctx context.Context, store Store, key, environment string) error {

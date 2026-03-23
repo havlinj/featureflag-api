@@ -4,6 +4,7 @@ package audit_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/havlinj/featureflag-api/internal/audit"
@@ -109,6 +110,19 @@ func TestPostgresStore_Create_nil_entry_returns_error(t *testing.T) {
 	}
 }
 
+func TestPostgresStore_List_negative_offset_returns_error(t *testing.T) {
+	store := &audit.PostgresStore{}
+
+	_, err := store.List(context.Background(), audit.ListFilter{}, audit.DefaultListLimit, -1)
+
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if !errors.Is(err, audit.ErrNegativeOffset) {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestPostgresStore_BeginTx_on_tx_scoped_store_returns_error(t *testing.T) {
 	database, cleanup := testutil.PostgresForIntegration(t)
 	defer cleanup()
@@ -134,4 +148,3 @@ func TestPostgresStore_BeginTx_on_tx_scoped_store_returns_error(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
-

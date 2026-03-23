@@ -83,10 +83,13 @@ func (p *PostgresStore) GetByID(ctx context.Context, id string) (*Entry, error) 
 
 func (p *PostgresStore) List(ctx context.Context, filter ListFilter, limit, offset int) ([]*Entry, error) {
 	if limit <= 0 {
-		limit = 50
+		limit = DefaultListLimit
+	}
+	if limit > MaxListLimit {
+		limit = MaxListLimit
 	}
 	if offset < 0 {
-		offset = 0
+		return nil, fmt.Errorf("audit store: %w", ErrNegativeOffset)
 	}
 
 	conds := make([]string, 0, 3)

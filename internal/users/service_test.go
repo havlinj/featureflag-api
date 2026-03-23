@@ -7,8 +7,8 @@ import (
 	"testing"
 
 	"github.com/havlinj/featureflag-api/graph/model"
-	"github.com/havlinj/featureflag-api/internal/audit"
 	"github.com/havlinj/featureflag-api/internal/auth"
+	"github.com/havlinj/featureflag-api/internal/testutil/auditmock"
 	"github.com/havlinj/featureflag-api/internal/users"
 	"github.com/havlinj/featureflag-api/internal/users/mock"
 )
@@ -370,34 +370,6 @@ func mustHash(t *testing.T, password string) string {
 	return hash
 }
 
-type auditTxStarterUsersMock struct {
-	beginErr error
-}
-
-func (s *auditTxStarterUsersMock) Create(ctx context.Context, entry *audit.Entry) error {
-	return nil
-}
-
-func (s *auditTxStarterUsersMock) GetByID(ctx context.Context, id string) (*audit.Entry, error) {
-	return nil, nil
-}
-
-func (s *auditTxStarterUsersMock) List(ctx context.Context, filter audit.ListFilter, limit, offset int) ([]*audit.Entry, error) {
-	return nil, nil
-}
-
-func (s *auditTxStarterUsersMock) BeginTx(ctx context.Context) (*sql.Tx, error) {
-	return nil, s.beginErr
-}
-
-type auditTxAwareUsersMock struct {
-	auditTxStarterUsersMock
-}
-
-func (s *auditTxAwareUsersMock) WithTx(tx *sql.Tx) audit.Store {
-	return s
-}
-
 type txAwareUsersStoreMock struct {
 	inner users.Store
 }
@@ -428,7 +400,7 @@ func (s *txAwareUsersStoreMock) WithTx(tx *sql.Tx) users.Store {
 
 func TestService_CreateUser_withAudit_missingActor_returns_error(t *testing.T) {
 	store := &txAwareUsersStoreMock{inner: &mock.Store{}}
-	svc := users.NewServiceWithAudit(store, &auditTxAwareUsersMock{})
+	svc := users.NewServiceWithAudit(store, &auditmock.TxAware{})
 	input := model.CreateUserInput{Email: "a@b.com", Role: model.RoleAdmin}
 
 	_, err := svc.CreateUser(context.Background(), input)
@@ -440,7 +412,7 @@ func TestService_CreateUser_withAudit_missingActor_returns_error(t *testing.T) {
 
 func TestService_UpdateUser_withAudit_notTxAwareAuditStore_returns_error(t *testing.T) {
 	store := &txAwareUsersStoreMock{inner: &mock.Store{}}
-	svc := users.NewServiceWithAudit(store, &auditTxStarterUsersMock{})
+	svc := users.NewServiceWithAudit(store, &auditmock.TxStarter{})
 	input := model.UpdateUserInput{ID: "u1"}
 	ctx := auth.WithActorID(context.Background(), "u1")
 
@@ -454,8 +426,8 @@ func TestService_UpdateUser_withAudit_notTxAwareAuditStore_returns_error(t *test
 func TestService_DeleteUser_withAudit_beginTx_error_is_returned(t *testing.T) {
 	store := &txAwareUsersStoreMock{inner: &mock.Store{}}
 	wantErr := errors.New("begin tx failed")
-	svc := users.NewServiceWithAudit(store, &auditTxAwareUsersMock{
-		auditTxStarterUsersMock: auditTxStarterUsersMock{beginErr: wantErr},
+	svc := users.NewServiceWithAudit(store, &auditmock.TxAware{
+		TxStarter: auditmock.TxStarter{BeginErr: wantErr},
 	})
 	ctx := auth.WithActorID(context.Background(), "u1")
 

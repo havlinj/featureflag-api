@@ -3,7 +3,13 @@ package audit
 import (
 	"context"
 	"database/sql"
+	"errors"
 )
+
+const DefaultListLimit = 50
+const MaxListLimit = 200
+
+var ErrNegativeOffset = errors.New("offset must be >= 0")
 
 // ListFilter allows optional narrowing of audit logs.
 type ListFilter struct {

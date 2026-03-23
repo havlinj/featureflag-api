@@ -40,7 +40,9 @@ func TestAuditLog_resolver_requires_auth(t *testing.T) {
 func TestAuditLog_resolver_returns_nil_when_not_found(t *testing.T) {
 	mock := &auditResolverMockStore{
 		getByIDFunc: func(ctx context.Context, id string) (*audit.Entry, error) { return nil, nil },
-		listFunc:    func(ctx context.Context, filter audit.ListFilter, limit, offset int) ([]*audit.Entry, error) { return nil, nil },
+		listFunc: func(ctx context.Context, filter audit.ListFilter, limit, offset int) ([]*audit.Entry, error) {
+			return nil, nil
+		},
 	}
 	r := &Resolver{Audit: audit.NewService(mock)}
 	q := &queryResolver{r}
@@ -59,7 +61,9 @@ func TestAuditLog_resolver_returns_nil_when_not_found(t *testing.T) {
 func TestAuditLogs_resolver_rejects_negative_offset(t *testing.T) {
 	mock := &auditResolverMockStore{
 		getByIDFunc: func(ctx context.Context, id string) (*audit.Entry, error) { return nil, nil },
-		listFunc:    func(ctx context.Context, filter audit.ListFilter, limit, offset int) ([]*audit.Entry, error) { return nil, nil },
+		listFunc: func(ctx context.Context, filter audit.ListFilter, limit, offset int) ([]*audit.Entry, error) {
+			return nil, nil
+		},
 	}
 	r := &Resolver{Audit: audit.NewService(mock)}
 	q := &queryResolver{r}
@@ -71,7 +75,7 @@ func TestAuditLogs_resolver_rejects_negative_offset(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error")
 	}
-	if err.Error() != "offset must be >= 0" {
+	if !errors.Is(err, audit.ErrNegativeOffset) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
@@ -105,3 +109,27 @@ func TestAuditLogs_resolver_uses_defaults_and_maps_entries(t *testing.T) {
 	}
 }
 
+func TestAuditLogs_resolver_caps_limit_to_max(t *testing.T) {
+	mock := &auditResolverMockStore{
+		getByIDFunc: func(ctx context.Context, id string) (*audit.Entry, error) { return nil, nil },
+		listFunc: func(ctx context.Context, filter audit.ListFilter, limit, offset int) ([]*audit.Entry, error) {
+			if limit != audit.MaxListLimit {
+				t.Fatalf("expected capped limit=%d, got %d", audit.MaxListLimit, limit)
+			}
+			if offset != 0 {
+				t.Fatalf("expected offset=0, got %d", offset)
+			}
+			return nil, nil
+		},
+	}
+	r := &Resolver{Audit: audit.NewService(mock)}
+	q := &queryResolver{r}
+	ctx := auth.WithClaims(context.Background(), &auth.Claims{Sub: "u1", Role: "admin"})
+	limit := audit.MaxListLimit + 1000
+
+	_, err := q.AuditLogs(ctx, nil, &limit, nil)
+
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+}
