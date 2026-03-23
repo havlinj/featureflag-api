@@ -5,7 +5,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$ROOT_DIR"
 
-MIN_COVERAGE=80
+MIN_COVERAGE=90
 
 # Note: in Go, "./internal/..." includes nested subpackages such as
 # "./internal/*/mock" and "./internal/testutil". We keep an explicit include

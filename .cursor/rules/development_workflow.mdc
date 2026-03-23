@@ -313,6 +313,7 @@ No milestone is complete without explicit review approval.
 - Testing & CI quality gates:
   - Reduce flakiness (readiness checks instead of fixed sleeps).
   - Add stronger CI quality gates (race detector and coverage policy).
+  - Coverage policy target for production packages should reach and maintain at least 90% (unit + integration measured together), with optional gradual per-file/per-package minimums for core service/repository files.
 - Documented review outcomes:
   - Explicit list of accepted deviations from original assumptions and rationale.
 
