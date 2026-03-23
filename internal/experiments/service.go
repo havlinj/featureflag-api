@@ -40,41 +40,66 @@ func NewServiceWithAudit(store Store, auditStore audit.Store) *Service {
 // CreateExperiment creates a new experiment with the given variants.
 // Variant weights must sum to 100; otherwise returns *InvalidWeightsError.
 func (s *Service) CreateExperiment(ctx context.Context, input model.CreateExperimentInput) (*model.Experiment, error) {
-	if s.audit == nil {
-		created, err := s.createExperimentWithStore(ctx, s.store, input)
+	if s.audit != nil {
+		auditCtx, err := s.prepareAuditTx(ctx)
 		if err != nil {
 			return nil, err
 		}
+		committed := false
+		defer func() {
+			if !committed {
+				_ = auditCtx.tx.Rollback()
+			}
+		}()
+
+		created, err := s.createExperimentWithStore(ctx, auditCtx.store, input)
+		if err != nil {
+			return nil, err
+		}
+		if err := auditCtx.audit.Create(ctx, &audit.Entry{
+			Entity:   audit.EntityExperiment,
+			EntityID: created.ID,
+			Action:   audit.ActionCreate,
+			ActorID:  auditCtx.actorID,
+		}); err != nil {
+			return nil, fmt.Errorf("audit create entry: %w", err)
+		}
+		if err := auditCtx.tx.Commit(); err != nil {
+			return nil, err
+		}
+		committed = true
 		return experimentToModel(created), nil
 	}
 
-	auditCtx, err := s.prepareAuditTx(ctx)
-	if err != nil {
-		return nil, err
-	}
-	committed := false
-	defer func() {
-		if !committed {
-			_ = auditCtx.tx.Rollback()
+	storeTxAware, canUseTx := s.store.(TxAwareStore)
+	storeTxStarter, canStartTx := s.store.(TxStarter)
+	if canUseTx && canStartTx {
+		tx, err := storeTxStarter.BeginTx(ctx)
+		if err != nil {
+			return nil, err
 		}
-	}()
+		committed := false
+		defer func() {
+			if !committed {
+				_ = tx.Rollback()
+			}
+		}()
 
-	created, err := s.createExperimentWithStore(ctx, auditCtx.store, input)
+		created, err := s.createExperimentWithStore(ctx, storeTxAware.WithTx(tx), input)
+		if err != nil {
+			return nil, err
+		}
+		if err := tx.Commit(); err != nil {
+			return nil, err
+		}
+		committed = true
+		return experimentToModel(created), nil
+	}
+
+	created, err := s.createExperimentWithStore(ctx, s.store, input)
 	if err != nil {
 		return nil, err
 	}
-	if err := auditCtx.audit.Create(ctx, &audit.Entry{
-		Entity:   audit.EntityExperiment,
-		EntityID: created.ID,
-		Action:   audit.ActionCreate,
-		ActorID:  auditCtx.actorID,
-	}); err != nil {
-		return nil, fmt.Errorf("audit create entry: %w", err)
-	}
-	if err := auditCtx.tx.Commit(); err != nil {
-		return nil, err
-	}
-	committed = true
 	return experimentToModel(created), nil
 }
 

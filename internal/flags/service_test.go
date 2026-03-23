@@ -179,6 +179,34 @@ func TestService_UpdateFlag_happy_path(t *testing.T) {
 	}
 }
 
+func TestService_UpdateFlag_uses_input_environment_when_provided(t *testing.T) {
+	ctx := context.Background()
+	store := &mock.Store{}
+	flag := &flags.Flag{ID: "f1", Key: "test-flag", Enabled: false, Environment: flags.DeploymentStage("staging")}
+	store.GetByKeyAndEnvironmentReturns = []mock.GetByKeyResult{
+		{Flag: flag, Err: nil},
+	}
+	store.UpdateReturns = []error{nil}
+	svc := flags.NewService(store)
+	env := "staging"
+	input := model.UpdateFlagInput{Key: "test-flag", Environment: &env, Enabled: true}
+
+	got, err := svc.UpdateFlag(ctx, input)
+
+	if err != nil {
+		t.Fatalf("UpdateFlag: %v", err)
+	}
+	if got == nil || !got.Enabled {
+		t.Errorf("expected enabled flag, got %+v", got)
+	}
+	if len(store.GetByKeyAndEnvironmentCalls) != 1 {
+		t.Fatalf("GetByKeyAndEnvironment calls: want 1, got %d", len(store.GetByKeyAndEnvironmentCalls))
+	}
+	if store.GetByKeyAndEnvironmentCalls[0].Env != flags.DeploymentStage("staging") {
+		t.Errorf("expected environment staging, got %q", store.GetByKeyAndEnvironmentCalls[0].Env)
+	}
+}
+
 func TestService_UpdateFlag_not_found_returns_ErrNotFound(t *testing.T) {
 	ctx := context.Background()
 	store := &mock.Store{}
@@ -523,6 +551,24 @@ func TestService_EvaluateFlag_uses_default_environment_dev(t *testing.T) {
 	}
 	if store.GetByKeyAndEnvironmentCalls[0].Env != flags.DeploymentStageDev {
 		t.Errorf("EvaluateFlag should use defaultEnvironment dev, got %q", store.GetByKeyAndEnvironmentCalls[0].Env)
+	}
+}
+
+func TestService_EvaluateFlagInEnvironment_uses_provided_environment(t *testing.T) {
+	ctx := context.Background()
+	store := &mock.Store{}
+	store.GetByKeyAndEnvironmentReturns = []mock.GetByKeyResult{
+		{Flag: nil, Err: nil},
+	}
+	svc := flags.NewService(store)
+
+	_, _ = svc.EvaluateFlagInEnvironment(ctx, "key", flags.DeploymentStage("staging"), evalCtx("user-1"))
+
+	if len(store.GetByKeyAndEnvironmentCalls) != 1 {
+		t.Fatalf("expected 1 GetByKeyAndEnvironment call, got %d", len(store.GetByKeyAndEnvironmentCalls))
+	}
+	if store.GetByKeyAndEnvironmentCalls[0].Env != flags.DeploymentStage("staging") {
+		t.Errorf("expected staging env, got %q", store.GetByKeyAndEnvironmentCalls[0].Env)
 	}
 }
 

@@ -170,7 +170,12 @@ func (s *Service) UpdateFlag(ctx context.Context, input model.UpdateFlagInput) (
 }
 
 func (s *Service) updateFlagWithStore(ctx context.Context, store Store, input model.UpdateFlagInput) (*Flag, error) {
-	flag, err := s.getFlagOrErrWithStore(ctx, store, input.Key, defaultEnvironment)
+	env := defaultEnvironment
+	if input.Environment != nil && *input.Environment != "" {
+		env = DeploymentStage(*input.Environment)
+	}
+
+	flag, err := s.getFlagOrErrWithStore(ctx, store, input.Key, env)
 	if err != nil {
 		return nil, err
 	}
@@ -230,11 +235,16 @@ func (s *Service) applyRulesUpdateWithStore(ctx context.Context, store Store, fl
 
 // EvaluateFlag returns whether the flag is enabled for the given evaluation context.
 func (s *Service) EvaluateFlag(ctx context.Context, key string, evalCtx model.EvaluationContextInput) (bool, error) {
+	return s.EvaluateFlagInEnvironment(ctx, key, defaultEnvironment, evalCtx)
+}
+
+// EvaluateFlagInEnvironment returns whether the flag is enabled for the given evaluation context in the target environment.
+func (s *Service) EvaluateFlagInEnvironment(ctx context.Context, key string, env DeploymentStage, evalCtx model.EvaluationContextInput) (bool, error) {
 	if evalCtx.UserID == "" {
 		return false, &InvalidUserIDError{UserID: evalCtx.UserID}
 	}
 
-	flag, err := s.store.GetByKeyAndEnvironment(ctx, key, defaultEnvironment)
+	flag, err := s.store.GetByKeyAndEnvironment(ctx, key, env)
 	if err != nil {
 		return false, fmt.Errorf("get flag: %w", err)
 	}

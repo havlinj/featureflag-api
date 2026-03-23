@@ -45,11 +45,15 @@ func (r *mutationResolver) DeleteFlag(ctx context.Context, key string, environme
 }
 
 // EvaluateFlag is the resolver for the evaluateFlag field.
-func (r *queryResolver) EvaluateFlag(ctx context.Context, key string, evaluationContext model.EvaluationContextInput) (bool, error) {
+func (r *queryResolver) EvaluateFlag(ctx context.Context, key string, evaluationContext model.EvaluationContextInput, environment *string) (bool, error) {
 	if _, err := auth.RequireRole(ctx, "admin", "developer", "viewer"); err != nil {
 		return false, err
 	}
-	return r.flags.EvaluateFlag(ctx, key, evaluationContext)
+	env := flags.DeploymentStageDev
+	if environment != nil && *environment != "" {
+		env = flags.DeploymentStage(*environment)
+	}
+	return r.flags.EvaluateFlagInEnvironment(ctx, key, env, evaluationContext)
 }
 
 // Mutation returns graph.MutationResolver implementation.

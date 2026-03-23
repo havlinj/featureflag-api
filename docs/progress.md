@@ -6,9 +6,9 @@
 # 🏗️ Progress Tracker – Feature Flag API
 
 **Last updated**: 2026-03-23  
-**Overall progress**: ██████████ 100% (Phase 1–4 complete)  
-**Status**: Phase 1, Phase 2, Phase 3 and Phase 4 **complete and reviewed (APPROVED)**  
-**Next step**: Post-Phase cleanup and optimization tasks (optional follow-up work)  
+**Overall progress**: █████████░ 90% (Phase 1–4 complete; Phase 5 in progress)  
+**Status**: Phase 1, Phase 2, Phase 3 and Phase 4 **complete and reviewed (APPROVED)**; Phase 5 **planned**  
+**Next step**: Phase 5 – Production hardening and quality reiteration  
 **Blockers**: None
 
 ## 📋 Milestones (per development_workflow.mdc)
@@ -19,6 +19,7 @@
 | Phase 2: Local Test Scripts, Binary Smoke & CI | ✅ Complete (reviewed) | 100% | Bash scripts (check, unit, integration, build, test_all_quick, test_all_full, test_binary_smoke); scripts/integration/; internal/config; GitHub Actions CI (push/PR to master) |
 | Phase 3: Experiments Integration | ✅ Complete (reviewed) | 100% | Experiments service, GraphQL schema + resolvers (createExperiment, experiment, getAssignment), DB (experiments, experiment_variants, experiment_assignments), deterministic assignment, integration + resolver unit tests |
 | Phase 4: Audit Logging | ✅ Complete (reviewed) | 100% | Audit module, audit_logs table, atomic writes (fail-closed), audit read API, integration + resolver tests |
+| Phase 5: Production Hardening & Quality Reiteration | ⏳ Planned | 0% | Security/runtime hardening, architecture cleanup, data-integrity improvements, stronger CI/testing gates |
 
 ## 🔧 Phase 1 – Current state
 
@@ -147,7 +148,21 @@
 - Tests: internal/db, internal/flags, internal/users, internal/experiments (service_test, postgres_test, errors_test), internal/auth, transport/graphql (experiments_resolvers_test), transport/graphql/middleware, test/integration (flags, users, auth, experiments; tag `integration`). Default `go test ./...` skips integration; run with `-tags=integration` for full E2E.
 - Code style: gofmt run before task completion (see .cursor/rules/coding_style.mdc).
 
+## 🔁 Phase 5 – Candidate scope (from final review)
+
+- [ ] Fix multi-environment correctness gap in flags update/evaluate flow (`dev` hardcoding)
+- [ ] Reduce transport-model coupling in domain services
+- [ ] Ensure experiment write atomicity independent of audit wiring
+- [ ] Strengthen DB integrity constraints for experiment assignments
+- [ ] Improve security defaults (TLS/DSN posture) and auth error shaping
+- [ ] Harden JWT validation policy and login abuse controls
+- [ ] Add server/runtime hardening (timeouts/limits) and GraphQL operation safeguards
+- [ ] Improve CI quality gates (race detector, coverage policy)
+- [ ] Remove flaky fixed sleeps in integration/bootstrap scripts via readiness checks
+
 ## 📝 Changelog
+
+**2026-03-23**: Introduced **Phase 5 – Production Hardening & Quality Reiteration** as a follow-up iteration after fulfilling original phase goals. Scope includes architecture hardening, security and runtime resilience improvements, data integrity constraints, and stronger CI/testing quality gates. This phase explicitly allows justified deviations from original assumptions when they materially improve safety and production quality.
 
 **2026-03-23**: Phase 4 (Audit Logging) closed after final REVIEW (APPROVED). Delivered audit module and persistence, `audit_logs` schema integration, fail-closed atomic business+audit writes for critical operations, GraphQL audit read API with admin RBAC, explicit negative-offset validation, and expanded test coverage (unit/resolver/repository integration/E2E integration). Follow-up refactor pass completed: shared audit tx helper, typed audit metadata constants, resolver precheck cleanup, dependency encapsulation across services/resolvers/app wiring, and resolver test fixtures moved to constructor-based setup. Runtime stack upgraded to Go 1.25 and gqlgen regenerated; `go test ./...` and `go test -tags=integration ./...` pass.
 

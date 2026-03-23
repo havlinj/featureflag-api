@@ -36,3 +36,8 @@ type TxAwareStore interface {
 	Store
 	WithTx(tx *sql.Tx) Store
 }
+
+// TxStarter is an optional interface for stores that can begin a sql.Tx.
+type TxStarter interface {
+	BeginTx(ctx context.Context) (*sql.Tx, error)
+}

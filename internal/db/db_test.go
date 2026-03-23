@@ -3,9 +3,11 @@ package db
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 )
 
@@ -18,6 +20,33 @@ func TestDB_EnsureSchema_and_naked_write_read(t *testing.T) {
 
 	assertFeatureFlagReadBack(t, database.Conn(), "naked-key", "dev", "naked desc", false)
 	assertFlagRuleReadBack(t, database.Conn(), flagID, "percentage", "50")
+}
+
+func TestDB_EnsureSchema_experiment_assignment_variant_belongs_to_same_experiment(t *testing.T) {
+	database := arrangeDBWithSchema(t)
+	truncateTables(t, database)
+	ctx := context.Background()
+	conn := database.Conn()
+	userID := insertUserRow(t, conn, "a@test.com")
+	exp1 := insertExperimentRow(t, conn, "exp-a", "dev")
+	exp2 := insertExperimentRow(t, conn, "exp-b", "dev")
+	variantFromExp2 := insertVariantRow(t, conn, exp2, "B", 100)
+
+	_, err := conn.ExecContext(ctx,
+		`INSERT INTO experiment_assignments (user_id, experiment_id, variant_id) VALUES ($1, $2, $3)`,
+		userID, exp1, variantFromExp2,
+	)
+
+	if err == nil {
+		t.Fatal("expected FK violation for mismatched experiment_id/variant_id, got nil")
+	}
+	var pgErr *pgconn.PgError
+	if !errors.As(err, &pgErr) {
+		t.Fatalf("expected pg error, got %v", err)
+	}
+	if pgErr.Code != "23503" {
+		t.Fatalf("expected FK violation code 23503, got %s", pgErr.Code)
+	}
 }
 
 // arrangeDBWithSchema starts Postgres, opens DB, runs EnsureSchema. Caller must not close DB (cleanup registered).
@@ -54,9 +83,51 @@ func arrangeDBWithSchema(t *testing.T) *DB {
 func truncateTables(t *testing.T, database *DB) {
 	t.Helper()
 	ctx := context.Background()
-	if _, err := database.Conn().ExecContext(ctx, "TRUNCATE flag_rules, feature_flags, users CASCADE"); err != nil {
+	if _, err := database.Conn().ExecContext(ctx, "TRUNCATE audit_logs, experiment_assignments, experiment_variants, experiments, flag_rules, feature_flags, users CASCADE"); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
+}
+
+func insertUserRow(t *testing.T, conn *sql.DB, email string) string {
+	t.Helper()
+	ctx := context.Background()
+	var id string
+	err := conn.QueryRowContext(ctx,
+		`INSERT INTO users (email, role) VALUES ($1, 'admin') RETURNING id`,
+		email,
+	).Scan(&id)
+	if err != nil {
+		t.Fatalf("insert users: %v", err)
+	}
+	return id
+}
+
+func insertExperimentRow(t *testing.T, conn *sql.DB, key, environment string) string {
+	t.Helper()
+	ctx := context.Background()
+	var id string
+	err := conn.QueryRowContext(ctx,
+		`INSERT INTO experiments (key, environment) VALUES ($1, $2) RETURNING id`,
+		key, environment,
+	).Scan(&id)
+	if err != nil {
+		t.Fatalf("insert experiments: %v", err)
+	}
+	return id
+}
+
+func insertVariantRow(t *testing.T, conn *sql.DB, experimentID, name string, weight int) string {
+	t.Helper()
+	ctx := context.Background()
+	var id string
+	err := conn.QueryRowContext(ctx,
+		`INSERT INTO experiment_variants (experiment_id, name, weight) VALUES ($1, $2, $3) RETURNING id`,
+		experimentID, name, weight,
+	).Scan(&id)
+	if err != nil {
+		t.Fatalf("insert experiment_variants: %v", err)
+	}
+	return id
 }
 
 func insertFeatureFlagRow(t *testing.T, conn *sql.DB, key, description string, enabled bool, environment string) string {

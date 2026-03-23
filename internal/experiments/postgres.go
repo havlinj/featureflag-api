@@ -10,7 +10,8 @@ import (
 
 // PostgresStore implements Store using PostgreSQL.
 type PostgresStore struct {
-	exec execQuerier
+	exec  execQuerier
+	begin beginTxer
 }
 
 type execQuerier interface {
@@ -19,9 +20,13 @@ type execQuerier interface {
 	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
 }
 
+type beginTxer interface {
+	BeginTx(ctx context.Context, opts *sql.TxOptions) (*sql.Tx, error)
+}
+
 // NewPostgresStore returns a Store that uses the given *sql.DB.
 func NewPostgresStore(conn *sql.DB) *PostgresStore {
-	return &PostgresStore{exec: conn}
+	return &PostgresStore{exec: conn, begin: conn}
 }
 
 func newPostgresStoreWithTx(tx *sql.Tx) *PostgresStore {
@@ -31,6 +36,14 @@ func newPostgresStoreWithTx(tx *sql.Tx) *PostgresStore {
 // WithTx returns a tx-scoped Store.
 func (p *PostgresStore) WithTx(tx *sql.Tx) Store {
 	return newPostgresStoreWithTx(tx)
+}
+
+// BeginTx starts a transaction when the store is db-backed.
+func (p *PostgresStore) BeginTx(ctx context.Context) (*sql.Tx, error) {
+	if p.begin == nil {
+		return nil, errors.New("experiments store: BeginTx not supported on tx-scoped store")
+	}
+	return p.begin.BeginTx(ctx, nil)
 }
 
 // CreateExperiment inserts a new experiment. Returns *DuplicateExperimentError if (key, environment) exists.

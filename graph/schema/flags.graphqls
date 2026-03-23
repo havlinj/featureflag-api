@@ -33,6 +33,7 @@ input CreateFlagInput {
 
 input UpdateFlagInput {
   key: String!
+  environment: String
   enabled: Boolean!
   rules: [RuleInput!]
 }
@@ -43,7 +44,7 @@ input EvaluationContextInput {
 }
 
 type Query {
-  evaluateFlag(key: String!, evaluationContext: EvaluationContextInput!): Boolean!
+  evaluateFlag(key: String!, evaluationContext: EvaluationContextInput!, environment: String): Boolean!
 }
 
 type Mutation {

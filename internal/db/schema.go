@@ -36,14 +36,31 @@ var schemaSQL = []string{
 		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 		experiment_id UUID NOT NULL REFERENCES experiments(id) ON DELETE CASCADE,
 		name TEXT NOT NULL,
-		weight INTEGER NOT NULL CHECK (weight >= 0)
+		weight INTEGER NOT NULL CHECK (weight >= 0),
+		UNIQUE(id, experiment_id)
 	)`,
 	`CREATE TABLE IF NOT EXISTS experiment_assignments (
 		user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
 		experiment_id UUID NOT NULL REFERENCES experiments(id) ON DELETE CASCADE,
-		variant_id UUID NOT NULL REFERENCES experiment_variants(id) ON DELETE CASCADE,
+		variant_id UUID NOT NULL,
 		PRIMARY KEY (user_id, experiment_id)
 	)`,
+	`DO $$
+	BEGIN
+		IF NOT EXISTS (
+			SELECT 1
+			FROM pg_constraint c
+			JOIN pg_namespace n ON n.oid = c.connamespace
+			WHERE c.conname = 'experiment_assignments_variant_experiment_fkey'
+			  AND n.nspname = 'public'
+		) THEN
+			ALTER TABLE public.experiment_assignments
+				ADD CONSTRAINT experiment_assignments_variant_experiment_fkey
+				FOREIGN KEY (variant_id, experiment_id)
+				REFERENCES public.experiment_variants(id, experiment_id)
+				ON DELETE CASCADE;
+		END IF;
+	END $$`,
 	`CREATE TABLE IF NOT EXISTS audit_logs (
 		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 		entity TEXT NOT NULL,

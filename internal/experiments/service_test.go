@@ -507,6 +507,15 @@ func (s *txAwareExperimentsStoreMock) WithTx(tx *sql.Tx) experiments.Store {
 	return s
 }
 
+type txCapableExperimentsStoreMock struct {
+	txAwareExperimentsStoreMock
+	beginErr error
+}
+
+func (s *txCapableExperimentsStoreMock) BeginTx(ctx context.Context) (*sql.Tx, error) {
+	return nil, s.beginErr
+}
+
 func TestService_CreateExperiment_withAudit_missingActor_returns_error(t *testing.T) {
 	store := &txAwareExperimentsStoreMock{inner: &mock.Store{}}
 	svc := experiments.NewServiceWithAudit(store, &auditmock.TxAware{})
@@ -557,5 +566,24 @@ func TestService_CreateExperiment_withAudit_beginTx_error_is_returned(t *testing
 
 	if !errors.Is(err, wantErr) {
 		t.Fatalf("expected %v, got %v", wantErr, err)
+	}
+}
+
+func TestService_CreateExperiment_withoutAudit_storeBeginTx_error_is_returned(t *testing.T) {
+	store := &txCapableExperimentsStoreMock{
+		txAwareExperimentsStoreMock: txAwareExperimentsStoreMock{inner: &mock.Store{}},
+		beginErr:                    errors.New("begin tx failed"),
+	}
+	svc := experiments.NewService(store)
+	input := model.CreateExperimentInput{
+		Key:         "ab-test",
+		Environment: "dev",
+		Variants:    variants50_50(),
+	}
+
+	_, err := svc.CreateExperiment(context.Background(), input)
+
+	if err == nil || err.Error() != "begin tx failed" {
+		t.Fatalf("expected begin tx failed error, got %v", err)
 	}
 }

@@ -171,4 +171,70 @@ func TestFlagsAPI_GraphQLOverHTTPS(t *testing.T) {
 	if got, _ := evalAfterDelResp.Data["evaluateFlag"].(bool); got {
 		t.Errorf("evaluateFlag after delete: expected false, got true")
 	}
+
+	// 7) environment-aware evaluateFlag: staging flag is visible only when environment is specified
+	createStagingResp, err := client.DoRequest(`
+		mutation CreateFlag($input: CreateFlagInput!) {
+			createFlag(input: $input) { id key environment }
+		}
+	`, map[string]interface{}{
+		"input": map[string]interface{}{
+			"key":         "staging-flag",
+			"description": "staging specific",
+			"environment": "staging",
+		},
+	})
+	if err != nil {
+		t.Fatalf("create staging flag: %v", err)
+	}
+	requireDataAndNoErrors(t, createStagingResp)
+
+	updateStagingResp, err := client.DoRequest(`
+		mutation UpdateFlag($input: UpdateFlagInput!) {
+			updateFlag(input: $input) { key enabled }
+		}
+	`, map[string]interface{}{
+		"input": map[string]interface{}{
+			"key":         "staging-flag",
+			"environment": "staging",
+			"enabled":     true,
+		},
+	})
+	if err != nil {
+		t.Fatalf("update staging flag: %v", err)
+	}
+	requireDataAndNoErrors(t, updateStagingResp)
+
+	evalDefaultEnvResp, err := client.DoRequest(`
+		query EvaluateFlag($key: String!, $evaluationContext: EvaluationContextInput!) {
+			evaluateFlag(key: $key, evaluationContext: $evaluationContext)
+		}
+	`, map[string]interface{}{
+		"key":               "staging-flag",
+		"evaluationContext": map[string]interface{}{"userId": "user-1"},
+	})
+	if err != nil {
+		t.Fatalf("evaluate staging flag in default env: %v", err)
+	}
+	requireDataAndNoErrors(t, evalDefaultEnvResp)
+	if got, _ := evalDefaultEnvResp.Data["evaluateFlag"].(bool); got {
+		t.Errorf("evaluateFlag default env: expected false for staging-only flag, got true")
+	}
+
+	evalStagingEnvResp, err := client.DoRequest(`
+		query EvaluateFlag($key: String!, $evaluationContext: EvaluationContextInput!, $environment: String) {
+			evaluateFlag(key: $key, evaluationContext: $evaluationContext, environment: $environment)
+		}
+	`, map[string]interface{}{
+		"key":               "staging-flag",
+		"environment":       "staging",
+		"evaluationContext": map[string]interface{}{"userId": "user-1"},
+	})
+	if err != nil {
+		t.Fatalf("evaluate staging flag in staging env: %v", err)
+	}
+	requireDataAndNoErrors(t, evalStagingEnvResp)
+	if got, _ := evalStagingEnvResp.Data["evaluateFlag"].(bool); !got {
+		t.Errorf("evaluateFlag staging env: expected true, got false")
+	}
 }

@@ -85,7 +85,7 @@ type ComplexityRoot struct {
 	Query struct {
 		AuditLog      func(childComplexity int, id string) int
 		AuditLogs     func(childComplexity int, filter *model.AuditLogsFilterInput, limit *int, offset *int) int
-		EvaluateFlag  func(childComplexity int, key string, evaluationContext model.EvaluationContextInput) int
+		EvaluateFlag  func(childComplexity int, key string, evaluationContext model.EvaluationContextInput, environment *string) int
 		Experiment    func(childComplexity int, key string, environment string) int
 		GetAssignment func(childComplexity int, userID string, experimentKey string, environment string) int
 		User          func(childComplexity int, id string) int
@@ -111,7 +111,7 @@ type MutationResolver interface {
 	DeleteUser(ctx context.Context, id string) (bool, error)
 }
 type QueryResolver interface {
-	EvaluateFlag(ctx context.Context, key string, evaluationContext model.EvaluationContextInput) (bool, error)
+	EvaluateFlag(ctx context.Context, key string, evaluationContext model.EvaluationContextInput, environment *string) (bool, error)
 	AuditLog(ctx context.Context, id string) (*model.AuditLog, error)
 	AuditLogs(ctx context.Context, filter *model.AuditLogsFilterInput, limit *int, offset *int) ([]*model.AuditLog, error)
 	Experiment(ctx context.Context, key string, environment string) (*model.Experiment, error)
@@ -380,7 +380,7 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			return 0, false
 		}
 
-		return e.ComplexityRoot.Query.EvaluateFlag(childComplexity, args["key"].(string), args["evaluationContext"].(model.EvaluationContextInput)), true
+		return e.ComplexityRoot.Query.EvaluateFlag(childComplexity, args["key"].(string), args["evaluationContext"].(model.EvaluationContextInput), args["environment"].(*string)), true
 	case "Query.experiment":
 		if e.ComplexityRoot.Query.Experiment == nil {
 			break
@@ -717,6 +717,11 @@ func (ec *executionContext) field_Query_evaluateFlag_args(ctx context.Context, r
 		return nil, err
 	}
 	args["evaluationContext"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "environment", ec.unmarshalOString2ᚖstring)
+	if err != nil {
+		return nil, err
+	}
+	args["environment"] = arg2
 	return args, nil
 }
 
@@ -1807,7 +1812,7 @@ func (ec *executionContext) _Query_evaluateFlag(ctx context.Context, field graph
 		ec.fieldContext_Query_evaluateFlag,
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.Resolvers.Query().EvaluateFlag(ctx, fc.Args["key"].(string), fc.Args["evaluationContext"].(model.EvaluationContextInput))
+			return ec.Resolvers.Query().EvaluateFlag(ctx, fc.Args["key"].(string), fc.Args["evaluationContext"].(model.EvaluationContextInput), fc.Args["environment"].(*string))
 		},
 		nil,
 		ec.marshalNBoolean2bool,
@@ -4171,7 +4176,7 @@ func (ec *executionContext) unmarshalInputUpdateFlagInput(ctx context.Context, o
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"key", "enabled", "rules"}
+	fieldsInOrder := [...]string{"key", "environment", "enabled", "rules"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -4185,6 +4190,13 @@ func (ec *executionContext) unmarshalInputUpdateFlagInput(ctx context.Context, o
 				return it, err
 			}
 			it.Key = data
+		case "environment":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("environment"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Environment = data
 		case "enabled":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("enabled"))
 			data, err := ec.unmarshalNBoolean2bool(ctx, v)

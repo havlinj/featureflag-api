@@ -292,6 +292,32 @@ No milestone is complete without explicit review approval.
 
 ---
 
+## Phase 5: Production Hardening & Quality Reiteration
+
+**Objectives:**
+- Reiterate over the completed implementation with a strict production-quality review mindset.
+- Improve architecture boundaries, security posture, runtime resilience, and test/CI reliability.
+- Address findings that may go beyond (or partially diverge from) the original phase scope when they materially improve software quality and safety.
+
+**Key Deliverables:**
+- Architecture hardening:
+  - Remove/limit transport-to-domain coupling where possible.
+  - Improve transactional consistency for critical writes regardless of optional features (e.g. audit wiring).
+- Security hardening:
+  - Safer defaults for transport and database security (TLS posture, secret handling, auth error shaping).
+  - Strengthen auth validation and abuse resistance (e.g. JWT policy checks, login throttling strategy).
+- Data integrity improvements:
+  - Tighten DB constraints to prevent cross-entity inconsistency.
+- Runtime & API robustness:
+  - Add server timeout/limit hardening and GraphQL operational safeguards where appropriate.
+- Testing & CI quality gates:
+  - Reduce flakiness (readiness checks instead of fixed sleeps).
+  - Add stronger CI quality gates (race detector and coverage policy).
+- Documented review outcomes:
+  - Explicit list of accepted deviations from original assumptions and rationale.
+
+---
+
 ## Notes
 
 - Each phase should be fully functional and testable before moving to the next.

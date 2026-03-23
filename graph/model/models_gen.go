@@ -97,9 +97,10 @@ type RuleInput struct {
 }
 
 type UpdateFlagInput struct {
-	Key     string       `json:"key"`
-	Enabled bool         `json:"enabled"`
-	Rules   []*RuleInput `json:"rules,omitempty"`
+	Key         string       `json:"key"`
+	Environment *string      `json:"environment,omitempty"`
+	Enabled     bool         `json:"enabled"`
+	Rules       []*RuleInput `json:"rules,omitempty"`
 }
 
 type UpdateUserInput struct {
