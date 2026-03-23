@@ -5,10 +5,10 @@
 
 # 🏗️ Progress Tracker – Feature Flag API
 
-**Last updated**: 2026-03-15  
-**Overall progress**: █████████░ 75% (Phase 1–3 of 4 complete)  
-**Status**: Phase 1 and Phase 2 **complete and reviewed (APPROVED)**; Phase 3 **complete and reviewed (APPROVED)** – Experiments module, GraphQL API, deterministic assignment, integration + resolver unit tests  
-**Next step**: Phase 4 – Audit logging  
+**Last updated**: 2026-03-23  
+**Overall progress**: ██████████ 100% (Phase 1–4 complete)  
+**Status**: Phase 1, Phase 2, Phase 3 and Phase 4 **complete and reviewed (APPROVED)**  
+**Next step**: Post-Phase cleanup and optimization tasks (optional follow-up work)  
 **Blockers**: None
 
 ## 📋 Milestones (per development_workflow.mdc)
@@ -18,7 +18,7 @@
 | Phase 1: Feature Flags & Users Core | ✅ Complete | 100% | Flags + Users API, rollout strategies (percentage + attribute, one per flag), rules CRUD, EvaluateFlag with context, DeleteFlag, DB, auth (JWT), logging, integration tests |
 | Phase 2: Local Test Scripts, Binary Smoke & CI | ✅ Complete (reviewed) | 100% | Bash scripts (check, unit, integration, build, test_all_quick, test_all_full, test_binary_smoke); scripts/integration/; internal/config; GitHub Actions CI (push/PR to master) |
 | Phase 3: Experiments Integration | ✅ Complete (reviewed) | 100% | Experiments service, GraphQL schema + resolvers (createExperiment, experiment, getAssignment), DB (experiments, experiment_variants, experiment_assignments), deterministic assignment, integration + resolver unit tests |
-| Phase 4: Audit Logging | ⏳ Planned | 0% | Audit service, audit_logs table, hooks |
+| Phase 4: Audit Logging | ✅ Complete (reviewed) | 100% | Audit module, audit_logs table, atomic writes (fail-closed), audit read API, integration + resolver tests |
 
 ## 🔧 Phase 1 – Current state
 
@@ -105,6 +105,42 @@
 
 **Conclusion:** Phase 3 implementation matches the approved design. Ready to close; next step is Phase 4 (Audit logging).
 
+## 🔧 Phase 4 – Current state
+
+- [x] DB schema updated with `audit_logs` table (`id`, `entity`, `entity_id`, `action`, `actor_id`, `created_at`)
+- [x] Truncation helpers updated to include `audit_logs` for integration tests
+- [x] New `internal/audit` module: `Entry`, `Store`, `PostgresStore`, thin `Service`
+- [x] Critical mutations are audited with fail-closed policy (flags/users/experiments scope agreed in phase planning)
+- [x] Atomic business + audit writes in one transaction for audited operations
+- [x] Context actor propagation from GraphQL resolver layer (`auth.WithActorID`) into service layer
+- [x] GraphQL audit read API delivered (`auditLog`, `auditLogs`) with admin RBAC
+- [x] Pagination validation in API: negative `offset` returns explicit error
+- [x] Resolver and service internals refactored to reduce duplication and improve encapsulation consistency
+- [x] Audit metadata constants and shared audit tx helper introduced for maintainability
+- [x] Unit, resolver, repository integration, and GraphQL integration tests updated and passing
+- [x] Go runtime/toolchain baseline updated to 1.25 and gqlgen regenerated/validated
+
+## Phase 4 – REVIEW (final)
+
+**Status: APPROVED**
+
+1. **Architecture**  
+   Layering is preserved: GraphQL resolvers remain thin adapters, business logic stays in services, and persistence stays in repository/store implementations. Audit write orchestration is centralized without leaking transport concerns into domain logic.
+
+2. **Simplicity**  
+   The solution avoids heavy abstractions; shared helpers were introduced only where repetition created real maintenance risk (audit tx/write orchestration and resolver prechecks).
+
+3. **Readability**  
+   Naming and flow are clearer after encapsulation of dependencies and removal of duplicated inline audit wiring. Test fixtures now use constructor-based setup instead of direct dependency field access.
+
+4. **Test quality**  
+   Coverage includes unit and integration scenarios for audit writes, rollback/error branches, pagination validation, resolver authorization behavior, and end-to-end GraphQL audit behavior. Full standard and integration suites were executed successfully.
+
+5. **Alignment with plan**  
+   Phase 4 deliverables from `development_workflow.mdc` were delivered: audit module + table, service hooks for critical operations, audit read API, and validation through integration tests. Post-phase technical hardening (encapsulation and Go/gqlgen upgrade) was completed with passing tests.
+
+**Conclusion:** Phase 4 implementation and follow-up hardening are complete and approved.
+
 ## 📈 Metrics
 
 - Test coverage: unit tests for db, flags.Service (incl. all return paths), users.Service, experiments.Service (CreateExperiment, GetExperiment, GetAssignment, weight validation, duplicate, not found, assignment determinism), auth, middleware; flags, users, and experiments PostgresStore (build tag `integration`); **experiments resolvers** (auth, nil service, not-found→null, delegation, service errors); integration tests for HTTPS+GraphQL against **real Postgres** (testcontainers), including test/integration/integration_experiments_test.go (createExperiment, experiment query, getAssignment, determinism). Mock errors in tests use descriptive labels.
@@ -112,6 +148,8 @@
 - Code style: gofmt run before task completion (see .cursor/rules/coding_style.mdc).
 
 ## 📝 Changelog
+
+**2026-03-23**: Phase 4 (Audit Logging) closed after final REVIEW (APPROVED). Delivered audit module and persistence, `audit_logs` schema integration, fail-closed atomic business+audit writes for critical operations, GraphQL audit read API with admin RBAC, explicit negative-offset validation, and expanded test coverage (unit/resolver/repository integration/E2E integration). Follow-up refactor pass completed: shared audit tx helper, typed audit metadata constants, resolver precheck cleanup, dependency encapsulation across services/resolvers/app wiring, and resolver test fixtures moved to constructor-based setup. Runtime stack upgraded to Go 1.25 and gqlgen regenerated; `go test ./...` and `go test -tags=integration ./...` pass.
 
 **2026-03-15**: Phase 3 (Experiments Integration) closed after final REVIEW (APPROVED). Delivered: experiments service layer (Store, PostgresStore, Service with CreateExperiment, GetExperiment, GetAssignment; deterministic assignment; structured errors); GraphQL schema (experiments.graphqls) and resolvers (CreateExperiment, experiment, getAssignment) with auth (admin/developer for create, admin/developer/viewer for queries) and ExperimentNotFoundError→null; wiring in app (NewApp accepts experimentsStore), cmd/main.go, test/integration/util.go; integration tests (integration_experiments_test.go) and full resolver unit tests (experiments_resolvers_test.go). progress.md updated: Phase 3 checkboxes, REVIEW section, milestones table, metrics; next step Phase 4 (Audit logging).
 
