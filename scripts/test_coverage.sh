@@ -18,6 +18,11 @@ MIN_ENTITY_FILE_COVERAGE=80
 # Function-level floor for core files to avoid low-covered functions hidden by file averages.
 MIN_CORE_FUNCTION_COVERAGE=50
 
+# Auto-exclude thin delegate wrappers from the function-level gate.
+# Thin delegate heuristic: single `return` statement that directly calls another
+# function/method and forwards arguments without transformations.
+AUTO_FILTER_THIN_DELEGATES=1
+
 # Optional whitelist entries:
 #   "path|reason|expires(YYYY-MM-DD)"
 # or
@@ -229,10 +234,35 @@ write_function_violations_file() {
 ' "$FUNC_REPORT_FILE" | sort -n > "$FUNCTION_VIOLATIONS_FILE"
 }
 
+# Emit tab-separated violation rows from FUNCTION_VIOLATIONS_FILE (pct, loc, name).
+emit_function_violation_lines() {
+  awk -F'\t' '{printf "  %6.1f%% < %s%%  %s %s\n", $1, min, $2, $3}' min="$MIN_CORE_FUNCTION_COVERAGE" "$FUNCTION_VIOLATIONS_FILE"
+}
+
+auto_filter_thin_delegates() {
+  if [[ "$AUTO_FILTER_THIN_DELEGATES" -ne 1 ]]; then
+    return 0
+  fi
+  if [[ ! -s "$FUNCTION_VIOLATIONS_FILE" ]]; then
+    echo "  PASS"
+    return 0
+  fi
+
+  # Rewrites FUNCTION_VIOLATIONS_FILE and prints summary + only remaining violations (or PASS).
+  if ! go run "${SCRIPT_DIR}/filter_thin_delegates.go" \
+    --violations "$FUNCTION_VIOLATIONS_FILE" \
+    --repo-root "$ROOT_DIR" \
+    --min "$MIN_CORE_FUNCTION_COVERAGE" ; then
+    echo "  WARN: auto thin-delegate filtering failed; listing unfiltered violations"
+    echo "  FAIL: functions below ${MIN_CORE_FUNCTION_COVERAGE}%"
+    emit_function_violation_lines
+  fi
+}
+
 print_function_gate_section() {
   if [[ -s "$FUNCTION_VIOLATIONS_FILE" ]]; then
     echo "  FAIL: functions below ${MIN_CORE_FUNCTION_COVERAGE}%"
-    awk -F'\t' '{printf "  %6.1f%% < %s%%  %s %s\n", $1, min, $2, $3}' min="$MIN_CORE_FUNCTION_COVERAGE" "$FUNCTION_VIOLATIONS_FILE"
+    emit_function_violation_lines
   else
     echo "  PASS"
   fi
@@ -324,7 +354,10 @@ main() {
   evaluate_per_file_floors
   print_function_floor_banner
   write_function_violations_file
-  print_function_gate_section
+  auto_filter_thin_delegates
+  if [[ "$AUTO_FILTER_THIN_DELEGATES" -ne 1 ]]; then
+    print_function_gate_section
+  fi
 
   local COVERAGE_TOTAL
   COVERAGE_TOTAL="$(coverage_total_percent)"
