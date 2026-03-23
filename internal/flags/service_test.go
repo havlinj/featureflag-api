@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -765,6 +766,32 @@ func TestService_CreateFlag_ReplaceRulesByFlagID_error_returns_wrapped_error(t *
 	}
 	if !errors.Is(err, wantErr) {
 		t.Errorf("expected wrapped %v, got %v", wantErr, err)
+	}
+}
+
+func TestService_EvaluateFlag_get_rules_error_includes_context(t *testing.T) {
+	ctx := context.Background()
+	store := &mock.Store{}
+	store.GetByKeyAndEnvironmentReturns = []mock.GetByKeyResult{
+		{Flag: &flags.Flag{ID: "f1", Key: "ctx-flag", Enabled: true, Environment: flags.DeploymentStageDev}, Err: nil},
+	}
+	wantErr := errors.New("GetRulesByFlagID failed")
+	store.GetRulesByFlagIDReturns = []mock.GetRulesResult{
+		{Rules: nil, Err: wantErr},
+	}
+	svc := flags.NewService(store)
+
+	_, err := svc.EvaluateFlag(ctx, "ctx-flag", evalCtx("user-1"))
+
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("expected wrapped %v, got %v", wantErr, err)
+	}
+	msg := err.Error()
+	if !strings.Contains(msg, `flag_id="f1"`) || !strings.Contains(msg, `key="ctx-flag"`) || !strings.Contains(msg, `environment="dev"`) {
+		t.Fatalf("expected contextual error message, got %q", msg)
 	}
 }
 

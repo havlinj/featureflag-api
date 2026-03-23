@@ -3,6 +3,7 @@
 package integration
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/havlinj/featureflag-api/internal/testutil"
@@ -168,4 +169,102 @@ func TestAdminCreatedUser_canLogin_and_roleEnforced(t *testing.T) {
 		t.Fatalf("createFlag as viewer request: %v", err)
 	}
 	requireGraphQLErrors(t, viewerCreateFlagResp)
+}
+
+func TestLogin_invalidCredentials_errorIsSanitized(t *testing.T) {
+	database, cleanup := testutil.PostgresForIntegration(t)
+	defer cleanup()
+	testutil.TruncateAll(t, database)
+	_, client, shutdown := startAppWithDB(t, database)
+	defer shutdown()
+
+	loginResp, err := client.DoRequest(`
+		mutation Login($input: LoginInput!) {
+			login(input: $input) { token }
+		}
+	`, map[string]interface{}{
+		"input": map[string]interface{}{
+			"email":    "missing-user@test.com",
+			"password": "wrong-password",
+		},
+	})
+	if err != nil {
+		t.Fatalf("login request: %v", err)
+	}
+	requireGraphQLErrors(t, loginResp)
+	errText := graphqlErrorMessages(loginResp)
+	if !strings.Contains(errText, "invalid credentials") {
+		t.Fatalf("expected sanitized invalid credentials message, got: %s", errText)
+	}
+	if strings.Contains(errText, "missing-user@test.com") {
+		t.Fatalf("error message leaks email context: %s", errText)
+	}
+}
+
+func TestCreateFlag_forbiddenError_isSanitized(t *testing.T) {
+	database, cleanup := testutil.PostgresForIntegration(t)
+	defer cleanup()
+	testutil.TruncateAll(t, database)
+	_, client, shutdown := startAppWithDB(t, database)
+	defer shutdown()
+
+	adminToken := testutil.SeedAdminAndLogin(t, database, client, "admin@test.com", "adminpass")
+	client.SetToken(adminToken)
+	viewerPass := "viewer-pass"
+	createViewerResp, err := client.DoRequest(`
+		mutation CreateUser($input: CreateUserInput!) {
+			createUser(input: $input) { id email role }
+		}
+	`, map[string]interface{}{
+		"input": map[string]interface{}{
+			"email":    "viewer-sanitized@test.com",
+			"role":     "viewer",
+			"password": viewerPass,
+		},
+	})
+	if err != nil {
+		t.Fatalf("create viewer: %v", err)
+	}
+	requireDataAndNoErrors(t, createViewerResp)
+
+	viewerLoginResp, err := client.DoRequest(`
+		mutation Login($input: LoginInput!) {
+			login(input: $input) { token }
+		}
+	`, map[string]interface{}{
+		"input": map[string]interface{}{
+			"email":    "viewer-sanitized@test.com",
+			"password": viewerPass,
+		},
+	})
+	if err != nil {
+		t.Fatalf("viewer login request: %v", err)
+	}
+	requireDataAndNoErrors(t, viewerLoginResp)
+	loginData, _ := viewerLoginResp.Data["login"].(map[string]interface{})
+	viewerToken, _ := loginData["token"].(string)
+	client.SetToken(viewerToken)
+
+	createFlagResp, err := client.DoRequest(`
+		mutation CreateFlag($input: CreateFlagInput!) {
+			createFlag(input: $input) { id key }
+		}
+	`, map[string]interface{}{
+		"input": map[string]interface{}{
+			"key":         "viewer-forbidden-flag",
+			"description": "forbidden",
+			"environment": "dev",
+		},
+	})
+	if err != nil {
+		t.Fatalf("viewer create flag request: %v", err)
+	}
+	requireGraphQLErrors(t, createFlagResp)
+	errText := graphqlErrorMessages(createFlagResp)
+	if !strings.Contains(errText, "forbidden") {
+		t.Fatalf("expected sanitized forbidden message, got: %s", errText)
+	}
+	if strings.Contains(errText, "allowed") || strings.Contains(errText, "admin") || strings.Contains(errText, "developer") {
+		t.Fatalf("error message leaks role policy details: %s", errText)
+	}
 }

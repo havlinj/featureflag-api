@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/havlinj/featureflag-api/graph/model"
@@ -210,6 +211,29 @@ func TestService_UpdateUser_get_error_returns_wrapped_error(t *testing.T) {
 	}
 	if len(store.UpdateCalls) != 0 {
 		t.Error("Update should not be called when GetByID fails")
+	}
+}
+
+func TestService_UpdateUser_get_error_includes_context(t *testing.T) {
+	ctx := context.Background()
+	store := &mock.Store{}
+	wantErr := errors.New("GetByID failed")
+	store.GetByIDReturns = []mock.GetByIDResult{
+		{User: nil, Err: wantErr},
+	}
+	svc := users.NewService(store)
+	input := model.UpdateUserInput{ID: "user-ctx-id"}
+
+	_, err := svc.UpdateUser(ctx, input)
+
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("expected wrapped %v, got %v", wantErr, err)
+	}
+	if !strings.Contains(err.Error(), `id="user-ctx-id"`) {
+		t.Fatalf("expected contextual error message, got %q", err.Error())
 	}
 }
 

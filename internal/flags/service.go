@@ -96,7 +96,7 @@ func (s *Service) createFlagWithStore(ctx context.Context, store Store, input mo
 	}
 	created, err := store.Create(ctx, flag)
 	if err != nil {
-		return nil, fmt.Errorf("create flag: %w", err)
+		return nil, fmt.Errorf("create flag key=%q environment=%q: %w", input.Key, env, err)
 	}
 	if err := persistRulesForNewFlag(ctx, store, created.ID, input.Rules); err != nil {
 		return nil, err
@@ -184,7 +184,7 @@ func (s *Service) updateFlagWithStore(ctx context.Context, store Store, input mo
 		return nil, err
 	}
 	if err := store.Update(ctx, flag); err != nil {
-		return nil, fmt.Errorf("update flag: %w", err)
+		return nil, fmt.Errorf("update flag id=%q key=%q environment=%q: %w", flag.ID, flag.Key, flag.Environment, err)
 	}
 	return flag, nil
 }
@@ -196,7 +196,7 @@ func (s *Service) getFlagOrErr(ctx context.Context, key string, env DeploymentSt
 func (s *Service) getFlagOrErrWithStore(ctx context.Context, store Store, key string, env DeploymentStage) (*Flag, error) {
 	flag, err := store.GetByKeyAndEnvironment(ctx, key, env)
 	if err != nil {
-		return nil, fmt.Errorf("get flag: %w", err)
+		return nil, fmt.Errorf("get flag key=%q environment=%q: %w", key, env, err)
 	}
 	if flag == nil {
 		return nil, &NotFoundError{Key: key, Environment: string(env)}
@@ -246,7 +246,7 @@ func (s *Service) EvaluateFlagInEnvironment(ctx context.Context, key string, env
 
 	flag, err := s.store.GetByKeyAndEnvironment(ctx, key, env)
 	if err != nil {
-		return false, fmt.Errorf("get flag: %w", err)
+		return false, fmt.Errorf("get flag for evaluation key=%q environment=%q: %w", key, env, err)
 	}
 	if flag == nil || !flag.Enabled {
 		return false, nil
@@ -254,7 +254,7 @@ func (s *Service) EvaluateFlagInEnvironment(ctx context.Context, key string, env
 
 	rules, err := s.store.GetRulesByFlagID(ctx, flag.ID)
 	if err != nil {
-		return false, fmt.Errorf("get rules: %w", err)
+		return false, fmt.Errorf("get rules for evaluation flag_id=%q key=%q environment=%q: %w", flag.ID, key, env, err)
 	}
 	if len(rules) == 0 {
 		return true, nil
@@ -306,7 +306,7 @@ func (s *Service) deleteFlagWithStoreAndID(ctx context.Context, store Store, key
 		return false, "", err
 	}
 	if err := store.Delete(ctx, flag.ID); err != nil {
-		return false, "", fmt.Errorf("delete flag: %w", err)
+		return false, "", fmt.Errorf("delete flag id=%q key=%q environment=%q: %w", flag.ID, key, env, err)
 	}
 	return true, flag.ID, nil
 }
@@ -336,7 +336,7 @@ func (s *Service) prepareAuditTx(ctx context.Context) (*auditTxContext, error) {
 func (s *Service) ensureUniqueFlagWithStore(ctx context.Context, store Store, key string, env DeploymentStage) error {
 	existing, err := store.GetByKeyAndEnvironment(ctx, key, env)
 	if err != nil {
-		return fmt.Errorf("check existing flag: %w", err)
+		return fmt.Errorf("check existing flag key=%q environment=%q: %w", key, env, err)
 	}
 	if existing != nil {
 		return &DuplicateKeyError{Key: key, Environment: string(env)}

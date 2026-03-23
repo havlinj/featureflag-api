@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/havlinj/featureflag-api/graph/model"
@@ -443,6 +444,33 @@ func TestService_GetAssignment_upsert_error_returns_wrapped(t *testing.T) {
 	}
 	if !errors.Is(err, wantErr) {
 		t.Errorf("expected wrapped %v, got %v", wantErr, err)
+	}
+}
+
+func TestService_GetAssignment_upsert_error_includes_context(t *testing.T) {
+	ctx := context.Background()
+	store := &mock.Store{}
+	exp := &experiments.Experiment{ID: "exp-1", Key: "upsert-ctx", Environment: "dev"}
+	store.GetExperimentByKeyAndEnvironmentReturns = []mock.GetExperimentResult{{Exp: exp, Err: nil}}
+	store.GetVariantsByExperimentIDReturns = []mock.GetVariantsResult{
+		{Variants: []*experiments.Variant{{ID: "vA", ExperimentID: "exp-1", Name: "A", Weight: 100}}, Err: nil},
+	}
+	store.GetAssignmentReturns = []mock.GetAssignmentResult{{A: nil, Err: nil}}
+	wantErr := errors.New("UpsertAssignment failed")
+	store.UpsertAssignmentReturns = []error{wantErr}
+	svc := experiments.NewService(store)
+
+	_, err := svc.GetAssignment(ctx, "user-1", "upsert-ctx", "dev")
+
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("expected wrapped %v, got %v", wantErr, err)
+	}
+	msg := err.Error()
+	if !strings.Contains(msg, `user_id="user-1"`) || !strings.Contains(msg, `experiment_id="exp-1"`) || !strings.Contains(msg, `variant_id="vA"`) {
+		t.Fatalf("expected contextual error message, got %q", msg)
 	}
 }
 

@@ -4,8 +4,10 @@ package integration
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -79,4 +81,15 @@ func requireGraphQLErrors(t *testing.T, resp *graphql.GraphQLResponse) {
 	if resp.Errors == nil || len(resp.Errors) == 0 {
 		t.Fatal("expected GraphQL errors, got none")
 	}
+}
+
+func graphqlErrorMessages(resp *graphql.GraphQLResponse) string {
+	if resp == nil || len(resp.Errors) == 0 {
+		return ""
+	}
+	parts := make([]string, 0, len(resp.Errors))
+	for _, e := range resp.Errors {
+		parts = append(parts, fmt.Sprintf("%v", e))
+	}
+	return strings.Join(parts, " | ")
 }

@@ -6,14 +6,14 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/99designs/gqlgen/graphql/handler"
+	gqlhandler "github.com/99designs/gqlgen/graphql/handler"
 	"github.com/99designs/gqlgen/graphql/handler/extension"
 	"github.com/havlinj/featureflag-api/graph"
 	"github.com/havlinj/featureflag-api/internal/audit"
 	"github.com/havlinj/featureflag-api/internal/experiments"
 	"github.com/havlinj/featureflag-api/internal/flags"
 	"github.com/havlinj/featureflag-api/internal/users"
-	"github.com/havlinj/featureflag-api/transport/graphql"
+	transportgraphql "github.com/havlinj/featureflag-api/transport/graphql"
 	"github.com/havlinj/featureflag-api/transport/graphql/middleware"
 )
 
@@ -33,7 +33,7 @@ func NewApp(
 	jwtSecret []byte,
 ) *App {
 	logger := slog.Default()
-	resolver := graphql.NewResolver(
+	resolver := transportgraphql.NewResolver(
 		flags.NewServiceWithAudit(flagsStore, auditStore),
 		users.NewServiceWithAudit(usersStore, auditStore),
 		experiments.NewServiceWithAudit(experimentsStore, auditStore),
@@ -42,15 +42,16 @@ func NewApp(
 		24*time.Hour,
 	)
 	schema := graph.NewExecutableSchema(graph.Config{Resolvers: resolver})
-	gqlHandler := handler.NewDefaultServer(schema)
+	gqlHandler := gqlhandler.NewDefaultServer(schema)
 	gqlHandler.Use(extension.FixedComplexityLimit(200))
+	gqlHandler.SetErrorPresenter(transportgraphql.PresentError)
 	chain := middleware.Chain(gqlHandler,
 		middleware.Recovery(logger),
 		middleware.Logging(logger),
 		middleware.Auth(jwtSecret),
 		middleware.BodyLimit(1<<20),
 	)
-	srv := graphql.NewServer(chain, tlsConfig)
+	srv := transportgraphql.NewServer(chain, tlsConfig)
 	return &App{server: Server{graphQLServer: srv}}
 }
 
