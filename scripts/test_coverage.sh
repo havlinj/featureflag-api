@@ -18,9 +18,9 @@ MIN_ENTITY_FILE_COVERAGE=80
 # Function-level floor for core files to avoid low-covered functions hidden by file averages.
 MIN_CORE_FUNCTION_COVERAGE=50
 
-# Auto-exclude thin delegate wrappers from the function-level gate.
-# Thin delegate heuristic: single `return` statement that directly calls another
-# function/method and forwards arguments without transformations.
+# Auto-filter function-level gate violations (see scripts/coverage_filter/):
+# - gqlgen output: any *.go under graph/ (also skipped in write_function_violations_file)
+# - thin delegates: single return that forwards a direct call with identifier-only args
 AUTO_FILTER_THIN_DELEGATES=1
 
 # Optional whitelist entries:
@@ -224,7 +224,8 @@ write_function_violations_file() {
     pct = $3
     gsub("%", "", pct)
     loc = $1
-    # target core files only
+    # target core files only; never gqlgen-generated Go under graph/
+    if (loc ~ /\/graph\/.*\.go:/) { next }
     if (loc ~ /\/internal\/.*\/service\.go:/ || loc ~ /\/internal\/.*\/postgres\.go:/ || loc ~ /\/transport\/graphql\/.*resolvers\.go:/) {
       if ((pct + 0) < (min + 0)) {
         printf "%.1f\t%s\t%s\n", pct, loc, $2
@@ -249,7 +250,7 @@ auto_filter_thin_delegates() {
   fi
 
   # Rewrites FUNCTION_VIOLATIONS_FILE and prints summary + only remaining violations (or PASS).
-  if ! go run "${SCRIPT_DIR}/filter_thin_delegates.go" \
+  if ! go run "${SCRIPT_DIR}/coverage_filter" \
     --violations "$FUNCTION_VIOLATIONS_FILE" \
     --repo-root "$ROOT_DIR" \
     --min "$MIN_CORE_FUNCTION_COVERAGE" ; then

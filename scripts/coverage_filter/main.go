@@ -150,18 +150,30 @@ func absInt(x int) int {
 	return x
 }
 
+// isGeneratedSourcePath reports repo-relative paths that are gqlgen (or similar) output.
+// In this project all Go files under graph/ are generated (generated.go, model/models_gen.go).
+func isGeneratedSourcePath(relPath string) bool {
+	relPath = filepath.ToSlash(strings.TrimSpace(relPath))
+	if relPath == "" || !strings.HasPrefix(relPath, "graph/") {
+		return false
+	}
+	return strings.HasSuffix(relPath, ".go")
+}
+
 func main() {
 	var violationsPath string
 	var repoRoot string
 	var modulePath string
 	var inplace bool
 	var minCoverage float64
+	var skipGenerated bool
 
 	flag.StringVar(&violationsPath, "violations", "", "path to FUNCTION_VIOLATIONS_FILE")
 	flag.StringVar(&repoRoot, "repo-root", ".", "repo root path")
 	flag.StringVar(&modulePath, "module-path", "", "module path from go.mod (optional)")
 	flag.BoolVar(&inplace, "inplace", true, "overwrite violations file")
 	flag.Float64Var(&minCoverage, "min", 50, "function-floor threshold (for report lines only)")
+	flag.BoolVar(&skipGenerated, "skip-generated", true, "drop violations in generated graph/ Go sources")
 	flag.Parse()
 
 	if violationsPath == "" {
@@ -184,7 +196,8 @@ func main() {
 	}
 	cache := map[string]*parsedFile{}
 
-	excluded := 0
+	excludedThin := 0
+	excludedGenerated := 0
 	total := 0
 	var kept []string
 
@@ -227,6 +240,10 @@ func main() {
 			kept = append(kept, line)
 			continue
 		}
+		if skipGenerated && isGeneratedSourcePath(relPath) {
+			excludedGenerated++
+			continue
+		}
 		diskPath := filepath.Join(repoRoot, filepath.FromSlash(relPath))
 
 		parsed, ok := cache[diskPath]
@@ -249,7 +266,7 @@ func main() {
 		}
 
 		if isThinDelegate(decl, fset) {
-			excluded++
+			excludedThin++
 			continue
 		}
 		fmt.Fprintln(w, line)
@@ -269,12 +286,13 @@ func main() {
 	}
 
 	remaining := len(kept)
-	fmt.Fprintf(os.Stdout, "auto-filter-thin-delegates: total=%d excluded=%d remaining=%d\n", total, excluded, remaining)
+	fmt.Fprintf(os.Stdout, "auto-filter-coverage-violations: total=%d thin_delegate=%d generated=%d remaining=%d\n",
+		total, excludedThin, excludedGenerated, remaining)
 	if remaining == 0 {
 		fmt.Println("  PASS")
 		return
 	}
-	fmt.Fprintf(os.Stdout, "  FAIL: functions below %.0f%% (after thin-delegate filter)\n", minCoverage)
+	fmt.Fprintf(os.Stdout, "  FAIL: functions below %.0f%% (after filters)\n", minCoverage)
 	for _, l := range kept {
 		pct, loc, name, ok := parseViolationLine(l)
 		if !ok {

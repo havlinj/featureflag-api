@@ -317,6 +317,38 @@ No milestone is complete without explicit review approval.
 - Documented review outcomes:
   - Explicit list of accepted deviations from original assumptions and rationale.
 
+### Phase 5 – Coverage measurement & tuning (workstream)
+
+This workstream started **after Phase 4** as part of Phase 5 (“stronger CI/testing gates”). It is **ongoing**: gates and tooling exist; **numeric targets are not yet met** (see `docs/progress.md`).
+
+**What exists today**
+
+1. **`scripts/test_coverage.sh`** (run from repo root, with working `go` matching `go.mod`):
+   - Runs `go test -tags=integration` with `-coverpkg` over the production package list (see `COVERAGE_PKGS` in the script) plus `./test/integration/...`, producing `coverage.out`.
+   - Builds `go tool cover -func` reports and enforces:
+     - **Global gate**: minimum total coverage (default **90%**).
+     - **Per-file gate** (optional): floors by file role — `service.go`, `postgres.go`, `*resolvers.go` / `resolver.go` / `server.go` / `chain.go`, `entity.go`.
+     - **Function-level gate** (optional): core functions in those same areas must be ≥ **50%** each (stops “high file average, empty branches” gaming).
+   - Summaries printed: package-level quick view, top 20 lowest functions, filtered function-gate violations.
+   - HTML drill-down (manual): `go tool cover -html=coverage.out -o coverage.html` — use this to find **which statements** are cold before writing tests.
+
+2. **`scripts/coverage_filter/`** (Go CLI, invoked when `AUTO_FILTER_THIN_DELEGATES=1`):
+   - Rewrites the function-violations temp file **in place** and prints what remains.
+   - Drops **generated gqlgen Go** under `graph/**/*.go` (also excluded earlier in the shell `awk` when building violations).
+   - Drops **thin delegate** wrappers: single `return` of one call, tiny span, call arguments are plain identifiers only (strict heuristic; few matches in practice).
+   - **Does not** change measured coverage — only which functions fail the **function gate**.
+
+**Workflow for contributors**
+
+- After meaningful code changes in `internal/*` or `transport/graphql`, run `./scripts/test_coverage.sh` (or the project’s full CI script if wired).
+- If the global or function gate fails, use **`coverage.html`** (or `-func` lines) to prioritize tests: service mappers, audit branches, evaluation paths, experiment assignment edge cases, etc.
+- Tuning thresholds belongs in **`scripts/test_coverage.sh`** (constants at top); document rationale in `docs/progress.md` changelog if policy changes.
+
+**Phase 5 exit criteria (coverage slice)** — not complete until agreed with REVIEW:
+
+- Global coverage ≥ policy default (90%) with the same package set, or an explicit documented exception.
+- Function-level and per-file gates either **pass** or are **consciously relaxed** with recorded rationale (not silently disabled).
+
 ---
 
 ## Notes

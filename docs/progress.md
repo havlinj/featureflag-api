@@ -6,9 +6,9 @@
 # 🏗️ Progress Tracker – Feature Flag API
 
 **Last updated**: 2026-03-23  
-**Overall progress**: █████████░ 90% (Phase 1–4 complete; Phase 5 in progress)  
-**Status**: Phase 1, Phase 2, Phase 3 and Phase 4 **complete and reviewed (APPROVED)**; Phase 5 **planned**  
-**Next step**: Phase 5 – Production hardening and quality reiteration  
+**Overall progress**: ██████████░ ~**95%** (Phase 1–4 complete; **Phase 5 in progress** — hardening & coverage policy **not finished**; coverage gates **not green**)  
+**Status**: Phase 1–4 **complete and reviewed (APPROVED)**; Phase 5 **active** (hardening + **coverage measurement / policy tuning** started; targets not met)  
+**Next step**: Continue Phase 5 — raise coverage toward **90%** global and clear **function-floor** violations; use **`coverage.html`** / `-func` to guide tests (see `docs/session_7.md`)  
 **Blockers**: None
 
 ## 📋 Milestones (per development_workflow.mdc)
@@ -19,7 +19,7 @@
 | Phase 2: Local Test Scripts, Binary Smoke & CI | ✅ Complete (reviewed) | 100% | Bash scripts (check, unit, integration, build, test_all_quick, test_all_full, test_binary_smoke); scripts/integration/; internal/config; GitHub Actions CI (push/PR to master) |
 | Phase 3: Experiments Integration | ✅ Complete (reviewed) | 100% | Experiments service, GraphQL schema + resolvers (createExperiment, experiment, getAssignment), DB (experiments, experiment_variants, experiment_assignments), deterministic assignment, integration + resolver unit tests |
 | Phase 4: Audit Logging | ✅ Complete (reviewed) | 100% | Audit module, audit_logs table, atomic writes (fail-closed), audit read API, integration + resolver tests |
-| Phase 5: Production Hardening & Quality Reiteration | ⏳ Planned | 0% | Security/runtime hardening, architecture cleanup, data-integrity improvements, stronger CI/testing gates |
+| Phase 5: Production Hardening & Quality Reiteration | ⏳ In progress | ~25% | Hardening checklist partial; **coverage script + multi-tier gates + `coverage_filter` landed**; **global ~72% vs 90% target**, function gate still failing on many core functions |
 
 ## 🔧 Phase 1 – Current state
 
@@ -144,11 +144,23 @@
 
 ## 📈 Metrics
 
+- **Enforced coverage policy (Phase 5, local script)**: `./scripts/test_coverage.sh` — global target **90%**, per-file floors for core roles, function floor **50%** on core files; violations summary + optional `coverage_filter`. As of session 7, **global ~72–73%** (gate **FAIL**); per-file gate **PASS**; function gate **FAIL** (~17 functions remain after filters). HTML: `go tool cover -html=coverage.out -o coverage.html`.
 - Test coverage: unit tests for db, flags.Service (incl. all return paths), users.Service, experiments.Service (CreateExperiment, GetExperiment, GetAssignment, weight validation, duplicate, not found, assignment determinism), auth, middleware; flags, users, and experiments PostgresStore (build tag `integration`); **experiments resolvers** (auth, nil service, not-found→null, delegation, service errors); integration tests for HTTPS+GraphQL against **real Postgres** (testcontainers), including test/integration/integration_experiments_test.go (createExperiment, experiment query, getAssignment, determinism). Mock errors in tests use descriptive labels.
 - Tests: internal/db, internal/flags, internal/users, internal/experiments (service_test, postgres_test, errors_test), internal/auth, transport/graphql (experiments_resolvers_test), transport/graphql/middleware, test/integration (flags, users, auth, experiments; tag `integration`). Default `go test ./...` skips integration; run with `-tags=integration` for full E2E.
 - Code style: gofmt run before task completion (see .cursor/rules/coding_style.mdc).
 
 ## 🔁 Phase 5 – Candidate scope (from final review)
+
+### Coverage & CI gates (started — **not done**)
+
+- [x] **`scripts/test_coverage.sh`**: unit + integration coverage over production `COVERAGE_PKGS`; **global**, **per-file**, and **function-level** gates (configurable constants at top of script)
+- [x] **`scripts/coverage_filter/`**: post-process function-gate violations (skip `graph/**/*.go`; thin-delegate heuristic for trivial `return other(...)` wrappers)
+- [ ] **Meet global gate** (target **90%**; current runs ~**72–73%**, small run-to-run jitter ~0.2pp is normal)
+- [ ] **Meet function-level gate** (core `service` / `postgres` / `*resolvers` functions ≥ **50%**; many mappers, audit paths, flag evaluation branches still cold)
+- [ ] Optional: wire `test_coverage.sh` into **CI** (or `test_all_full.sh`) once gates pass or policy is explicitly relaxed
+- [ ] **Race detector** in CI (still open from original Phase 5 list)
+
+### Other Phase 5 items (largely untouched)
 
 - [ ] Fix multi-environment correctness gap in flags update/evaluate flow (`dev` hardcoding)
 - [ ] Reduce transport-model coupling in domain services
@@ -157,10 +169,11 @@
 - [ ] Improve security defaults (TLS/DSN posture) and auth error shaping
 - [ ] Harden JWT validation policy and login abuse controls
 - [ ] Add server/runtime hardening (timeouts/limits) and GraphQL operation safeguards
-- [ ] Improve CI quality gates (race detector, coverage policy)
 - [ ] Remove flaky fixed sleeps in integration/bootstrap scripts via readiness checks
 
 ## 📝 Changelog
+
+**2026-03-23 (session 7)**: Documented **Phase 5 coverage workstream** in `.cursor/rules/development_workflow.mdc` (subsection *Phase 5 – Coverage measurement & tuning*): `scripts/test_coverage.sh` gates, `scripts/coverage_filter/`, workflow with `coverage.html`, exit criteria. **progress.md**: Phase 5 status → *in progress*; split checkboxes (coverage started vs rest of hardening); milestones table updated; next step points to raising coverage and using HTML report. Added **`docs/session_7.md`** as resume handoff (filters, honest impact, suggested next steps). Note: global coverage ~72–73% vs 90% target; function gate still lists ~17 functions after filters; thin-delegate filter removes ~1 wrapper only; `generated=0` for `graph/` until those files are in the measured set.
 
 **2026-03-23**: Introduced **Phase 5 – Production Hardening & Quality Reiteration** as a follow-up iteration after fulfilling original phase goals. Scope includes architecture hardening, security and runtime resilience improvements, data integrity constraints, and stronger CI/testing quality gates. This phase explicitly allows justified deviations from original assumptions when they materially improve safety and production quality.
 
