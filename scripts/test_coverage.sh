@@ -7,12 +7,16 @@ cd "$ROOT_DIR"
 
 MIN_COVERAGE=90
 ENFORCE_PER_FILE=1
+ENFORCE_FUNCTION_FLOOR=1
 
 # Per-file coverage floors by file role.
-MIN_SERVICE_FILE_COVERAGE=75
-MIN_POSTGRES_FILE_COVERAGE=75
-MIN_WIRING_FILE_COVERAGE=60
-MIN_ENTITY_FILE_COVERAGE=70
+MIN_SERVICE_FILE_COVERAGE=85
+MIN_POSTGRES_FILE_COVERAGE=85
+MIN_WIRING_FILE_COVERAGE=75
+MIN_ENTITY_FILE_COVERAGE=80
+
+# Function-level floor for core files to avoid low-covered functions hidden by file averages.
+MIN_CORE_FUNCTION_COVERAGE=50
 
 # Optional whitelist entries:
 #   "path|reason|expires(YYYY-MM-DD)"
@@ -42,19 +46,41 @@ COVERAGE_PKGS=(
   ./transport/graphql/middleware
 )
 
-COVERAGE_IMPORTS="$(go list "${COVERAGE_PKGS[@]}" | awk 'BEGIN{ORS=","} {print}' | sed 's/,$//')"
+GLOBAL_FAIL=0
+PER_FILE_FAIL=0
+TEST_EXEC_FAIL=0
+GO_TEST_EXIT=0
 
-echo "== coverage (unit + integration)"
-echo "== measured packages: ${COVERAGE_PKGS[*]}"
-go test -tags=integration -covermode=atomic -coverpkg="${COVERAGE_IMPORTS}" -coverprofile=coverage.out \
-  "${COVERAGE_PKGS[@]}" ./test/integration/...
+FUNC_REPORT_FILE=""
+FILE_REPORT_FILE=""
+PER_FILE_VIOLATIONS_FILE=""
+FUNCTION_VIOLATIONS_FILE=""
 
-FUNC_REPORT_FILE="$(mktemp)"
-FILE_REPORT_FILE="$(mktemp)"
-VIOLATIONS_FILE="$(mktemp)"
-trap 'rm -f "$FUNC_REPORT_FILE" "$FILE_REPORT_FILE" "$VIOLATIONS_FILE"' EXIT
-go tool cover -func=coverage.out > "$FUNC_REPORT_FILE"
-awk '
+coverage_imports_csv() {
+  go list "${COVERAGE_PKGS[@]}" | awk 'BEGIN{ORS=","} {print}' | sed 's/,$//'
+}
+
+# Must not wrap go test in command substitution: test output goes to stdout and must reach the terminal.
+run_tests_with_coverage() {
+  local imports="$1"
+  set +e
+  go test -tags=integration -covermode=atomic -coverpkg="${imports}" -coverprofile=coverage.out \
+    "${COVERAGE_PKGS[@]}" ./test/integration/...
+  GO_TEST_EXIT=$?
+  set -e
+}
+
+setup_temp_reports() {
+  FUNC_REPORT_FILE="$(mktemp)"
+  FILE_REPORT_FILE="$(mktemp)"
+  PER_FILE_VIOLATIONS_FILE="$(mktemp)"
+  FUNCTION_VIOLATIONS_FILE="$(mktemp)"
+  trap 'rm -f "$FUNC_REPORT_FILE" "$FILE_REPORT_FILE" "$PER_FILE_VIOLATIONS_FILE" "$FUNCTION_VIOLATIONS_FILE"' EXIT
+}
+
+build_file_level_report() {
+  go tool cover -func=coverage.out > "$FUNC_REPORT_FILE"
+  awk '
   NR == 1 {next}
   {
     split($0, parts, " ")
@@ -76,10 +102,12 @@ awk '
     }
   }
 ' coverage.out | sort -n > "$FILE_REPORT_FILE"
+}
 
-echo ""
-echo "== coverage summary by package (function-average, quick signal)"
-awk '
+print_package_summary() {
+  echo ""
+  echo "== coverage summary by package (function-average, quick signal)"
+  awk '
   $1 ~ /^total:/ {next}
   {
     split($1, a, ":")
@@ -95,90 +123,218 @@ awk '
     }
   }
 ' "$FUNC_REPORT_FILE" | sort -n | awk '{printf "  %6.1f%%  %s\n", $1, $2}'
+}
 
-echo ""
-echo "== top 20 lowest-covered functions"
-awk '
+print_lowest_functions() {
+  echo ""
+  echo "== top 20 lowest-covered functions"
+  awk '
   $1 ~ /^total:/ {next}
   {
     pct = $3
     gsub("%", "", pct)
     printf "%.1f\t%s\t%s\n", pct, $1, $2
   }
-' "$FUNC_REPORT_FILE" | sort -n | head -n 20 | \
-  awk '{printf "  %6.1f%%  %s %s\n", $1, $2, $3}'
+' "$FUNC_REPORT_FILE" | sort -n | \
+    awk 'NR <= 20 {printf "  %6.1f%%  %s %s\n", $1, $2, $3}'
+}
 
-echo ""
-echo "== per-file coverage floors (core files)"
-if [[ "$ENFORCE_PER_FILE" -eq 1 ]]; then
-  echo "  service.go >= ${MIN_SERVICE_FILE_COVERAGE}%"
-  echo "  postgres.go >= ${MIN_POSTGRES_FILE_COVERAGE}%"
-  echo "  wiring files (*resolvers.go,resolver.go,server.go,chain.go) >= ${MIN_WIRING_FILE_COVERAGE}%"
-  echo "  entity.go >= ${MIN_ENTITY_FILE_COVERAGE}%"
-else
-  echo "  per-file enforcement disabled"
-fi
-
-while IFS=$'\t' read -r pct file; do
-  required=""
-
-  case "$file" in
-    */service.go)
-      required="$MIN_SERVICE_FILE_COVERAGE"
-      ;;
-    */postgres.go)
-      required="$MIN_POSTGRES_FILE_COVERAGE"
-      ;;
-    */*resolvers.go|*/resolver.go|*/server.go|*/chain.go)
-      required="$MIN_WIRING_FILE_COVERAGE"
-      ;;
-    */entity.go)
-      required="$MIN_ENTITY_FILE_COVERAGE"
-      ;;
-  esac
-
-  if [[ -z "$required" ]]; then
-    continue
+print_per_file_floor_banner() {
+  echo ""
+  echo "== per-file coverage floors (core files)"
+  if [[ "$ENFORCE_PER_FILE" -eq 1 ]]; then
+    echo "  service.go >= ${MIN_SERVICE_FILE_COVERAGE}%"
+    echo "  postgres.go >= ${MIN_POSTGRES_FILE_COVERAGE}%"
+    echo "  wiring files (*resolvers.go,resolver.go,server.go,chain.go) >= ${MIN_WIRING_FILE_COVERAGE}%"
+    echo "  entity.go >= ${MIN_ENTITY_FILE_COVERAGE}%"
+  else
+    echo "  per-file enforcement disabled"
   fi
+}
 
-  whitelisted_reason=""
-  whitelisted_expires=""
-  for entry in "${PER_FILE_WHITELIST[@]}"; do
-    wl_file="${entry%%|*}"
-    rest="${entry#*|}"
-    wl_reason="${rest%%|*}"
-    wl_expires="${rest##*|}"
-    if [[ "$wl_file" == "$file" ]]; then
-      whitelisted_reason="$wl_reason"
-      whitelisted_expires="$wl_expires"
-      break
+evaluate_per_file_floors() {
+  while IFS=$'\t' read -r pct file; do
+    local required=""
+
+    case "$file" in
+      */service.go)
+        required="$MIN_SERVICE_FILE_COVERAGE"
+        ;;
+      */postgres.go)
+        required="$MIN_POSTGRES_FILE_COVERAGE"
+        ;;
+      */*resolvers.go|*/resolver.go|*/server.go|*/chain.go)
+        required="$MIN_WIRING_FILE_COVERAGE"
+        ;;
+      */entity.go)
+        required="$MIN_ENTITY_FILE_COVERAGE"
+        ;;
+    esac
+
+    if [[ -z "$required" ]]; then
+      continue
     fi
-  done
 
-  if awk "BEGIN {exit !($pct + 0 < $required + 0)}"; then
-    if [[ -n "$whitelisted_reason" ]]; then
-      printf "  WARN whitelist: %.2f%% < %s%%  %s  (reason: %s, expires: %s)\n" \
-        "$pct" "$required" "$file" "$whitelisted_reason" "$whitelisted_expires"
-      if [[ "$whitelisted_expires" != "permanent" && "$whitelisted_expires" < "$(date +%F)" ]]; then
-        printf "whitelist expired: %s (%s)\n" "$file" "$whitelisted_expires" >> "$VIOLATIONS_FILE"
+    local whitelisted_reason=""
+    local whitelisted_expires=""
+    for entry in "${PER_FILE_WHITELIST[@]}"; do
+      local wl_file="${entry%%|*}"
+      local rest="${entry#*|}"
+      local wl_reason="${rest%%|*}"
+      local wl_expires="${rest##*|}"
+      if [[ "$wl_file" == "$file" ]]; then
+        whitelisted_reason="$wl_reason"
+        whitelisted_expires="$wl_expires"
+        break
       fi
-    else
-      printf "  FAIL: %.2f%% < %s%%  %s\n" "$pct" "$required" "$file"
-      printf "%s\t%s\t%s\n" "$pct" "$required" "$file" >> "$VIOLATIONS_FILE"
+    done
+
+    if awk "BEGIN {exit !($pct + 0 < $required + 0)}"; then
+      if [[ -n "$whitelisted_reason" ]]; then
+        printf "  WARN whitelist: %.2f%% < %s%%  %s  (reason: %s, expires: %s)\n" \
+          "$pct" "$required" "$file" "$whitelisted_reason" "$whitelisted_expires"
+        if [[ "$whitelisted_expires" != "permanent" && "$whitelisted_expires" < "$(date +%F)" ]]; then
+          printf "whitelist expired: %s (%s)\n" "$file" "$whitelisted_expires" >> "$PER_FILE_VIOLATIONS_FILE"
+        fi
+      else
+        printf "  FAIL: %.2f%% < %s%%  %s\n" "$pct" "$required" "$file"
+        printf "%s\t%s\t%s\n" "$pct" "$required" "$file" >> "$PER_FILE_VIOLATIONS_FILE"
+      fi
     fi
+  done < "$FILE_REPORT_FILE"
+}
+
+print_function_floor_banner() {
+  echo ""
+  echo "== function-level floor (core files)"
+  if [[ "$ENFORCE_FUNCTION_FLOOR" -eq 1 ]]; then
+    echo "  core functions in service/postgres/resolvers must be >= ${MIN_CORE_FUNCTION_COVERAGE}%"
   fi
-done < "$FILE_REPORT_FILE"
+}
 
-COVERAGE_TOTAL=$(awk '/^total:/ {gsub("%","",$3); print $3}' "$FUNC_REPORT_FILE")
-echo ""
-if [[ -s "$VIOLATIONS_FILE" ]]; then
-  echo "Per-file coverage floor violations detected."
-  exit 1
-fi
+write_function_violations_file() {
+  awk -v min="$MIN_CORE_FUNCTION_COVERAGE" '
+  $1 ~ /^total:/ {next}
+  {
+    pct = $3
+    gsub("%", "", pct)
+    loc = $1
+    # target core files only
+    if (loc ~ /\/internal\/.*\/service\.go:/ || loc ~ /\/internal\/.*\/postgres\.go:/ || loc ~ /\/transport\/graphql\/.*resolvers\.go:/) {
+      if ((pct + 0) < (min + 0)) {
+        printf "%.1f\t%s\t%s\n", pct, loc, $2
+      }
+    }
+  }
+' "$FUNC_REPORT_FILE" | sort -n > "$FUNCTION_VIOLATIONS_FILE"
+}
 
-if awk "BEGIN {exit !($COVERAGE_TOTAL + 0 >= $MIN_COVERAGE + 0)}"; then
-  echo "Coverage ${COVERAGE_TOTAL}% >= ${MIN_COVERAGE}%"
-else
-  echo "Coverage ${COVERAGE_TOTAL}% < ${MIN_COVERAGE}%"
-  exit 1
-fi
+print_function_gate_section() {
+  if [[ -s "$FUNCTION_VIOLATIONS_FILE" ]]; then
+    echo "  FAIL: functions below ${MIN_CORE_FUNCTION_COVERAGE}%"
+    awk -F'\t' '{printf "  %6.1f%% < %s%%  %s %s\n", $1, min, $2, $3}' min="$MIN_CORE_FUNCTION_COVERAGE" "$FUNCTION_VIOLATIONS_FILE"
+  else
+    echo "  PASS"
+  fi
+}
+
+coverage_total_percent() {
+  awk '/^total:/ {gsub("%","",$3); print $3}' "$FUNC_REPORT_FILE"
+}
+
+print_global_gate() {
+  local total="$1"
+  if awk "BEGIN {exit !($total + 0 >= $MIN_COVERAGE + 0)}"; then
+    echo "GLOBAL gate: PASS (${total}% >= ${MIN_COVERAGE}%)"
+  else
+    echo "GLOBAL gate: FAIL (${total}% < ${MIN_COVERAGE}%)"
+    GLOBAL_FAIL=1
+  fi
+}
+
+print_per_file_gate() {
+  if [[ -s "$PER_FILE_VIOLATIONS_FILE" ]]; then
+    PER_FILE_FAIL=1
+    echo "PER-FILE gate: FAIL (one or more files below required minimum)"
+    echo "== per-file violations (actual < required)"
+    awk -F'\t' '{printf "  %6.2f%% < %s%%  %s\n", $1, $2, $3}' "$PER_FILE_VIOLATIONS_FILE"
+  else
+    echo "PER-FILE gate: PASS"
+  fi
+}
+
+print_function_gate_flag() {
+  if [[ -s "$FUNCTION_VIOLATIONS_FILE" ]]; then
+    FUNCTION_FAIL=1
+    echo "FUNCTION gate: FAIL (one or more core functions below minimum)"
+  else
+    FUNCTION_FAIL=0
+    echo "FUNCTION gate: PASS"
+  fi
+}
+
+print_test_execution_gate() {
+  if [[ "$TEST_EXEC_FAIL" -eq 1 ]]; then
+    echo "TEST EXECUTION gate: FAIL (go test command failed before/while generating report)"
+  else
+    echo "TEST EXECUTION gate: PASS"
+  fi
+}
+
+finalize_gates() {
+  echo ""
+  if [[ "$GLOBAL_FAIL" -eq 0 && "$PER_FILE_FAIL" -eq 0 && "$FUNCTION_FAIL" -eq 0 && "$TEST_EXEC_FAIL" -eq 0 ]]; then
+    echo "Coverage gates: PASS (global + per-file + function)"
+  else
+    echo "Coverage gates: FAIL"
+    if [[ "$GLOBAL_FAIL" -eq 1 ]]; then
+      echo "Reason: global coverage threshold not met."
+    fi
+    if [[ "$PER_FILE_FAIL" -eq 1 ]]; then
+      echo "Reason: per-file minimum threshold violations."
+    fi
+    if [[ "$FUNCTION_FAIL" -eq 1 ]]; then
+      echo "Reason: function-level minimum threshold violations in core files."
+    fi
+    if [[ "$TEST_EXEC_FAIL" -eq 1 ]]; then
+      echo "Reason: go test execution failed."
+    fi
+    exit 1
+  fi
+}
+
+main() {
+  local COVERAGE_IMPORTS
+  COVERAGE_IMPORTS="$(coverage_imports_csv)"
+
+  echo "== coverage (unit + integration)"
+  echo "== measured packages: ${COVERAGE_PKGS[*]}"
+
+  run_tests_with_coverage "$COVERAGE_IMPORTS"
+  if [[ "$GO_TEST_EXIT" -ne 0 ]]; then
+    TEST_EXEC_FAIL=1
+    echo "go test execution returned non-zero exit code: ${GO_TEST_EXIT}"
+  fi
+
+  setup_temp_reports
+  build_file_level_report
+  print_package_summary
+  print_lowest_functions
+  print_per_file_floor_banner
+  evaluate_per_file_floors
+  print_function_floor_banner
+  write_function_violations_file
+  print_function_gate_section
+
+  local COVERAGE_TOTAL
+  COVERAGE_TOTAL="$(coverage_total_percent)"
+  echo ""
+
+  print_global_gate "$COVERAGE_TOTAL"
+  print_per_file_gate
+  print_function_gate_flag
+  print_test_execution_gate
+  finalize_gates
+}
+
+main "$@"
