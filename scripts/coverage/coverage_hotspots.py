@@ -62,13 +62,16 @@ def parse_args() -> argparse.Namespace:
 
 
 def run_cover_func(coverage_file: str) -> List[Tuple[float, str]]:
-    cmd = ["go", "tool", "cover", f"-func={coverage_file}"]
+    go_bin = "go"
+    if os.path.exists("/usr/local/go/bin/go"):
+        go_bin = "/usr/local/go/bin/go"
+    cmd = [go_bin, "tool", "cover", f"-func={coverage_file}"]
     proc = subprocess.run(cmd, capture_output=True, text=True)
     if proc.returncode != 0:
         raise RuntimeError(proc.stderr.strip() or proc.stdout.strip() or "go tool cover failed")
 
     out: List[Tuple[float, str]] = []
-    pattern = re.compile(r"^(.+):\s+([\d.]+)%$")
+    pattern = re.compile(r"^(.+?):\s+(\S+)\s+([\d.]+)%$")
     for line in proc.stdout.splitlines():
         line = line.strip()
         if not line or line.startswith("total:"):
@@ -76,8 +79,8 @@ def run_cover_func(coverage_file: str) -> List[Tuple[float, str]]:
         match = pattern.match(line)
         if not match:
             continue
-        name = match.group(1)
-        pct = float(match.group(2))
+        name = f"{match.group(1)}: {match.group(2)}"
+        pct = float(match.group(3))
         out.append((pct, name))
     return sorted(out, key=lambda item: item[0])
 

@@ -2,6 +2,9 @@
 # Runs coverage for production packages (unit + integration) and enforces a minimum threshold.
 set -euo pipefail
 export LC_ALL=C
+if [[ -x "/usr/local/go/bin/go" ]]; then
+  export PATH="/usr/local/go/bin:$PATH"
+fi
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 cd "$ROOT_DIR"
