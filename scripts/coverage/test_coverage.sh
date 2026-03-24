@@ -12,7 +12,7 @@ cd "$ROOT_DIR"
 # Risk-based baseline:
 # - keep strong signal on critical paths
 # - avoid inflating low-value tests only to chase a vanity percentage
-MIN_COVERAGE=75
+MIN_COVERAGE=80
 ENFORCE_PER_FILE=1
 ENFORCE_FUNCTION_FLOOR=1
 
@@ -23,14 +23,14 @@ ENFORCE_FUNCTION_FLOOR=1
 COVERAGE_ALLOW_CACHE="${COVERAGE_ALLOW_CACHE:-0}"
 
 # Per-file coverage floors by file role.
-MIN_ANY_FILE_COVERAGE=30
-MIN_SERVICE_FILE_COVERAGE=80
-MIN_POSTGRES_FILE_COVERAGE=80
+MIN_ANY_FILE_COVERAGE=40
+MIN_SERVICE_FILE_COVERAGE=85
+MIN_POSTGRES_FILE_COVERAGE=85
 MIN_WIRING_FILE_COVERAGE=70
-MIN_ENTITY_FILE_COVERAGE=70
+MIN_ENTITY_FILE_COVERAGE=75
 
 # Function-level floor for core files to avoid low-covered functions hidden by file averages.
-MIN_CORE_FUNCTION_COVERAGE=40
+MIN_CORE_FUNCTION_COVERAGE=50
 
 # Auto-filter function-level gate violations (see scripts/coverage/coverage_filter/):
 # - gqlgen output: any *.go under graph/ (also skipped in write_function_violations_file)

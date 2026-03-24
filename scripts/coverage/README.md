@@ -5,10 +5,10 @@ This folder contains all tooling related to coverage measurement, quality gates,
 ## What is here
 
 - `test_coverage.sh`: runs unit + integration coverage for production packages and enforces gates
-  - global gate (default 75%)
-  - generic per-file floor (default 30%) for measured non-generated files
+  - global gate (default 80%)
+  - generic per-file floor (default 40%) for measured non-generated files
   - per-file floors for core file roles
-  - function-level floor for core functions (default 40%)
+  - function-level floor for core functions (default 50%)
   - deterministic mode by default (clears Go test cache + runs with `-count=1`)
   - optional fast mode via `COVERAGE_ALLOW_CACHE=1`
   - generated GraphQL Go files under `graph/**/*.go` are excluded from per-file/function enforcement
