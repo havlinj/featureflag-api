@@ -33,8 +33,12 @@ func (s *minimalUsersTxAwareStore) WithTx(tx *sql.Tx) Store {
 
 type minimalUsersNonTxStore struct{}
 
-func (s *minimalUsersNonTxStore) Create(ctx context.Context, user *User) (*User, error) { return nil, nil }
-func (s *minimalUsersNonTxStore) GetByID(ctx context.Context, id string) (*User, error)  { return nil, nil }
+func (s *minimalUsersNonTxStore) Create(ctx context.Context, user *User) (*User, error) {
+	return nil, nil
+}
+func (s *minimalUsersNonTxStore) GetByID(ctx context.Context, id string) (*User, error) {
+	return nil, nil
+}
 func (s *minimalUsersNonTxStore) GetByEmail(ctx context.Context, email string) (*User, error) {
 	return nil, nil
 }

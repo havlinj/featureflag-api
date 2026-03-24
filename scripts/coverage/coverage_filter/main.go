@@ -302,4 +302,3 @@ func main() {
 		fmt.Fprintf(os.Stdout, "  %6.1f%% < %.0f%%  %s %s\n", pct, minCoverage, loc, name)
 	}
 }
-

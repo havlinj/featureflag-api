@@ -6,9 +6,10 @@ This folder contains all tooling related to coverage measurement, quality gates,
 
 - `test_coverage.sh`: runs unit + integration coverage for production packages and enforces gates
   - global gate (default 80%)
-  - generic per-file floor (default 40%) for measured non-generated files
+  - generic per-file floor (default 60%) for measured non-generated files
   - per-file floors for core file roles
   - function-level floor for core functions (default 50%)
+  - prints top 20 lowest-covered files (configurable via `LOWEST_FILES_COUNT`)
   - deterministic mode by default (clears Go test cache + runs with `-count=1`)
   - optional fast mode via `COVERAGE_ALLOW_CACHE=1`
   - writes run metadata to `scripts/coverage/state/coverage_run_meta.json`
@@ -28,6 +29,24 @@ This folder contains all tooling related to coverage measurement, quality gates,
 
 - CI coverage step calls `bash scripts/coverage/test_coverage.sh`.
 - Local usage should call the same path directly.
+
+## Current policy
+
+`test_coverage.sh` enforces these default gates:
+
+- global coverage: `>= 80%`
+- any measured non-generated file: `>= 60%`
+- `service.go` files: `>= 85%`
+- `postgres.go` files: `>= 85%`
+- wiring files (`*resolvers.go`, `resolver.go`, `server.go`, `chain.go`): `>= 70%`
+- `entity.go` files: `>= 75%`
+- function-level floor (core files): `>= 50%`
+
+The script also prints:
+
+- package-level overview with file targets
+- top lowest-covered files (`LOWEST_FILES_COUNT`, default `20`)
+- top lowest-covered functions (`20`)
 
 ## Usage
 

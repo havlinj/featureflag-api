@@ -23,4 +23,3 @@ func TestIsGeneratedSourcePath(t *testing.T) {
 		}
 	}
 }
-

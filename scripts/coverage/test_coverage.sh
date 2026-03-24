@@ -24,11 +24,12 @@ COVERAGE_ALLOW_CACHE="${COVERAGE_ALLOW_CACHE:-0}"
 RUN_META_FILE="scripts/coverage/state/coverage_run_meta.json"
 
 # Per-file coverage floors by file role.
-MIN_ANY_FILE_COVERAGE=40
+MIN_ANY_FILE_COVERAGE=60
 MIN_SERVICE_FILE_COVERAGE=85
 MIN_POSTGRES_FILE_COVERAGE=85
 MIN_WIRING_FILE_COVERAGE=70
 MIN_ENTITY_FILE_COVERAGE=75
+LOWEST_FILES_COUNT=20
 
 # Function-level floor for core files to avoid low-covered functions hidden by file averages.
 MIN_CORE_FUNCTION_COVERAGE=50
@@ -218,6 +219,12 @@ print_package_summary() {
 ' any="$MIN_ANY_FILE_COVERAGE" svc="$MIN_SERVICE_FILE_COVERAGE" pg="$MIN_POSTGRES_FILE_COVERAGE" wiring="$MIN_WIRING_FILE_COVERAGE" ent="$MIN_ENTITY_FILE_COVERAGE" "$FUNC_REPORT_FILE" \
   | sort -n \
   | awk -F'\t' '{printf "  %6.1f%%  (target: %s%%)  %s\n", $1, $2, $3}'
+}
+
+print_lowest_files() {
+  echo ""
+  echo "== top ${LOWEST_FILES_COUNT} lowest-covered files"
+  awk -F'\t' 'NR <= n {printf "  %6.2f%%  %s\n", $1, $2}' n="$LOWEST_FILES_COUNT" "$FILE_REPORT_FILE"
 }
 
 print_lowest_functions() {
@@ -442,6 +449,7 @@ main() {
   setup_temp_reports
   build_file_level_report
   print_package_summary
+  print_lowest_files
   print_lowest_functions
   print_per_file_floor_banner
   evaluate_per_file_floors

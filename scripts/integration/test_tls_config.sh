@@ -26,12 +26,20 @@ docker run -d --name "$CONTAINER_NAME" \
   -p 5432:5432 \
   -e POSTGRES_USER=test -e POSTGRES_PASSWORD=test -e POSTGRES_DB=testdb \
   postgres:16-alpine
+PG_READY=0
 for _ in {1..60}; do
-  if docker exec "$CONTAINER_NAME" pg_isready -U test -d testdb >/dev/null 2>&1; then
+  if docker exec "$CONTAINER_NAME" pg_isready -U test -d testdb >/dev/null 2>&1 \
+    && [[ "$(docker exec "$CONTAINER_NAME" psql -U test -d testdb -tAc 'select 1' 2>/dev/null | tr -d '[:space:]')" == "1" ]]; then
+    PG_READY=1
     break
   fi
   sleep 0.2
 done
+if [[ "$PG_READY" -ne 1 ]]; then
+  echo "Postgres did not become ready in time" >&2
+  docker logs "$CONTAINER_NAME" >&2 || true
+  exit 1
+fi
 PG_PORT=$(docker port "$CONTAINER_NAME" 5432 | cut -d: -f2)
 export DATABASE_DSN="postgres://test:test@127.0.0.1:$PG_PORT/testdb?sslmode=disable"
 export JWT_SECRET="integration-tls-secret-at-least-32"
