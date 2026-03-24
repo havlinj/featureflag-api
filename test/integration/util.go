@@ -4,6 +4,8 @@ package integration
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -115,4 +117,92 @@ func graphqlErrorCodes(resp *graphql.GraphQLResponse) []string {
 		codes = append(codes, code)
 	}
 	return codes
+}
+
+// FaultInjectingAuditStore is an integration-test double that keeps real DB behavior
+// but forces audit Create failures for selected (entity, action) pairs.
+type FaultInjectingAuditStore struct {
+	store      audit.Store
+	txStarter  audit.TxStarter
+	txAware    audit.TxAwareStore
+	failEntity string
+	failAction string
+	failErr    error
+}
+
+func NewFaultInjectingAuditStore(base *audit.PostgresStore, failEntity, failAction string) *FaultInjectingAuditStore {
+	return &FaultInjectingAuditStore{
+		store:      base,
+		txStarter:  base,
+		txAware:    base,
+		failEntity: failEntity,
+		failAction: failAction,
+		failErr:    errors.New("forced audit create failure"),
+	}
+}
+
+func (s *FaultInjectingAuditStore) Create(ctx context.Context, entry *audit.Entry) error {
+	if entry != nil && entry.Entity == s.failEntity && entry.Action == s.failAction {
+		return s.failErr
+	}
+	return s.store.Create(ctx, entry)
+}
+
+func (s *FaultInjectingAuditStore) GetByID(ctx context.Context, id string) (*audit.Entry, error) {
+	return s.store.GetByID(ctx, id)
+}
+
+func (s *FaultInjectingAuditStore) List(ctx context.Context, filter audit.ListFilter, limit, offset int) ([]*audit.Entry, error) {
+	return s.store.List(ctx, filter, limit, offset)
+}
+
+func (s *FaultInjectingAuditStore) BeginTx(ctx context.Context) (*sql.Tx, error) {
+	if s.txStarter == nil {
+		return nil, errors.New("audit tx starter not configured")
+	}
+	return s.txStarter.BeginTx(ctx)
+}
+
+func (s *FaultInjectingAuditStore) WithTx(tx *sql.Tx) audit.Store {
+	if s.txAware == nil {
+		return s
+	}
+	return &FaultInjectingAuditStore{
+		store:      s.txAware.WithTx(tx),
+		txStarter:  nil,
+		txAware:    nil,
+		failEntity: s.failEntity,
+		failAction: s.failAction,
+		failErr:    s.failErr,
+	}
+}
+
+// startAppWithCustomAuditStore mirrors production wiring but allows an injected audit store.
+func startAppWithCustomAuditStore(t *testing.T, database *db.DB, auditStore audit.Store) (*app.App, *testutil.GraphQLClient, func()) {
+	t.Helper()
+	conn := database.Conn()
+	flagsStore := flags.NewPostgresStore(conn)
+	usersStore := users.NewPostgresStore(conn)
+	experimentsStore := experiments.NewPostgresStore(conn)
+
+	addr := testutil.MakeFreeSocketAddr()
+	tlsConfig, err := testutil.NewTLSConfigForServer()
+	if err != nil {
+		t.Fatalf("create TLS config: %v", err)
+	}
+	jwtSecret := []byte("test-jwt-secret")
+	a := app.NewApp(tlsConfig, flagsStore, usersStore, experimentsStore, auditStore, jwtSecret)
+	go func() {
+		if err := a.Run(addr); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("server error: %v", err)
+		}
+	}()
+	client := testutil.NewClientForIntegration("https://" + addr)
+	waitForGraphQLReady(t, client)
+	shutdown := func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = a.Shutdown(ctx)
+	}
+	return a, client, shutdown
 }

@@ -1423,3 +1423,42 @@ func TestService_UpdateFlag_nil_rules_preserves_rollout_and_skips_rule_replace(t
 		t.Fatalf("ReplaceRulesByFlagID must not run when rules are omitted (nil), got %d calls", len(store.ReplaceRulesByFlagIDCalls))
 	}
 }
+
+// UpdateFlag with Rules == [] must clear rollout strategy and persist empty rule set.
+func TestService_UpdateFlag_empty_rules_clears_rollout_and_replaces_rules(t *testing.T) {
+	ctx := context.Background()
+	store := &mock.Store{}
+	flag := &flags.Flag{
+		ID:              "f1",
+		Key:             "rollout-flag",
+		Enabled:         true,
+		Environment:     flags.DeploymentStageDev,
+		RolloutStrategy: flags.RolloutStrategyPercentage,
+	}
+	store.GetByKeyAndEnvironmentReturns = []mock.GetByKeyResult{{Flag: flag, Err: nil}}
+	store.ReplaceRulesByFlagIDReturns = []error{nil}
+	store.UpdateReturns = []error{nil}
+	svc := flags.NewService(store)
+	input := model.UpdateFlagInput{Key: "rollout-flag", Enabled: true, Rules: []*model.RuleInput{}}
+
+	got, err := svc.UpdateFlag(ctx, input)
+
+	if err != nil {
+		t.Fatalf("UpdateFlag: %v", err)
+	}
+	if got == nil {
+		t.Fatal("expected non-nil updated flag")
+	}
+	if flag.RolloutStrategy != flags.RolloutStrategyNone {
+		t.Fatalf("expected rollout strategy to be cleared to none, got %q", flag.RolloutStrategy)
+	}
+	if len(store.ReplaceRulesByFlagIDCalls) != 1 {
+		t.Fatalf("expected 1 ReplaceRulesByFlagID call, got %d", len(store.ReplaceRulesByFlagIDCalls))
+	}
+	if store.ReplaceRulesByFlagIDCalls[0].FlagID != "f1" {
+		t.Fatalf("unexpected ReplaceRulesByFlagID args: %+v", store.ReplaceRulesByFlagIDCalls[0])
+	}
+	if store.ReplaceRulesByFlagIDCalls[0].Rules != nil {
+		t.Fatal("expected ReplaceRulesByFlagID to receive nil rules when clearing")
+	}
+}

@@ -5,8 +5,18 @@
 - **Quick local validation**: `./scripts/test_all_quick.sh` — check, unit tests, Go integration tests (no binary smoke).
 - **Full suite (same as CI)**: `./scripts/test_all_full.sh` — check, unit, Go integration, build, binary smoke, bash integration tests. Requires Docker.
 - **CI**: GitHub Actions (`.github/workflows/ci.yml`) runs the full suite on every push to `master` and on pull requests targeting `master`. Scripts are executable (execute bit in repo + `chmod +x` step in CI on Linux).
+- **CI sync guard**: `python3 ./scripts/verify_ci_sync.py` verifies that scripts referenced by `test_all_full.sh` are also listed in CI workflow commands.
 
 See `scripts/integration/README.md` for the list of bash integration tests.
+
+## Coverage tooling
+
+All coverage-related scripts and docs are in `scripts/coverage/`.
+
+- Gate runner: `bash ./scripts/coverage/test_coverage.sh`
+- Hotspot analysis: `python3 ./scripts/coverage/coverage_hotspots.py`
+- Docs and usage: `scripts/coverage/README.md`
+
 
 ## Seed first admin
 

@@ -39,7 +39,9 @@ export LISTEN_ADDR="127.0.0.1:18443"
 export TLS_CERT_FILE="$CERT_DIR/cert.pem"
 export TLS_KEY_FILE="$CERT_DIR/key.pem"
 
-"$SCRIPT_DIR/../build.sh" >/dev/null 2>&1
+if [[ ! -x "$ROOT_DIR/bin/featureflag-api" ]]; then
+  "$SCRIPT_DIR/../build.sh" >/dev/null 2>&1
+fi
 "$ROOT_DIR/bin/featureflag-api" &
 BINARY_PID=$!
 for _ in {1..60}; do

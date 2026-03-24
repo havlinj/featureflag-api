@@ -482,6 +482,80 @@ func TestService_Login_wrong_password_returns_ErrInvalidCredentials(t *testing.T
 	}
 }
 
+func TestService_Login_store_error_returns_wrapped_error(t *testing.T) {
+	ctx := context.Background()
+	store := &mock.Store{}
+	wantErr := errors.New("GetByEmail failed")
+	store.GetByEmailReturns = []mock.GetByEmailResult{{User: nil, Err: wantErr}}
+	svc := users.NewService(store)
+
+	_, _, err := svc.Login(ctx, "a@b.com", "any")
+
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("expected wrapped %v, got %v", wantErr, err)
+	}
+	var opErr *users.OperationError
+	if !errors.As(err, &opErr) {
+		t.Fatalf("expected *users.OperationError, got %T", err)
+	}
+	if opErr.Op != "users.service.login.store_get_by_email" {
+		t.Fatalf("unexpected op %q", opErr.Op)
+	}
+	if opErr.Email != "a@b.com" {
+		t.Fatalf("unexpected context fields: %+v", opErr)
+	}
+}
+
+func TestService_CreateUser_without_password_keeps_password_hash_nil(t *testing.T) {
+	ctx := context.Background()
+	store := &mock.Store{}
+	store.GetByEmailReturns = []mock.GetByEmailResult{{User: nil, Err: nil}}
+	store.CreateReturns = []mock.CreateResult{
+		{User: &users.User{ID: "u1", Email: "a@b.com", Role: users.RoleDeveloper}, Err: nil},
+	}
+	svc := users.NewService(store)
+	input := model.CreateUserInput{Email: "a@b.com", Role: model.RoleDeveloper}
+
+	_, err := svc.CreateUser(ctx, input)
+
+	if err != nil {
+		t.Fatalf("CreateUser: %v", err)
+	}
+	if len(store.CreateCalls) != 1 {
+		t.Fatalf("Create calls: want 1, got %d", len(store.CreateCalls))
+	}
+	if store.CreateCalls[0].User.PasswordHash != nil {
+		t.Fatal("expected PasswordHash to stay nil when password is not provided")
+	}
+}
+
+func TestService_UpdateUser_with_empty_password_does_not_change_password_hash(t *testing.T) {
+	ctx := context.Background()
+	existingHash := mustHash(t, "keep-me")
+	u := &users.User{ID: "u1", Email: "old@x.com", Role: users.RoleViewer, PasswordHash: &existingHash}
+	store := &mock.Store{}
+	store.GetByIDReturns = []mock.GetByIDResult{{User: u, Err: nil}}
+	store.UpdateReturns = []error{nil}
+	svc := users.NewService(store)
+	empty := ""
+	input := model.UpdateUserInput{ID: "u1", Password: &empty}
+
+	_, err := svc.UpdateUser(ctx, input)
+
+	if err != nil {
+		t.Fatalf("UpdateUser: %v", err)
+	}
+	if len(store.UpdateCalls) != 1 {
+		t.Fatalf("Update calls: want 1, got %d", len(store.UpdateCalls))
+	}
+	if store.UpdateCalls[0].User.PasswordHash == nil {
+		t.Fatal("expected PasswordHash to remain set")
+	}
+	if *store.UpdateCalls[0].User.PasswordHash != existingHash {
+		t.Fatal("expected empty password to keep existing hash unchanged")
+	}
+}
+
 func mustHash(t *testing.T, password string) string {
 	t.Helper()
 	hash, err := auth.HashPassword(password)

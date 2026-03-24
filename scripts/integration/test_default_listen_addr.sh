@@ -32,7 +32,9 @@ export DATABASE_DSN="postgres://test:test@127.0.0.1:$PG_PORT/testdb?sslmode=disa
 export JWT_SECRET="integration-secret-at-least-32-bytes"
 unset LISTEN_ADDR
 
-"$SCRIPT_DIR/../build.sh" >/dev/null 2>&1
+if [[ ! -x "$ROOT_DIR/bin/featureflag-api" ]]; then
+  "$SCRIPT_DIR/../build.sh" >/dev/null 2>&1
+fi
 "$ROOT_DIR/bin/featureflag-api" &
 BINARY_PID=$!
 for _ in {1..60}; do

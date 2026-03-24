@@ -27,6 +27,9 @@ jobs:
       - name: Check (gofmt, go vet)
         run: bash scripts/check.sh
 
+      - name: Verify CI scripts are synced with test_all_full
+        run: python3 scripts/verify_ci_sync.py
+
       - name: Unit tests
         run: bash scripts/test_unit.sh
 
@@ -34,7 +37,7 @@ jobs:
         run: bash scripts/test_integration.sh
 
       - name: Coverage gate
-        run: bash scripts/test_coverage.sh
+        run: bash scripts/coverage/test_coverage.sh
 
       - name: Build binary
         run: bash scripts/build.sh
@@ -42,9 +45,32 @@ jobs:
       - name: Binary smoke test
         run: bash scripts/test_binary_smoke.sh
 
-      - name: Integration tests (bash, config / sad path)
-        run: |
-          bash scripts/integration/test_missing_jwt_secret.sh
-          bash scripts/integration/test_invalid_dsn.sh
-          bash scripts/integration/test_default_listen_addr.sh
-          bash scripts/integration/test_tls_config.sh
+  bash-integration:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        script:
+          - scripts/integration/test_missing_jwt_secret.sh
+          - scripts/integration/test_weak_jwt_secret.sh
+          - scripts/integration/test_invalid_dsn.sh
+          - scripts/integration/test_default_listen_addr.sh
+          - scripts/integration/test_tls_config.sh
+          - scripts/integration/test_invalid_tls_files.sh
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Make scripts executable
+        run: chmod +x scripts/*.sh scripts/integration/*.sh
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Verify CI scripts are synced with test_all_full
+        run: python3 scripts/verify_ci_sync.py
+
+      - name: Run bash integration test
+        run: bash ${{ matrix.script }}

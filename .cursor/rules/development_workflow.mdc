@@ -323,7 +323,7 @@ This workstream started **after Phase 4** as part of Phase 5 (“stronger CI/tes
 
 **What exists today**
 
-1. **`scripts/test_coverage.sh`** (run from repo root, with working `go` matching `go.mod`):
+1. **`scripts/coverage/test_coverage.sh`** (run from repo root, with working `go` matching `go.mod`):
    - Runs `go test -tags=integration` with `-coverpkg` over the production package list (see `COVERAGE_PKGS` in the script) plus `./test/integration/...`, producing `coverage.out`.
    - Builds `go tool cover -func` reports and enforces:
      - **Global gate**: minimum total coverage (default **90%**).
@@ -332,7 +332,7 @@ This workstream started **after Phase 4** as part of Phase 5 (“stronger CI/tes
    - Summaries printed: package-level quick view, top 20 lowest functions, filtered function-gate violations.
    - HTML drill-down (manual): `go tool cover -html=coverage.out -o coverage.html` — use this to find **which statements** are cold before writing tests.
 
-2. **`scripts/coverage_filter/`** (Go CLI, invoked when `AUTO_FILTER_THIN_DELEGATES=1`):
+2. **`scripts/coverage/coverage_filter/`** (Go CLI, invoked when `AUTO_FILTER_THIN_DELEGATES=1`):
    - Rewrites the function-violations temp file **in place** and prints what remains.
    - Drops **generated gqlgen Go** under `graph/**/*.go` (also excluded earlier in the shell `awk` when building violations).
    - Drops **thin delegate** wrappers: single `return` of one call, tiny span, call arguments are plain identifiers only (strict heuristic; few matches in practice).
@@ -340,9 +340,9 @@ This workstream started **after Phase 4** as part of Phase 5 (“stronger CI/tes
 
 **Workflow for contributors**
 
-- After meaningful code changes in `internal/*` or `transport/graphql`, run `./scripts/test_coverage.sh` (or the project’s full CI script if wired).
+- After meaningful code changes in `internal/*` or `transport/graphql`, run `./scripts/coverage/test_coverage.sh` (or the project’s full CI script if wired).
 - If the global or function gate fails, use **`coverage.html`** (or `-func` lines) to prioritize tests: service mappers, audit branches, evaluation paths, experiment assignment edge cases, etc.
-- Tuning thresholds belongs in **`scripts/test_coverage.sh`** (constants at top); document rationale in `docs/progress.md` changelog if policy changes.
+- Tuning thresholds belongs in **`scripts/coverage/test_coverage.sh`** (constants at top); document rationale in `docs/progress.md` changelog if policy changes.
 
 **Phase 5 exit criteria (coverage slice)** — not complete until agreed with REVIEW:
 

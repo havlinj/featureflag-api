@@ -5,7 +5,7 @@
 
 ## Resume here (next session)
 
-1. Run `./scripts/test_coverage.sh` from repo root (Go version must satisfy `go.mod`).
+1. Run `./scripts/coverage/test_coverage.sh` from repo root (Go version must satisfy `go.mod`).
 2. Inspect failures:
    - **GLOBAL** — usually the main blocker (~**72–73%** vs **90%** target; ~0.2pp jitter between runs is normal).
    - **FUNCTION** — list of core functions still &lt; **50%** after filters (see script output).
@@ -17,17 +17,17 @@
 
 ### Coverage script and gates
 
-- **`scripts/test_coverage.sh`** runs `go test -tags=integration` with `-coverpkg` over explicit production packages (`COVERAGE_PKGS`) and `./test/integration/...`, writes **`coverage.out`**, then:
+- **`scripts/coverage/test_coverage.sh`** runs `go test -tags=integration` with `-coverpkg` over explicit production packages (`COVERAGE_PKGS`) and `./test/integration/...`, writes **`coverage.out`**, then:
   - **Global gate**: `MIN_COVERAGE` (default **90%**).
   - **Per-file gate**: floors for `service.go`, `postgres.go`, wiring files (`*resolvers.go`, `resolver.go`, `server.go`, `chain.go`), `entity.go`.
   - **Function-level gate**: each reported function in those core paths must be ≥ **`MIN_CORE_FUNCTION_COVERAGE`** (default **50%**).
 - Output includes package summary, top 20 lowest functions, and (when auto-filter on) the **remaining** function-gate violations.
 
-### `scripts/coverage_filter/` (Go)
+### `scripts/coverage/coverage_filter/` (Go)
 
 - Post-processes the **tab-separated function violations file** (in place): drops violations whose source file is under **`graph/**/*.go`** (gqlgen output; also excluded in shell `awk` when building the list — **no effect today** until `graph` is in the measured package set).
 - Drops **thin delegate** wrappers: one statement, single `return` of one `CallExpr`, short span, **identifier-only** call arguments. In practice **~one** function matched (`EvaluateFlag` → `EvaluateFlagInEnvironment`); most low-covered code is real logic, not this pattern.
-- Renamed / moved from flat `scripts/*.go` to **`scripts/coverage_filter/`** (snake_case folder); `go run "${SCRIPT_DIR}/coverage_filter"` from `test_coverage.sh`.
+- Renamed / moved from flat `scripts/*.go` to **`scripts/coverage/coverage_filter/`** (snake_case folder); `go run "${SCRIPT_DIR}/coverage_filter"` from `test_coverage.sh`.
 - **`README.md`** in that folder describes flags and usage.
 
 ### Documentation updates (this session)
@@ -53,22 +53,22 @@
 
 **Added / moved**
 
-- `scripts/coverage_filter/main.go`, `main_test.go`, `README.md` (filter CLI; tests for `isGeneratedSourcePath`)
+- `scripts/coverage/coverage_filter/main.go`, `main_test.go`, `README.md` (filter CLI; tests for `isGeneratedSourcePath`)
 
 **Modified**
 
-- `scripts/test_coverage.sh` — gates, `coverage_filter` invocation, `graph/` exclusion in function violations `awk`, comments
+- `scripts/coverage/test_coverage.sh` — gates, `coverage_filter` invocation, `graph/` exclusion in function violations `awk`, comments
 - `.cursor/rules/development_workflow.mdc` — Phase 5 coverage workstream
 - `docs/progress.md` — Phase 5 state, checkboxes, metrics, changelog
 
 **Removed (superseded by `coverage_filter/`)**
 
-- Earlier standalone `scripts/filter_thin_delegates.go` (if still present in history, replaced by package under `scripts/coverage_filter/`)
+- Earlier standalone `scripts/filter_thin_delegates.go` (if still present in history, replaced by package under `scripts/coverage/coverage_filter/`)
 
 ## Commands reference
 
 ```bash
-./scripts/test_coverage.sh
+./scripts/coverage/test_coverage.sh
 go tool cover -html=coverage.out -o coverage.html
-go test ./scripts/coverage_filter   # package tests (needs Go from go.mod)
+go test ./scripts/coverage/coverage_filter   # package tests (needs Go from go.mod)
 ```

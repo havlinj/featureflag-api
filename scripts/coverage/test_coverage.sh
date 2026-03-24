@@ -2,7 +2,7 @@
 # Runs coverage for production packages (unit + integration) and enforces a minimum threshold.
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+ROOT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 cd "$ROOT_DIR"
 
 MIN_COVERAGE=90
@@ -18,7 +18,7 @@ MIN_ENTITY_FILE_COVERAGE=80
 # Function-level floor for core files to avoid low-covered functions hidden by file averages.
 MIN_CORE_FUNCTION_COVERAGE=50
 
-# Auto-filter function-level gate violations (see scripts/coverage_filter/):
+# Auto-filter function-level gate violations (see scripts/coverage/coverage_filter/):
 # - gqlgen output: any *.go under graph/ (also skipped in write_function_violations_file)
 # - thin delegates: single return that forwards a direct call with identifier-only args
 AUTO_FILTER_THIN_DELEGATES=1
