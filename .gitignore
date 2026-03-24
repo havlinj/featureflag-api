@@ -5,3 +5,4 @@ coverage.html
 scripts/**/__pycache__/
 scripts/coverage/state/
 .venv/
+.ruff_cache/
