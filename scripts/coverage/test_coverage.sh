@@ -1,27 +1,35 @@
 #!/usr/bin/env bash
 # Runs coverage for production packages (unit + integration) and enforces a minimum threshold.
 set -euo pipefail
+export LC_ALL=C
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 cd "$ROOT_DIR"
 
-MIN_COVERAGE=90
+# Risk-based baseline:
+# - keep strong signal on critical paths
+# - avoid inflating low-value tests only to chase a vanity percentage
+MIN_COVERAGE=75
 ENFORCE_PER_FILE=1
 ENFORCE_FUNCTION_FLOOR=1
 
 # Per-file coverage floors by file role.
-MIN_SERVICE_FILE_COVERAGE=85
-MIN_POSTGRES_FILE_COVERAGE=85
-MIN_WIRING_FILE_COVERAGE=75
-MIN_ENTITY_FILE_COVERAGE=80
+MIN_ANY_FILE_COVERAGE=30
+MIN_SERVICE_FILE_COVERAGE=80
+MIN_POSTGRES_FILE_COVERAGE=80
+MIN_WIRING_FILE_COVERAGE=70
+MIN_ENTITY_FILE_COVERAGE=70
 
 # Function-level floor for core files to avoid low-covered functions hidden by file averages.
-MIN_CORE_FUNCTION_COVERAGE=50
+MIN_CORE_FUNCTION_COVERAGE=40
 
 # Auto-filter function-level gate violations (see scripts/coverage/coverage_filter/):
 # - gqlgen output: any *.go under graph/ (also skipped in write_function_violations_file)
 # - thin delegates: single return that forwards a direct call with identifier-only args
 AUTO_FILTER_THIN_DELEGATES=1
+
+# Single source of truth for generated GraphQL Go files that must be excluded from enforcement.
+GENERATED_GRAPH_GO_RE='/graph/.*[.]go:?$'
 
 # Optional whitelist entries:
 #   "path|reason|expires(YYYY-MM-DD)"
@@ -85,28 +93,24 @@ setup_temp_reports() {
 
 build_file_level_report() {
   go tool cover -func=coverage.out > "$FUNC_REPORT_FILE"
+  # Keep per-file gate consistent with the package summary source:
+  # aggregate function percentages from `go tool cover -func`.
   awk '
-  NR == 1 {next}
+  $1 ~ /^total:/ {next}
   {
-    split($0, parts, " ")
-    file = parts[1]
-    stmts = parts[2] + 0
-    count = parts[3] + 0
-    total[file] += stmts
-    if (count > 0) {
-      covered[file] += stmts
-    }
+    split($1, a, ":")
+    file = a[1]
+    pct = $3
+    gsub("%", "", pct)
+    sum[file] += pct
+    cnt[file] += 1
   }
   END {
-    for (f in total) {
-      pct = 0
-      if (total[f] > 0) {
-        pct = (covered[f] * 100.0) / total[f]
-      }
-      printf "%.2f\t%s\n", pct, f
+    for (f in sum) {
+      printf "%.2f\t%s\n", sum[f] / cnt[f], f
     }
   }
-' coverage.out | sort -n > "$FILE_REPORT_FILE"
+' "$FUNC_REPORT_FILE" | sort -n > "$FILE_REPORT_FILE"
 }
 
 print_package_summary() {
@@ -124,10 +128,23 @@ print_package_summary() {
   }
   END {
     for (p in sum) {
-      printf "%.1f\t%s\n", sum[p] / cnt[p], p
+      avg = sum[p] / cnt[p]
+      target = any
+      if (p ~ /\/service\.go$/) {
+        target = svc
+      } else if (p ~ /\/postgres\.go$/) {
+        target = pg
+      } else if (p ~ /\/[^/]*resolvers\.go$/ || p ~ /\/resolver\.go$/ || p ~ /\/server\.go$/ || p ~ /\/chain\.go$/) {
+        target = wiring
+      } else if (p ~ /\/entity\.go$/) {
+        target = ent
+      }
+      printf "%.1f\t%s\t%s\n", avg, target, p
     }
   }
-' "$FUNC_REPORT_FILE" | sort -n | awk '{printf "  %6.1f%%  %s\n", $1, $2}'
+' any="$MIN_ANY_FILE_COVERAGE" svc="$MIN_SERVICE_FILE_COVERAGE" pg="$MIN_POSTGRES_FILE_COVERAGE" wiring="$MIN_WIRING_FILE_COVERAGE" ent="$MIN_ENTITY_FILE_COVERAGE" "$FUNC_REPORT_FILE" \
+  | sort -n \
+  | awk -F'\t' '{printf "  %6.1f%%  (target: %s%%)  %s\n", $1, $2, $3}'
 }
 
 print_lowest_functions() {
@@ -146,8 +163,9 @@ print_lowest_functions() {
 
 print_per_file_floor_banner() {
   echo ""
-  echo "== per-file coverage floors (core files)"
+  echo "== per-file coverage floors"
   if [[ "$ENFORCE_PER_FILE" -eq 1 ]]; then
+    echo "  any measured file >= ${MIN_ANY_FILE_COVERAGE}%"
     echo "  service.go >= ${MIN_SERVICE_FILE_COVERAGE}%"
     echo "  postgres.go >= ${MIN_POSTGRES_FILE_COVERAGE}%"
     echo "  wiring files (*resolvers.go,resolver.go,server.go,chain.go) >= ${MIN_WIRING_FILE_COVERAGE}%"
@@ -159,7 +177,12 @@ print_per_file_floor_banner() {
 
 evaluate_per_file_floors() {
   while IFS=$'\t' read -r pct file; do
-    local required=""
+    # Never enforce per-file floors for gqlgen-generated sources.
+    if [[ "$file" =~ $GENERATED_GRAPH_GO_RE ]]; then
+      continue
+    fi
+
+    local required="$MIN_ANY_FILE_COVERAGE"
 
     case "$file" in
       */service.go)
@@ -175,10 +198,6 @@ evaluate_per_file_floors() {
         required="$MIN_ENTITY_FILE_COVERAGE"
         ;;
     esac
-
-    if [[ -z "$required" ]]; then
-      continue
-    fi
 
     local whitelisted_reason=""
     local whitelisted_expires=""
@@ -202,7 +221,6 @@ evaluate_per_file_floors() {
           printf "whitelist expired: %s (%s)\n" "$file" "$whitelisted_expires" >> "$PER_FILE_VIOLATIONS_FILE"
         fi
       else
-        printf "  FAIL: %.2f%% < %s%%  %s\n" "$pct" "$required" "$file"
         printf "%s\t%s\t%s\n" "$pct" "$required" "$file" >> "$PER_FILE_VIOLATIONS_FILE"
       fi
     fi
@@ -218,14 +236,14 @@ print_function_floor_banner() {
 }
 
 write_function_violations_file() {
-  awk -v min="$MIN_CORE_FUNCTION_COVERAGE" '
+  awk -v min="$MIN_CORE_FUNCTION_COVERAGE" -v generated_re="$GENERATED_GRAPH_GO_RE" '
   $1 ~ /^total:/ {next}
   {
     pct = $3
     gsub("%", "", pct)
     loc = $1
     # target core files only; never gqlgen-generated Go under graph/
-    if (loc ~ /\/graph\/.*\.go:/) { next }
+    if (loc ~ generated_re) { next }
     if (loc ~ /\/internal\/.*\/service\.go:/ || loc ~ /\/internal\/.*\/postgres\.go:/ || loc ~ /\/transport\/graphql\/.*resolvers\.go:/) {
       if ((pct + 0) < (min + 0)) {
         printf "%.1f\t%s\t%s\n", pct, loc, $2

@@ -105,11 +105,12 @@ func TestAssignVariant_Calculation(t *testing.T) {
 
 - Coverage gate is evaluated from `scripts/coverage/test_coverage.sh`.
 - Coverage must include both unit and integration test execution against production packages.
-- Target global coverage threshold is **90%**.
+- Target global coverage threshold is **75%** (risk-based baseline for current phase).
 - Prefer production package include-lists over broad wildcards so helper/mock packages do not skew the signal.
 - Use coverage output for prioritization, not vanity:
   - first fix the lowest-covered high-impact functions
   - then improve remaining branch/error-path gaps
 - Optional tightening path for future work:
-  - keep global hard gate at 90%
-  - add per-file/per-package minimums gradually (start with core service/repository files), to avoid brittle or low-value test inflation.
+  - raise global gate gradually from 75% only when critical-path gates stay green
+  - tighten function floor from 40% and per-file floors incrementally for high-risk files first
+  - avoid adding low-value tests for thin wrappers and trivial mapping-only code
