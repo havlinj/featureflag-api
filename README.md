@@ -2,6 +2,20 @@
 
 A Go-based backend service for managing feature flags and A/B experiments, featuring role-based access control, audit logging, and rollout strategies. Built with clean architecture principles, GraphQL (gqlgen), PostgreSQL, and JWT-based authentication.
 
+## Quality highlights
+
+Beyond feature completeness, the project places explicit emphasis on engineering quality:
+
+- **Layered architecture with clear boundaries** - transport, service, and persistence concerns are separated and testable in isolation.
+- **Risk-based test strategy** - combines unit tests, Go integration tests, and binary/bash integration scenarios to validate both logic and runtime behaviour.
+- **High and enforced coverage standards** - global coverage around 90% with additional per-file and function-level gates to prevent weak spots from being hidden by averages.
+- **Deterministic coverage workflow** - coverage runs are configured for reproducibility, reducing cache-related noise and making trend comparisons meaningful.
+- **Coverage hotspot analysis with historical deltas** - tooling highlights low-covered functions, tracks changes over time, and improves targeting of high-value test additions.
+- **CI/Local sync safeguards** - dedicated verification scripts ensure CI script execution stays aligned with the canonical local full-test workflow.
+- **Operational robustness in test automation** - smoke/integration scripts include explicit dependency readiness checks to reduce flaky failures.
+
+These points are intentional design choices: the project aims not only to implement functionality, but to demonstrate maintainability, reliability, and disciplined delivery practices.
+
 ## Motivation
 
 This project marks my first deliberate adoption of an agentic AI workflow, implemented using the Cursor IDE. It was created primarily as a structured learning exercise, focused on evaluating how modern AI-assisted development can be integrated into a disciplined engineering process.
@@ -123,3 +137,4 @@ The API is served over **HTTPS**; GraphQL queries and mutations use the standard
 ## Testing
 
 The project relies on **unit tests** and **integration tests**. Unit tests focus on the service layer (flag and experiment logic, rollout and assignment rules) using mocked repositories so that behaviour can be checked in isolation. Integration tests run against a real database (e.g. PostgreSQL via testcontainers or Docker) and hit the GraphQL API over HTTP to verify end-to-end behaviour, including authentication and role enforcement. The aim is to keep core business logic well covered and to validate that the API, services, and database work together correctly.
+
