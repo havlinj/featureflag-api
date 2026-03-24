@@ -17,6 +17,8 @@ This folder contains all tooling related to coverage measurement, quality gates,
   - prints lowest-covered functions
   - prints count of functions below function gate
   - supports local delta against previous run via state file
+  - keeps state history (default 10 snapshots), prints delta vs immediate previous run, and if project tree is unchanged it auto-walks older snapshots to find the last git-changed run for comparison
+  - deduplicates identical consecutive snapshots via `repeat_count`
 
 ## How it is integrated
 
@@ -42,7 +44,9 @@ Useful options:
 ```bash
 python3 scripts/coverage/coverage_hotspots.py --files internal/flags/service.go internal/experiments/service.go
 python3 scripts/coverage/coverage_hotspots.py --top 30 --examples 3
-python3 scripts/coverage/coverage_hotspots.py --gate 50 --state-file .coverage_hotspots_state.json
+python3 scripts/coverage/coverage_hotspots.py --gate 50 --state-file scripts/coverage/state/coverage_hotspots_state.json
+python3 scripts/coverage/coverage_hotspots.py --gate 50 --state-file scripts/coverage/state/coverage_hotspots_demo_state.json
+python3 scripts/coverage/coverage_hotspots.py --state-history-size 20
 python3 scripts/coverage/coverage_hotspots.py --no-state
 ```
 

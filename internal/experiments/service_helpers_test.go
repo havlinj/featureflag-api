@@ -3,6 +3,7 @@ package experiments
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"testing"
 
 	"github.com/havlinj/featureflag-api/graph/model"
@@ -42,8 +43,33 @@ func (s *minimalExperimentsTxAwareStore) WithTx(tx *sql.Tx) Store {
 	return s
 }
 
+type minimalExperimentsNonTxStore struct{}
+
+func (s *minimalExperimentsNonTxStore) CreateExperiment(ctx context.Context, exp *Experiment) (*Experiment, error) {
+	return exp, nil
+}
+func (s *minimalExperimentsNonTxStore) GetExperimentByKeyAndEnvironment(ctx context.Context, key, environment string) (*Experiment, error) {
+	return nil, nil
+}
+func (s *minimalExperimentsNonTxStore) GetExperimentByID(ctx context.Context, id string) (*Experiment, error) {
+	return nil, nil
+}
+func (s *minimalExperimentsNonTxStore) CreateVariant(ctx context.Context, v *Variant) (*Variant, error) {
+	return v, nil
+}
+func (s *minimalExperimentsNonTxStore) GetVariantsByExperimentID(ctx context.Context, experimentID string) ([]*Variant, error) {
+	return nil, nil
+}
+func (s *minimalExperimentsNonTxStore) GetAssignment(ctx context.Context, userID, experimentID string) (*Assignment, error) {
+	return nil, nil
+}
+func (s *minimalExperimentsNonTxStore) UpsertAssignment(ctx context.Context, a *Assignment) error {
+	return nil
+}
+
 type minimalExperimentsAuditStore struct {
-	gotTx *sql.Tx
+	gotTx    *sql.Tx
+	beginErr error
 }
 
 func (s *minimalExperimentsAuditStore) Create(ctx context.Context, entry *audit.Entry) error {
@@ -56,6 +82,9 @@ func (s *minimalExperimentsAuditStore) List(ctx context.Context, filter audit.Li
 	return nil, nil
 }
 func (s *minimalExperimentsAuditStore) BeginTx(ctx context.Context) (*sql.Tx, error) {
+	if s.beginErr != nil {
+		return nil, s.beginErr
+	}
 	return &sql.Tx{}, nil
 }
 func (s *minimalExperimentsAuditStore) WithTx(tx *sql.Tx) audit.Store {
@@ -79,6 +108,36 @@ func TestPrepareAuditTx_Success_ConfiguresTxScopedStores(t *testing.T) {
 	}
 	if expStore.gotTx == nil || auditStore.gotTx == nil {
 		t.Fatal("expected both stores to receive tx via WithTx")
+	}
+}
+
+func TestPrepareAuditTx_StoreNotTxAware_ReturnsError(t *testing.T) {
+	svc := NewServiceWithAudit(&minimalExperimentsNonTxStore{}, &minimalExperimentsAuditStore{})
+
+	out, err := svc.prepareAuditTx(context.Background())
+
+	if err == nil {
+		t.Fatal("expected error for non tx-aware store")
+	}
+	if out != nil {
+		t.Fatalf("expected nil audit tx context, got %+v", out)
+	}
+}
+
+func TestPrepareAuditTx_BeginTxError_Propagates(t *testing.T) {
+	expected := errors.New("begin tx failed")
+	expStore := &minimalExperimentsTxAwareStore{}
+	auditStore := &minimalExperimentsAuditStore{beginErr: expected}
+	svc := NewServiceWithAudit(expStore, auditStore)
+	ctx := auth.WithActorID(context.Background(), "actor-1")
+
+	out, err := svc.prepareAuditTx(ctx)
+
+	if out != nil {
+		t.Fatalf("expected nil context, got %+v", out)
+	}
+	if !errors.Is(err, expected) {
+		t.Fatalf("expected begin error, got %v", err)
 	}
 }
 

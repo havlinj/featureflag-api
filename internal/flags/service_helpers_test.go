@@ -76,6 +76,12 @@ func TestFlagToModel_TableDriven(t *testing.T) {
 			if got.ID != tc.in.ID || got.Key != tc.in.Key || got.Enabled != tc.in.Enabled || got.Environment != string(tc.in.Environment) {
 				t.Fatalf("unexpected mapped fields: got %+v input %+v", got, tc.in)
 			}
+			if got.Description != tc.in.Description {
+				t.Fatalf("unexpected description mapping: got=%v want=%v", got.Description, tc.in.Description)
+			}
+			if got.RolloutStrategy != rolloutStrategyToModel(tc.in.RolloutStrategy) {
+				t.Fatalf("unexpected rollout strategy mapping: got=%q want=%q", got.RolloutStrategy, rolloutStrategyToModel(tc.in.RolloutStrategy))
+			}
 		})
 	}
 }
@@ -104,6 +110,14 @@ func TestRuleInputToRuleType_TableDriven(t *testing.T) {
 			in: &model.RuleInput{
 				Type:  model.RolloutRuleTypeAttribute,
 				Value: `{"attribute":"userId","op":"in","values":["u1"]}`,
+			},
+			want: RuleTypeAttribute,
+		},
+		{
+			name: "unknown type falls back to attribute type",
+			in: &model.RuleInput{
+				Type:  model.RolloutRuleType("UNSPECIFIED"),
+				Value: "x",
 			},
 			want: RuleTypeAttribute,
 		},
@@ -342,6 +356,36 @@ func TestDeleteFlagWithStoreAndID_TableDriven(t *testing.T) {
 		ok, id, err := svc.deleteFlagWithStoreAndID(ctx, store, "k1", DeploymentStageDev)
 		if ok || id != "" || err == nil {
 			t.Fatalf("unexpected result: ok=%v id=%q err=%v", ok, id, err)
+		}
+		var opErr *OperationError
+		if !errors.As(err, &opErr) {
+			t.Fatalf("expected *OperationError, got %T", err)
+		}
+	})
+}
+
+func TestDeleteFlag_NoAudit_Path(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("success", func(t *testing.T) {
+		svc := NewService(&minimalFlagsTxAwareStore{})
+		ok, err := svc.DeleteFlag(ctx, "k1", DeploymentStageDev)
+		if err != nil {
+			t.Fatalf("DeleteFlag: %v", err)
+		}
+		if !ok {
+			t.Fatal("expected flag to be deleted")
+		}
+	})
+
+	t.Run("delete store error", func(t *testing.T) {
+		svc := NewService(&minimalFlagsTxAwareStore{deleteErr: errors.New("boom")})
+		ok, err := svc.DeleteFlag(ctx, "k1", DeploymentStageDev)
+		if ok {
+			t.Fatal("expected delete to fail")
+		}
+		if err == nil {
+			t.Fatal("expected operation error")
 		}
 		var opErr *OperationError
 		if !errors.As(err, &opErr) {

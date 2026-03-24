@@ -16,6 +16,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -24,7 +25,7 @@ import sys
 from datetime import datetime, timezone
 from collections import defaultdict
 from dataclasses import dataclass
-from typing import Dict, List, Set, Tuple
+from typing import Dict, List, Optional, Set, Tuple
 
 
 @dataclass
@@ -44,7 +45,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--gate", type=float, default=50.0, help="Function coverage gate threshold in percent")
     parser.add_argument(
         "--state-file",
-        default=".coverage_hotspots_state.json",
+        default="scripts/coverage/state/coverage_hotspots_state.json",
         help="Path to local state snapshot for delta comparison",
     )
     parser.add_argument(
@@ -57,6 +58,12 @@ def parse_args() -> argparse.Namespace:
         nargs="*",
         default=[],
         help="Optional relative file filters, e.g. internal/flags/service.go",
+    )
+    parser.add_argument(
+        "--state-history-size",
+        type=int,
+        default=10,
+        help="How many snapshots to keep in state history",
     )
     return parser.parse_args()
 
@@ -83,6 +90,35 @@ def run_cover_func(coverage_file: str) -> List[Tuple[float, str]]:
         pct = float(match.group(3))
         out.append((pct, name))
     return sorted(out, key=lambda item: item[0])
+
+
+def run_git(args: List[str]) -> Tuple[bool, str]:
+    proc = subprocess.run(["git", *args], capture_output=True, text=True)
+    if proc.returncode != 0:
+        return False, (proc.stderr.strip() or proc.stdout.strip())
+    return True, proc.stdout.strip()
+
+
+def collect_git_metadata() -> dict:
+    ok, _ = run_git(["rev-parse", "--is-inside-work-tree"])
+    if not ok:
+        return {"available": False}
+
+    ok_head, head = run_git(["rev-parse", "HEAD"])
+    ok_status, status = run_git(["status", "--porcelain"])
+    if not ok_status:
+        status = ""
+
+    status_lines = [line for line in status.splitlines() if line.strip()]
+    status_digest = hashlib.sha256("\n".join(status_lines).encode("utf-8")).hexdigest()
+
+    return {
+        "available": True,
+        "head": head if ok_head else "",
+        "dirty": len(status_lines) > 0,
+        "status_count": len(status_lines),
+        "status_digest": status_digest,
+    }
 
 
 def in_file_scope(name: str, selected_files: List[str]) -> bool:
@@ -191,26 +227,112 @@ def load_previous_state(path: str) -> dict:
         return json.load(handle)
 
 
-def save_state(path: str, gate: float, selected_files: List[str], below_gate: List[Tuple[float, str]]) -> None:
-    payload = {
+def build_snapshot(
+    gate: float,
+    selected_files: List[str],
+    below_gate: List[Tuple[float, str]],
+    func_rows: List[Tuple[float, str]],
+) -> dict:
+    scoped_func_rows = [(pct, name) for pct, name in func_rows if in_file_scope(name, selected_files)]
+    git_meta = collect_git_metadata()
+    return {
         "saved_at": datetime.now(timezone.utc).isoformat(),
         "gate": gate,
         "selected_files": selected_files,
         "below_gate": [{"pct": pct, "name": name} for pct, name in below_gate],
         "below_gate_count": len(below_gate),
+        "function_rows": [{"pct": pct, "name": name} for pct, name in scoped_func_rows],
+        "git": git_meta,
     }
+
+
+def snapshot_signature(snapshot: dict) -> Tuple[Tuple[str, float], ...]:
+    rows = snapshot.get("function_rows", [])
+    pairs = []
+    for item in rows:
+        name = item.get("name")
+        if not name:
+            continue
+        pct = round(float(item.get("pct", 0.0)), 1)
+        pairs.append((name, pct))
+    return tuple(sorted(pairs))
+
+
+def choose_comparison_snapshot(state: dict, current_snapshot: dict) -> Optional[dict]:
+    history = state.get("history", [])
+    if not isinstance(history, list) or not history:
+        return None
+
+    current_sig = snapshot_signature(current_snapshot)
+    for snap in reversed(history):
+        if not isinstance(snap, dict):
+            continue
+        if snapshot_signature(snap) != current_sig:
+            return snap
+    return None
+
+
+def get_history_snapshots(state: dict) -> List[dict]:
+    history = state.get("history", [])
+    if isinstance(history, list):
+        return [item for item in history if isinstance(item, dict)]
+    if state:
+        return [state]
+    return []
+
+
+def git_identity(snapshot: dict) -> Tuple[str, str]:
+    git = snapshot.get("git", {})
+    if not isinstance(git, dict):
+        return ("", "")
+    return (git.get("head", ""), git.get("status_digest", ""))
+
+
+def choose_last_git_changed_snapshot(state: dict, current_snapshot: dict) -> Optional[dict]:
+    history = get_history_snapshots(state)
+    if not history:
+        return None
+
+    current_identity = git_identity(current_snapshot)
+    for snap in reversed(history):
+        if git_identity(snap) != current_identity:
+            return snap
+    return None
+
+
+def save_state(path: str, snapshot: dict, history_size: int) -> None:
+    state_dir = os.path.dirname(path)
+    if state_dir:
+        os.makedirs(state_dir, exist_ok=True)
+
+    existing = load_previous_state(path)
+    history = get_history_snapshots(existing)
+
+    if history and snapshot_signature(history[-1]) == snapshot_signature(snapshot):
+        repeats = int(history[-1].get("repeat_count", 1))
+        history[-1]["repeat_count"] = repeats + 1
+        history[-1]["saved_at"] = snapshot.get("saved_at")
+        history[-1]["git"] = snapshot.get("git", history[-1].get("git", {"available": False}))
+    else:
+        snapshot["repeat_count"] = 1
+        history.append(snapshot)
+    if history_size > 0:
+        history = history[-history_size:]
+
+    payload = {"history": history, "latest": history[-1] if history else snapshot}
     with open(path, "w", encoding="utf-8") as handle:
         json.dump(payload, handle, ensure_ascii=False, indent=2)
 
 
-def print_delta(previous: dict, current_set: Set[str], gate: float) -> None:
+def print_delta(previous: dict, current_rows: List[Tuple[float, str]], gate: float, heading: str) -> None:
     prev_items = previous.get("below_gate", [])
     prev_set = {item.get("name", "") for item in prev_items if item.get("name")}
+    current_set = {name for pct, name in current_rows if pct < gate}
     prev_count = len(prev_set)
     curr_count = len(current_set)
     diff = curr_count - prev_count
 
-    print("== function-gate delta vs previous run")
+    print(f"== {heading}")
     print(f"previous below gate ({gate:.1f}%): {prev_count}")
     print(f"current  below gate ({gate:.1f}%): {curr_count}")
     sign = "+" if diff > 0 else ""
@@ -232,6 +354,65 @@ def print_delta(previous: dict, current_set: Set[str], gate: float) -> None:
             print(f"  ... and {len(added) - 10} more")
     if not removed and not added:
         print("no set change in below-gate functions")
+    print()
+
+    prev_rows_items = previous.get("function_rows", [])
+    prev_rows = {item.get("name", ""): float(item.get("pct", 0.0)) for item in prev_rows_items if item.get("name")}
+    curr_rows = {name: pct for pct, name in current_rows}
+
+    common = sorted(set(prev_rows.keys()) & set(curr_rows.keys()))
+    changed = []
+    for name in common:
+        old_pct = prev_rows[name]
+        new_pct = curr_rows[name]
+        delta_pct = new_pct - old_pct
+        if abs(delta_pct) >= 0.1:
+            changed.append((delta_pct, old_pct, new_pct, name))
+
+    print("== function coverage delta (%) vs previous run")
+    if not changed:
+        print("no per-function percentage changes detected")
+        print()
+        return
+
+    improved = sorted([row for row in changed if row[0] > 0], key=lambda item: item[0], reverse=True)
+    regressed = sorted([row for row in changed if row[0] < 0], key=lambda item: item[0])
+
+    print("most improved:")
+    for delta_pct, old_pct, new_pct, name in improved[:10]:
+        print(f"  +{delta_pct:.1f} pp  {old_pct:.1f}% -> {new_pct:.1f}%  {name}")
+
+    if regressed:
+        print("most regressed:")
+        for delta_pct, old_pct, new_pct, name in regressed[:10]:
+            print(f"  {delta_pct:.1f} pp  {old_pct:.1f}% -> {new_pct:.1f}%  {name}")
+    print()
+
+
+def print_git_delta(previous: dict, current: dict) -> None:
+    prev_git = previous.get("git", {})
+    curr_git = current.get("git", {})
+    if not prev_git.get("available") or not curr_git.get("available"):
+        return
+
+    prev_head = prev_git.get("head", "")
+    curr_head = curr_git.get("head", "")
+    prev_digest = prev_git.get("status_digest", "")
+    curr_digest = curr_git.get("status_digest", "")
+    prev_count = int(prev_git.get("status_count", 0))
+    curr_count = int(curr_git.get("status_count", 0))
+
+    if prev_head == curr_head and prev_digest == curr_digest:
+        print("== git workspace delta")
+        print("no repository change detected since compared snapshot")
+        print()
+        return
+
+    print("== git workspace delta")
+    if prev_head != curr_head:
+        print(f"HEAD changed: {prev_head[:12]} -> {curr_head[:12]}")
+    if prev_digest != curr_digest:
+        print(f"working tree changed: status entries {prev_count} -> {curr_count}")
     print()
 
 
@@ -274,11 +455,43 @@ def main() -> int:
         print()
 
         if not args.no_state:
-            previous = load_previous_state(args.state_file)
-            if previous:
-                current_set = {name for _, name in below_gate}
-                print_delta(previous, current_set, args.gate)
-            save_state(args.state_file, args.gate, args.files, below_gate)
+            current_snapshot = build_snapshot(args.gate, args.files, below_gate, func_rows)
+            state = load_previous_state(args.state_file)
+            history = get_history_snapshots(state)
+            immediate_previous = history[-1] if history else None
+            if immediate_previous:
+                print_delta(
+                    immediate_previous,
+                    func_rows,
+                    args.gate,
+                    "function-gate delta vs immediate previous run",
+                )
+                print_git_delta(immediate_previous, current_snapshot)
+                if git_identity(immediate_previous) == git_identity(current_snapshot):
+                    git_changed = choose_last_git_changed_snapshot(state, current_snapshot)
+                    if git_changed:
+                        print_delta(
+                            git_changed,
+                            func_rows,
+                            args.gate,
+                            "function-gate delta vs last git-changed run",
+                        )
+                        print_git_delta(git_changed, current_snapshot)
+                    else:
+                        distinct = choose_comparison_snapshot(state, current_snapshot)
+                        if distinct:
+                            print_delta(
+                                distinct,
+                                func_rows,
+                                args.gate,
+                                "function-gate delta vs last distinct run",
+                            )
+                            print_git_delta(distinct, current_snapshot)
+            elif state:
+                print("== function-gate delta vs previous run")
+                print("no comparable distinct historical snapshot found")
+                print()
+            save_state(args.state_file, current_snapshot, args.state_history_size)
     else:
         print("== function gate status")
         print("unavailable: go tool cover -func could not run in this environment")
