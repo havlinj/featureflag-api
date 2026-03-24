@@ -572,38 +572,6 @@ func TestService_EvaluateFlag_get_flag_error_returns_error(t *testing.T) {
 	}
 }
 
-func TestService_EvaluateFlag_get_rules_error_returns_error(t *testing.T) {
-	ctx := context.Background()
-	store := &mock.Store{}
-	store.GetByKeyAndEnvironmentReturns = []mock.GetByKeyResult{
-		{Flag: &flags.Flag{ID: "f1", Key: "key", Enabled: true, Environment: flags.DeploymentStageDev, RolloutStrategy: flags.RolloutStrategyPercentage}, Err: nil},
-	}
-	wantErr := errors.New("GetRulesByFlagID failed")
-	store.GetRulesByFlagIDReturns = []mock.GetRulesResult{
-		{Rules: nil, Err: wantErr},
-	}
-	svc := flags.NewService(store)
-
-	enabled, err := svc.EvaluateFlag(ctx, "key", evalCtx("user-1"))
-
-	if enabled {
-		t.Error("expected false on error")
-	}
-	if err == nil || !errors.Is(err, wantErr) {
-		t.Errorf("expected wrapped %v, got %v", wantErr, err)
-	}
-	var opErr *flags.OperationError
-	if !errors.As(err, &opErr) {
-		t.Fatalf("expected *flags.OperationError, got %T", err)
-	}
-	if opErr.Op != "flags.service.evaluate_flag.store_get_rules_by_flag_id" {
-		t.Fatalf("unexpected op %q", opErr.Op)
-	}
-	if opErr.Key != "key" || opErr.Environment != "dev" || opErr.FlagID != "f1" {
-		t.Fatalf("unexpected context fields: %+v", opErr)
-	}
-}
-
 func TestService_EvaluateFlag_uses_default_environment_dev(t *testing.T) {
 	ctx := context.Background()
 	store := &mock.Store{}

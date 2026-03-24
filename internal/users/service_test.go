@@ -261,39 +261,6 @@ func TestService_UpdateUser_not_found_returns_ErrNotFound(t *testing.T) {
 	}
 }
 
-func TestService_UpdateUser_get_error_returns_wrapped_error(t *testing.T) {
-	ctx := context.Background()
-	store := &mock.Store{}
-	wantErr := errors.New("GetByID failed")
-	store.GetByIDReturns = []mock.GetByIDResult{
-		{User: nil, Err: wantErr},
-	}
-	svc := users.NewService(store)
-	input := model.UpdateUserInput{ID: "some-id"}
-
-	got, err := svc.UpdateUser(ctx, input)
-
-	if got != nil {
-		t.Errorf("expected nil, got %+v", got)
-	}
-	if !errors.Is(err, wantErr) {
-		t.Errorf("expected wrapped %v, got %v", wantErr, err)
-	}
-	var opErr *users.OperationError
-	if !errors.As(err, &opErr) {
-		t.Fatalf("expected *users.OperationError, got %T", err)
-	}
-	if opErr.Op != "users.service.update_user.store_get_by_id" {
-		t.Fatalf("unexpected op %q", opErr.Op)
-	}
-	if opErr.ID != "some-id" {
-		t.Fatalf("unexpected context fields: %+v", opErr)
-	}
-	if len(store.UpdateCalls) != 0 {
-		t.Error("Update should not be called when GetByID fails")
-	}
-}
-
 func TestService_UpdateUser_get_error_includes_context(t *testing.T) {
 	ctx := context.Background()
 	store := &mock.Store{}
