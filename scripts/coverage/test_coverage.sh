@@ -16,6 +16,12 @@ MIN_COVERAGE=75
 ENFORCE_PER_FILE=1
 ENFORCE_FUNCTION_FLOOR=1
 
+# Deterministic coverage by default:
+# - clear Go test cache
+# - disable test result cache via -count=1
+# Set COVERAGE_ALLOW_CACHE=1 for faster local feedback loops.
+COVERAGE_ALLOW_CACHE="${COVERAGE_ALLOW_CACHE:-0}"
+
 # Per-file coverage floors by file role.
 MIN_ANY_FILE_COVERAGE=30
 MIN_SERVICE_FILE_COVERAGE=80
@@ -79,8 +85,18 @@ coverage_imports_csv() {
 # Must not wrap go test in command substitution: test output goes to stdout and must reach the terminal.
 run_tests_with_coverage() {
   local imports="$1"
+  local go_test_extra_args=()
+
+  if [[ "$COVERAGE_ALLOW_CACHE" == "1" ]]; then
+    echo "== coverage mode: cached (fast local feedback)"
+  else
+    echo "== coverage mode: fresh (deterministic)"
+    go clean -testcache
+    go_test_extra_args+=(-count=1)
+  fi
+
   set +e
-  go test -tags=integration -covermode=atomic -coverpkg="${imports}" -coverprofile=coverage.out \
+  go test "${go_test_extra_args[@]}" -tags=integration -covermode=atomic -coverpkg="${imports}" -coverprofile=coverage.out \
     "${COVERAGE_PKGS[@]}" ./test/integration/...
   GO_TEST_EXIT=$?
   set -e

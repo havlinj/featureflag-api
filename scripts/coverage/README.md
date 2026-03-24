@@ -9,6 +9,8 @@ This folder contains all tooling related to coverage measurement, quality gates,
   - generic per-file floor (default 30%) for measured non-generated files
   - per-file floors for core file roles
   - function-level floor for core functions (default 40%)
+  - deterministic mode by default (clears Go test cache + runs with `-count=1`)
+  - optional fast mode via `COVERAGE_ALLOW_CACHE=1`
   - generated GraphQL Go files under `graph/**/*.go` are excluded from per-file/function enforcement
 - `coverage_filter/`: Go helper that post-processes function-level violations
   - skips generated `graph/**/*.go`
@@ -31,6 +33,7 @@ Run full coverage gates:
 
 ```bash
 bash scripts/coverage/test_coverage.sh
+COVERAGE_ALLOW_CACHE=1 bash scripts/coverage/test_coverage.sh
 ```
 
 Hotspot analysis:
