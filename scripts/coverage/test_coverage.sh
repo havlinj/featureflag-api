@@ -79,19 +79,36 @@ FILE_REPORT_FILE=""
 PER_FILE_VIOLATIONS_FILE=""
 FUNCTION_VIOLATIONS_FILE=""
 
-coverage_imports_csv() {
+build_coverpkg_imports() {
   go list "${COVERAGE_PKGS[@]}" | awk 'BEGIN{ORS=","} {print}' | sed 's/,$//'
 }
 
-# Must not wrap go test in command substitution: test output goes to stdout and must reach the terminal.
-run_tests_with_coverage() {
-  local imports="$1"
-  local go_test_extra_args=()
-
+coverage_cache_mode() {
   if [[ "$COVERAGE_ALLOW_CACHE" == "1" ]]; then
+    echo "cached"
+  else
+    echo "fresh"
+  fi
+}
+
+print_coverage_mode_banner() {
+  local mode="$1"
+  if [[ "$mode" == "cached" ]]; then
     echo "== coverage mode: cached (fast local feedback)"
   else
     echo "== coverage mode: fresh (deterministic)"
+  fi
+}
+
+# Must not wrap go test in command substitution: test output goes to stdout and must reach the terminal.
+execute_coverage_tests() {
+  local imports="$1"
+  local mode
+  mode="$(coverage_cache_mode)"
+  local go_test_extra_args=()
+
+  print_coverage_mode_banner "$mode"
+  if [[ "$mode" == "fresh" ]]; then
     go clean -testcache
     go_test_extra_args+=(-count=1)
   fi
@@ -104,16 +121,14 @@ run_tests_with_coverage() {
 }
 
 write_run_metadata() {
-  local cache_mode="fresh"
+  local cache_mode
   local coverage_sha256=""
   local go_version=""
   local generated_at=""
   local measured_packages=""
   local coverage_cmd=""
 
-  if [[ "$COVERAGE_ALLOW_CACHE" == "1" ]]; then
-    cache_mode="cached"
-  fi
+  cache_mode="$(coverage_cache_mode)"
 
   if [[ -f coverage.out ]]; then
     coverage_sha256="$(sha256sum coverage.out | awk '{print $1}')"
@@ -412,12 +427,12 @@ finalize_gates() {
 
 main() {
   local COVERAGE_IMPORTS
-  COVERAGE_IMPORTS="$(coverage_imports_csv)"
+  COVERAGE_IMPORTS="$(build_coverpkg_imports)"
 
   echo "== coverage (unit + integration)"
   echo "== measured packages: ${COVERAGE_PKGS[*]}"
 
-  run_tests_with_coverage "$COVERAGE_IMPORTS"
+  execute_coverage_tests "$COVERAGE_IMPORTS"
   write_run_metadata
   if [[ "$GO_TEST_EXIT" -ne 0 ]]; then
     TEST_EXEC_FAIL=1
