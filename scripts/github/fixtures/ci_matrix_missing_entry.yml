@@ -1,0 +1,19 @@
+name: CI
+jobs:
+  test:
+    steps:
+      - run: bash scripts/check.sh
+      - run: bash scripts/test_unit.sh
+      - run: bash scripts/test_integration.sh
+      - run: bash scripts/coverage/test_coverage.sh
+      - run: bash scripts/build.sh
+      - run: bash scripts/test_binary_smoke.sh
+  bash-integration:
+    strategy:
+      matrix:
+        script:
+          - scripts/integration/test_missing_jwt_secret.sh
+          - scripts/integration/test_weak_jwt_secret.sh
+          - scripts/integration/test_invalid_dsn.sh
+          - scripts/integration/test_default_listen_addr.sh
+          - scripts/integration/test_tls_config.sh

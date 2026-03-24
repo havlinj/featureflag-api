@@ -62,7 +62,9 @@ class RunMeta:
             cache_mode=str(data.get("cache_mode", "unknown")),
             go_version=str(data.get("go_version", "unknown")),
             coverage_profile_sha256=str(data.get("coverage_profile_sha256", "")),
-            includes_bash_integration_tests=bool(data.get("includes_bash_integration_tests", False)),
+            includes_bash_integration_tests=bool(
+                data.get("includes_bash_integration_tests", False)
+            ),
         )
 
 
@@ -103,16 +105,22 @@ class Snapshot:
             "saved_at": self.saved_at,
             "gate": self.gate,
             "selected_files": self.selected_files,
-            "below_gate": [{"pct": row.percent, "name": row.name} for row in self.below_gate],
+            "below_gate": [
+                {"pct": row.percent, "name": row.name} for row in self.below_gate
+            ],
             "below_gate_count": len(self.below_gate),
-            "function_rows": [{"pct": row.percent, "name": row.name} for row in self.function_rows],
+            "function_rows": [
+                {"pct": row.percent, "name": row.name} for row in self.function_rows
+            ],
             "coverage_profile_sha256": self.coverage_profile_sha256,
             "git": asdict(self.git),
             "repeat_count": self.repeat_count,
         }
 
     def signature(self) -> Tuple[Tuple[str, float], ...]:
-        return tuple(sorted((row.name, round(row.percent, 1)) for row in self.function_rows))
+        return tuple(
+            sorted((row.name, round(row.percent, 1)) for row in self.function_rows)
+        )
 
     def git_identity(self) -> Tuple[str, str]:
         return (self.git.head, self.git.status_digest)
@@ -136,7 +144,11 @@ class SnapshotStore:
             payload = json.load(handle)
         raw_history = payload.get("history", [])
         if isinstance(raw_history, list):
-            self._history = [Snapshot.from_dict(item) for item in raw_history if isinstance(item, dict)]
+            self._history = [
+                Snapshot.from_dict(item)
+                for item in raw_history
+                if isinstance(item, dict)
+            ]
         elif isinstance(payload, dict):
             self._history = [Snapshot.from_dict(payload)]
         else:
@@ -166,30 +178,50 @@ class SnapshotStore:
             self._history = self._history[-history_size:]
 
         latest = self._history[-1] if self._history else snapshot
-        payload = {"history": [item.to_dict() for item in self._history], "latest": latest.to_dict()}
+        payload = {
+            "history": [item.to_dict() for item in self._history],
+            "latest": latest.to_dict(),
+        }
         with open(self.path, "w", encoding="utf-8") as handle:
             json.dump(payload, handle, ensure_ascii=False, indent=2)
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Show coverage hotspots from coverage.out")
-    parser.add_argument("--coverage-file", default="coverage.out", help="Path to coverage.out")
-    parser.add_argument("--top", type=int, default=20, help="How many rows to print per section")
-    parser.add_argument("--examples", type=int, default=2, help="Example snippets per function")
-    parser.add_argument("--gate", type=float, default=50.0, help="Function coverage gate threshold in percent")
+    parser = argparse.ArgumentParser(
+        description="Show coverage hotspots from coverage.out"
+    )
+    parser.add_argument(
+        "--coverage-file", default="coverage.out", help="Path to coverage.out"
+    )
+    parser.add_argument(
+        "--top", type=int, default=20, help="How many rows to print per section"
+    )
+    parser.add_argument(
+        "--examples", type=int, default=2, help="Example snippets per function"
+    )
+    parser.add_argument(
+        "--gate",
+        type=float,
+        default=50.0,
+        help="Function coverage gate threshold in percent",
+    )
     parser.add_argument(
         "--state-file",
         default="scripts/coverage/state/coverage_hotspots_state.json",
         help="Path to local state snapshot for delta comparison",
     )
-    parser.add_argument("--no-state", action="store_true", help="Do not read/write local state snapshot")
+    parser.add_argument(
+        "--no-state", action="store_true", help="Do not read/write local state snapshot"
+    )
     parser.add_argument(
         "--files",
         nargs="*",
         default=[],
         help="Optional relative file filters, e.g. internal/flags/service.go",
     )
-    parser.add_argument("--state-history-size", type=int, default=10, help="How many snapshots to keep")
+    parser.add_argument(
+        "--state-history-size", type=int, default=10, help="How many snapshots to keep"
+    )
     parser.add_argument(
         "--run-meta-file",
         default="scripts/coverage/state/coverage_run_meta.json",
@@ -209,10 +241,14 @@ def file_sha256(path: str) -> str:
 def run_cover_func(coverage_file: str) -> List[FunctionCoverage]:
     go_bin = "/usr/local/go/bin/go" if os.path.exists("/usr/local/go/bin/go") else "go"
     proc = subprocess.run(
-        [go_bin, "tool", "cover", f"-func={coverage_file}"], capture_output=True, text=True
+        [go_bin, "tool", "cover", f"-func={coverage_file}"],
+        capture_output=True,
+        text=True,
     )
     if proc.returncode != 0:
-        raise RuntimeError(proc.stderr.strip() or proc.stdout.strip() or "go tool cover failed")
+        raise RuntimeError(
+            proc.stderr.strip() or proc.stdout.strip() or "go tool cover failed"
+        )
 
     pattern = re.compile(r"^(.+?):\s+(\S+)\s+([\d.]+)%$")
     rows: List[FunctionCoverage] = []
@@ -223,7 +259,12 @@ def run_cover_func(coverage_file: str) -> List[FunctionCoverage]:
         match = pattern.match(line)
         if not match:
             continue
-        rows.append(FunctionCoverage(percent=float(match.group(3)), name=f"{match.group(1)}: {match.group(2)}"))
+        rows.append(
+            FunctionCoverage(
+                percent=float(match.group(3)),
+                name=f"{match.group(1)}: {match.group(2)}",
+            )
+        )
     return sorted(rows, key=lambda item: item.percent)
 
 
@@ -233,8 +274,14 @@ def in_file_scope(name: str, selected_files: Sequence[str]) -> bool:
     return any(file_filter in name for file_filter in selected_files)
 
 
-def below_gate_functions(rows: Sequence[FunctionCoverage], gate: float, selected_files: Sequence[str]) -> List[FunctionCoverage]:
-    return [row for row in rows if in_file_scope(row.name, selected_files) and row.percent < gate]
+def below_gate_functions(
+    rows: Sequence[FunctionCoverage], gate: float, selected_files: Sequence[str]
+) -> List[FunctionCoverage]:
+    return [
+        row
+        for row in rows
+        if in_file_scope(row.name, selected_files) and row.percent < gate
+    ]
 
 
 def parse_coverage_profile(coverage_file: str) -> List[ZeroBlock]:
@@ -260,7 +307,9 @@ def parse_coverage_profile(coverage_file: str) -> List[ZeroBlock]:
     return blocks
 
 
-def load_file_lines(repo_root: str, module_path_file: str, cache: Dict[str, List[str]]) -> List[str]:
+def load_file_lines(
+    repo_root: str, module_path_file: str, cache: Dict[str, List[str]]
+) -> List[str]:
     rel = module_path_file.replace("github.com/havlinj/featureflag-api/", "")
     if rel not in cache:
         with open(os.path.join(repo_root, rel), encoding="utf-8") as handle:
@@ -280,7 +329,9 @@ def nearest_function_name(lines: Sequence[str], start_line: int) -> str:
 
 def summarize_zero_blocks(
     repo_root: str, blocks: Sequence[ZeroBlock], selected_files: Sequence[str]
-) -> Tuple[List[Tuple[str, str, int, int]], Dict[Tuple[str, str], List[Tuple[int, int, str]]]]:
+) -> Tuple[
+    List[Tuple[str, str, int, int]], Dict[Tuple[str, str], List[Tuple[int, int, str]]]
+]:
     cache: Dict[str, List[str]] = {}
     grouped: Dict[Tuple[str, str], List[Tuple[int, int, str]]] = defaultdict(list)
 
@@ -343,7 +394,9 @@ def build_snapshot(
     function_rows: Sequence[FunctionCoverage],
     coverage_sha256: str,
 ) -> Snapshot:
-    scoped_rows = [row for row in function_rows if in_file_scope(row.name, selected_files)]
+    scoped_rows = [
+        row for row in function_rows if in_file_scope(row.name, selected_files)
+    ]
     return Snapshot(
         saved_at=datetime.now(timezone.utc).isoformat(),
         gate=gate,
@@ -355,10 +408,14 @@ def build_snapshot(
     )
 
 
-def print_profile_context(coverage_file: str, run_meta: RunMeta, coverage_sha256: str) -> None:
+def print_profile_context(
+    coverage_file: str, run_meta: RunMeta, coverage_sha256: str
+) -> None:
     print("== coverage profile context")
     print(f"profile: {coverage_file}")
-    print("source: includes Go tests (including ./test/integration), excludes bash scripts under scripts/integration")
+    print(
+        "source: includes Go tests (including ./test/integration), excludes bash scripts under scripts/integration"
+    )
     if run_meta.generated_at == "unknown":
         print("WARN: run metadata not found; profile provenance is unknown")
         print()
@@ -366,9 +423,16 @@ def print_profile_context(coverage_file: str, run_meta: RunMeta, coverage_sha256
     print(f"generated_at: {run_meta.generated_at}")
     print(f"cache_mode: {run_meta.cache_mode}")
     print(f"go_version: {run_meta.go_version}")
-    print(f"includes_bash_integration_tests: {run_meta.includes_bash_integration_tests}")
-    if run_meta.coverage_profile_sha256 and run_meta.coverage_profile_sha256 != coverage_sha256:
-        print("WARN: coverage.out hash does not match latest run metadata (profile may be stale)")
+    print(
+        f"includes_bash_integration_tests: {run_meta.includes_bash_integration_tests}"
+    )
+    if (
+        run_meta.coverage_profile_sha256
+        and run_meta.coverage_profile_sha256 != coverage_sha256
+    ):
+        print(
+            "WARN: coverage.out hash does not match latest run metadata (profile may be stale)"
+        )
     print()
 
 
@@ -394,11 +458,18 @@ def print_git_delta(previous: Snapshot, current: Snapshot) -> None:
     if previous.git.head != current.git.head:
         print(f"HEAD changed: {previous.git.head[:12]} -> {current.git.head[:12]}")
     if previous.git.status_digest != current.git.status_digest:
-        print(f"working tree changed: status entries {previous.git.status_count} -> {current.git.status_count}")
+        print(
+            f"working tree changed: status entries {previous.git.status_count} -> {current.git.status_count}"
+        )
     print()
 
 
-def print_function_delta(previous: Snapshot, current_rows: Sequence[FunctionCoverage], gate: float, heading: str) -> None:
+def print_function_delta(
+    previous: Snapshot,
+    current_rows: Sequence[FunctionCoverage],
+    gate: float,
+    heading: str,
+) -> None:
     previous_below = {row.name for row in previous.below_gate}
     current_below = {row.name for row in current_rows if row.percent < gate}
     diff = len(current_below) - len(previous_below)
@@ -441,8 +512,14 @@ def print_function_delta(previous: Snapshot, current_rows: Sequence[FunctionCove
         print("no per-function percentage changes detected")
         print()
         return
-    improved = sorted((item for item in changed if item[0] > 0), key=lambda item: item[0], reverse=True)
-    regressed = sorted((item for item in changed if item[0] < 0), key=lambda item: item[0])
+    improved = sorted(
+        (item for item in changed if item[0] > 0),
+        key=lambda item: item[0],
+        reverse=True,
+    )
+    regressed = sorted(
+        (item for item in changed if item[0] < 0), key=lambda item: item[0]
+    )
     print("most improved:")
     for delta, old, new, name in improved[:10]:
         print(f"  +{delta:.1f} pp  {old:.1f}% -> {new:.1f}%  {name}")
@@ -453,7 +530,9 @@ def print_function_delta(previous: Snapshot, current_rows: Sequence[FunctionCove
     print()
 
 
-def pick_last_distinct_snapshot(history: Sequence[Snapshot], current: Snapshot) -> Optional[Snapshot]:
+def pick_last_distinct_snapshot(
+    history: Sequence[Snapshot], current: Snapshot
+) -> Optional[Snapshot]:
     current_signature = current.signature()
     for snapshot in reversed(history):
         if snapshot.signature() != current_signature:
@@ -461,7 +540,9 @@ def pick_last_distinct_snapshot(history: Sequence[Snapshot], current: Snapshot) 
     return None
 
 
-def pick_last_git_changed_snapshot(history: Sequence[Snapshot], current: Snapshot) -> Optional[Snapshot]:
+def pick_last_git_changed_snapshot(
+    history: Sequence[Snapshot], current: Snapshot
+) -> Optional[Snapshot]:
     current_identity = current.git_identity()
     for snapshot in reversed(history):
         if snapshot.git_identity() != current_identity:
@@ -469,7 +550,9 @@ def pick_last_git_changed_snapshot(history: Sequence[Snapshot], current: Snapsho
     return None
 
 
-def print_top_functions(rows: Sequence[FunctionCoverage], top: int, selected_files: Sequence[str]) -> None:
+def print_top_functions(
+    rows: Sequence[FunctionCoverage], top: int, selected_files: Sequence[str]
+) -> None:
     print("== lowest-covered functions (go tool cover -func)")
     printed = 0
     for row in rows:
@@ -521,26 +604,43 @@ def main() -> int:
         print_below_gate(below_gate, args.gate, args.top)
 
         if not args.no_state:
-            current_snapshot = build_snapshot(args.gate, args.files, below_gate, function_rows, coverage_sha256)
+            current_snapshot = build_snapshot(
+                args.gate, args.files, below_gate, function_rows, coverage_sha256
+            )
             store = SnapshotStore(args.state_file)
             previous = store.history[-1] if store.history else None
             if previous:
-                print_function_delta(previous, function_rows, args.gate, "function-gate delta vs immediate previous run")
+                print_function_delta(
+                    previous,
+                    function_rows,
+                    args.gate,
+                    "function-gate delta vs immediate previous run",
+                )
                 print_profile_delta(previous, coverage_sha256)
                 print_git_delta(previous, current_snapshot)
                 if previous.git_identity() == current_snapshot.git_identity():
-                    git_changed = pick_last_git_changed_snapshot(store.history, current_snapshot)
+                    git_changed = pick_last_git_changed_snapshot(
+                        store.history, current_snapshot
+                    )
                     if git_changed:
                         print_function_delta(
-                            git_changed, function_rows, args.gate, "function-gate delta vs last git-changed run"
+                            git_changed,
+                            function_rows,
+                            args.gate,
+                            "function-gate delta vs last git-changed run",
                         )
                         print_profile_delta(git_changed, coverage_sha256)
                         print_git_delta(git_changed, current_snapshot)
                     else:
-                        distinct = pick_last_distinct_snapshot(store.history, current_snapshot)
+                        distinct = pick_last_distinct_snapshot(
+                            store.history, current_snapshot
+                        )
                         if distinct:
                             print_function_delta(
-                                distinct, function_rows, args.gate, "function-gate delta vs last distinct run"
+                                distinct,
+                                function_rows,
+                                args.gate,
+                                "function-gate delta vs last distinct run",
                             )
                             print_profile_delta(distinct, coverage_sha256)
                             print_git_delta(distinct, current_snapshot)
@@ -564,4 +664,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

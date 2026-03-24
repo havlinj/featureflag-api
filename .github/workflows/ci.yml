@@ -28,7 +28,7 @@ jobs:
         run: bash scripts/check.sh
 
       - name: Verify CI scripts are synced with test_all_full
-        run: python3 scripts/verify_ci_sync.py
+        run: python3 scripts/github/verify_ci_sync.py
 
       - name: Unit tests
         run: bash scripts/test_unit.sh
@@ -70,7 +70,7 @@ jobs:
           go-version-file: go.mod
 
       - name: Verify CI scripts are synced with test_all_full
-        run: python3 scripts/verify_ci_sync.py
+        run: python3 scripts/github/verify_ci_sync.py
 
       - name: Run bash integration test
         run: bash ${{ matrix.script }}
