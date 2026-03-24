@@ -21,6 +21,7 @@ ENFORCE_FUNCTION_FLOOR=1
 # - disable test result cache via -count=1
 # Set COVERAGE_ALLOW_CACHE=1 for faster local feedback loops.
 COVERAGE_ALLOW_CACHE="${COVERAGE_ALLOW_CACHE:-0}"
+RUN_META_FILE="scripts/coverage/state/coverage_run_meta.json"
 
 # Per-file coverage floors by file role.
 MIN_ANY_FILE_COVERAGE=40
@@ -100,6 +101,44 @@ run_tests_with_coverage() {
     "${COVERAGE_PKGS[@]}" ./test/integration/...
   GO_TEST_EXIT=$?
   set -e
+}
+
+write_run_metadata() {
+  local cache_mode="fresh"
+  local coverage_sha256=""
+  local go_version=""
+  local generated_at=""
+  local measured_packages=""
+  local coverage_cmd=""
+
+  if [[ "$COVERAGE_ALLOW_CACHE" == "1" ]]; then
+    cache_mode="cached"
+  fi
+
+  if [[ -f coverage.out ]]; then
+    coverage_sha256="$(sha256sum coverage.out | awk '{print $1}')"
+  fi
+
+  go_version="$(go version 2>/dev/null || true)"
+  generated_at="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+  measured_packages="$(printf "%s " "${COVERAGE_PKGS[@]}" ./test/integration/... | sed 's/[[:space:]]*$//')"
+  coverage_cmd="go test ${COVERAGE_PKGS[*]} ./test/integration/... -coverprofile=coverage.out"
+
+  mkdir -p "$(dirname "$RUN_META_FILE")"
+  cat > "$RUN_META_FILE" <<EOF
+{
+  "generated_at": "$generated_at",
+  "cache_mode": "$cache_mode",
+  "go_version": "$go_version",
+  "go_test_exit": $GO_TEST_EXIT,
+  "coverage_profile": "coverage.out",
+  "coverage_profile_sha256": "$coverage_sha256",
+  "command": "$coverage_cmd",
+  "measured_packages": "$measured_packages",
+  "includes_go_integration_tests": true,
+  "includes_bash_integration_tests": false
+}
+EOF
 }
 
 setup_temp_reports() {
@@ -379,6 +418,7 @@ main() {
   echo "== measured packages: ${COVERAGE_PKGS[*]}"
 
   run_tests_with_coverage "$COVERAGE_IMPORTS"
+  write_run_metadata
   if [[ "$GO_TEST_EXIT" -ne 0 ]]; then
     TEST_EXEC_FAIL=1
     echo "go test execution returned non-zero exit code: ${GO_TEST_EXIT}"

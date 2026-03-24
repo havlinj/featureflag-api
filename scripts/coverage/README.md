@@ -11,6 +11,7 @@ This folder contains all tooling related to coverage measurement, quality gates,
   - function-level floor for core functions (default 50%)
   - deterministic mode by default (clears Go test cache + runs with `-count=1`)
   - optional fast mode via `COVERAGE_ALLOW_CACHE=1`
+  - writes run metadata to `scripts/coverage/state/coverage_run_meta.json`
   - generated GraphQL Go files under `graph/**/*.go` are excluded from per-file/function enforcement
 - `coverage_filter/`: Go helper that post-processes function-level violations
   - skips generated `graph/**/*.go`
@@ -21,6 +22,7 @@ This folder contains all tooling related to coverage measurement, quality gates,
   - supports local delta against previous run via state file
   - keeps state history (default 10 snapshots), prints delta vs immediate previous run, and if project tree is unchanged it auto-walks older snapshots to find the last git-changed run for comparison
   - deduplicates identical consecutive snapshots via `repeat_count`
+  - prints coverage profile provenance (cache mode, go version, metadata/hash consistency)
 
 ## How it is integrated
 
@@ -39,6 +41,13 @@ COVERAGE_ALLOW_CACHE=1 bash scripts/coverage/test_coverage.sh
 Hotspot analysis:
 
 ```bash
+python3 scripts/coverage/coverage_hotspots.py
+```
+
+Recommended truthful flow:
+
+```bash
+bash scripts/coverage/test_coverage.sh
 python3 scripts/coverage/coverage_hotspots.py
 ```
 
