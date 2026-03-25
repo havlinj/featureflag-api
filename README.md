@@ -1,140 +1,239 @@
 # Feature Flag & Experiment Management API
 
-A Go-based backend service for managing feature flags and A/B experiments, featuring role-based access control, audit logging, and rollout strategies. Built with clean architecture principles, GraphQL (gqlgen), PostgreSQL, and JWT-based authentication.
+A production-oriented backend service for managing feature flags and A/B experiments, built in Go with GraphQL and PostgreSQL.
+
+The project focuses on **clean architecture, deterministic behavior, strong testing discipline, and structured development workflow**, while also serving as a **real-world environment for learning and applying new technologies** (Go, GraphQL, PostgreSQL).
+
+---
+
+## At a glance
+
+- Clean architecture with strict separation of transport, service, and repository layers  
+- GraphQL API (schema-first via gqlgen) over HTTPS  
+- Deterministic feature flag rollout (percentage + attribute-based)  
+- Experiment management with stable user assignment  
+- Fail-closed audit logging with transactional guarantees  
+- End-to-end tested with real PostgreSQL (testcontainers)  
+- Local + CI parity via scripts and GitHub Actions  
+- Risk-based coverage policy with enforced multi-level gates (~90% achieved)
+
+---
+
+## Why this project exists
+
+This project was built with three primary goals:
+
+### 1. Engineering discipline
+
+To design and implement a backend system with:
+
+- clear architectural boundaries  
+- deterministic behavior  
+- explicit error handling  
+- strong testability
+
+### 2. Learning new technologies in a real context
+
+The project intentionally uses:
+
+- **Go** (idiomatic backend development, concurrency, strong typing)  
+- **GraphQL (gqlgen)** (schema-first API design)  
+- **PostgreSQL** (relational modeling, transactional consistency)
+
+The goal was not just to "try" these technologies, but to **apply them in a realistic, structured system**.
+
+### 3. Structured development workflow
+
+The system was developed using a strict cycle:
+
+#### PLAN → APPROVAL → IMPLEMENT → TEST → REVIEW
+
+With:
+
+- phased delivery  
+- explicit review checkpoints  
+- continuous validation through tests and CI
+
+---
+
+## System overview
+
+The system provides:
+
+### Feature Flags
+
+- Create, update, delete flags  
+- Enable/disable per environment (`dev`, `staging`, `prod`)  
+- Rollout strategies:
+  - Percentage-based (deterministic hashing)
+  - Attribute-based (e.g. userId, email domain)
+
+### Experiments (A/B testing)
+
+- Define experiments with variants  
+- Weighted distribution (e.g. 50/50, 90/10)  
+- Deterministic user assignment  
+- Persistent assignment storage
+
+### Audit Logging
+
+- Every critical mutation is recorded  
+- Includes actor, action, and timestamp  
+- Enforced as a **system invariant** (fail-closed)
+
+### Authentication & Authorization
+
+- JWT-based authentication  
+- Role-based access control:
+  - `admin`
+  - `developer`
+  - `viewer`
+
+---
+
+## Architecture at a glance
+
+The system follows a layered architecture with strict separation of concerns:
+
+- **Transport layer** → GraphQL (resolvers, middleware)  
+- **Service layer** → business logic (flags, experiments, audit)  
+- **Repository layer** → PostgreSQL access  
+- **Database** → relational schema with transactional guarantees
+
+![Architecture diagram](docs/diagrams/images/uml_components_graph.png)
+
+---
+
+## Selected behavioural flows
+
+### Fail-closed audit semantics
+
+Critical mutations use **fail-closed audit logic**:
+
+- Business change and audit log are executed in the same transaction  
+- If audit logging fails → transaction is rolled back  
+- The system **never allows a state where data changes exist without audit trail**
+
+![Fail-closed audit flow](docs/diagrams/images/seq_audit_fail_closed_rollback_mscgen.png)
+
+---
+
+### End-to-end request flows
+
+The following diagram shows representative flows across the same stack:
+
+- **Login**  
+  - User lookup + password verification  
+  - JWT token issued
+- **CreateFlag (write path)**  
+  - JWT validated in middleware  
+  - Transactional write + audit logging  
+  - Commit on success
+- **EvaluateFlag (read/decision path)**  
+  - Rules loaded from DB  
+  - Deterministic evaluation in service layer  
+  - Boolean result returned
+
+![Request flows](docs/diagrams/images/seq_login_createflag_evaluate_mscgen.png)
+
+---
+
+## Engineering approach
+
+### Clean architecture enforcement
+
+- Transport layer depends only on service contracts  
+- Service layer is independent of GraphQL and transport  
+- Repository layer handles only persistence  
+- No cross-layer leakage
+
+### Coding discipline
+
+- Small, focused functions (max ~23 lines)  
+- Explicit error handling (typed errors, no hidden failures)  
+- No global mutable state (unless safely controlled)  
+- Idiomatic Go prioritized over abstraction
+
+### Deterministic behavior
+
+- Feature rollout uses hashing → stable results  
+- Experiment assignment is repeatable  
+- Tests do not rely on randomness
+
+---
 
 ## Quality highlights
 
-Beyond feature completeness, the project places explicit emphasis on engineering quality:
+- Unit tests for all business logic  
+- Integration tests with real PostgreSQL (testcontainers)  
+- GraphQL tested end-to-end over HTTPS  
+- Binary smoke tests (real compiled app)  
+- Bash-based integration scenarios (config, error cases)  
+- CI runs full suite on every push/PR
 
-- **Layered architecture with clear boundaries** - transport, service, and persistence concerns are separated and testable in isolation.
-- **Risk-based test strategy** - combines unit tests, Go integration tests, and binary/bash integration scenarios to validate both logic and runtime behaviour.
-- **High and enforced coverage standards** - global coverage around 90% with additional per-file and function-level gates to prevent weak spots from being hidden by averages.
-- **Deterministic coverage workflow** - coverage runs are configured for reproducibility, reducing cache-related noise and making trend comparisons meaningful.
-- **Coverage hotspot analysis with historical deltas** - tooling highlights low-covered functions, tracks changes over time, and improves targeting of high-value test additions.
-- **CI/Local sync safeguards** - dedicated verification scripts ensure CI script execution stays aligned with the canonical local full-test workflow.
-- **Operational robustness in test automation** - smoke/integration scripts include explicit dependency readiness checks to reduce flaky failures.
+### Coverage policy (final)
 
-These points are intentional design choices: the project aims not only to implement functionality, but to demonstrate maintainability, reliability, and disciplined delivery practices.
+- Global coverage: **~90%**  
+- Enforced multi-tier gates:
+  - Global threshold  
+  - Per-file thresholds  
+  - Function-level thresholds
+- Coverage measured across **unit + integration tests combined**  
+- Designed to prevent “fake coverage” (e.g. empty branches)
 
-## Motivation
+---
 
-This project marks my first deliberate adoption of an agentic AI workflow, implemented using the Cursor IDE. It was created primarily as a structured learning exercise, focused on evaluating how modern AI-assisted development can be integrated into a disciplined engineering process.
+## Technology stack
 
-Rather than treating AI as a novelty, I approached it as a tooling shift with architectural implications. The productivity gains were significant, but more importantly, the workflow challenges established assumptions about how software is designed, implemented, and iterated on. It requires clearer intent, stronger contextual framing, and more explicit communication of constraints.
+- **Go** — core backend implementation  
+- **GraphQL (gqlgen)** — schema-first API  
+- **PostgreSQL** — persistence layer  
+- **JWT** — authentication  
+- **Docker / testcontainers** — integration testing  
+- **GitHub Actions** — CI pipeline  
+- **Bash scripts** — local/CI parity
 
-From the outset, I placed strong emphasis on initial project configuration. Establishing high-quality context for the AI proved essential. This context was iteratively refined throughout development. With sufficient structure and systematic thinking, continuity across sessions can be maintained effectively.
+---
 
-One notable advantage of working with Cursor is its responsiveness to developer feedback and its ability to provide deeper technical explanations when needed. Used correctly, it functions as a capable implementation partner—augmenting, not replacing, engineering judgment.
+## Project status
 
-### AI Workflow Perspective
+The project is **complete and fully reviewed**.
 
-Part of the workflow design was informed by structured outputs generated by another LLM. Using one model (optimized for retrieval or summarization) to prepare inputs for another highlights an important pattern: AI systems can be composed. This layered usage has practical implications for accelerating research, reducing cognitive load, and tackling complex domains more efficiently.
+- All planned phases (1–5) finished  
+- Core functionality implemented and tested  
+- Production-oriented hardening completed  
+- Coverage and quality gates stabilized
 
-The key is not blind adoption, but calibrated usage—understanding when AI meaningfully improves leverage and when traditional approaches remain preferable.
+The project is now in **maintenance mode**:
 
-### Technology Scope and Intentional Expansion
+- bug fixes  
+- minor refinements  
+- optional future extensions
 
-This project also served a second purpose: broadening my technological range. Designing systems responsibly requires at least a working understanding of the tools involved, including their trade-offs and operational characteristics.
-
-#### Language
-
-This project was intentionally selected to support my expansion into Go. The decision was professionally motivated and carefully considered, though I will not elaborate further here.
-
-Prior to this, my primary focus had been Rust, which provided strong foundations across abstraction layers and system-level reasoning. However, no single language is optimal across all domains. Go was chosen for its different design philosophy and ecosystem characteristics, which align well with certain categories of backend and distributed systems development.
-
-The application is therefore implemented in Go by design, not by convenience.
-
-#### API Design
-
-While REST remains widespread and practical, there are scenarios where its structural model becomes limiting. Certain use cases require greater flexibility in shaping data contracts and query behavior.
-
-For this reason, the project incorporates GraphQL. The objective was not trend adoption, but architectural exposure—understanding how alternative API paradigms influence system design, client interaction patterns, and schema evolution.
-
-#### Database
-
-My earlier experience was centered primarily on SQLite. While suitable for many use cases, it does not fully represent the operational realities of client–server or distributed environments.
-
-This project therefore uses PostgreSQL, selected for its maturity, feature depth, and suitability for production-grade systems. The goal was to gain hands-on experience with a database system designed for concurrency, scaling considerations, and more complex deployment topologies.
-
-## Application overview
-
-The system is a **Feature Flag & Experiment Management API**: a backend that allows creating and managing feature flags (with rollout strategies), A/B experiments with variants and user assignments, and an audit trail of changes. Access is controlled via JWT authentication and role-based permissions.
-
-### Purpose and scope
-
-The API is intended for applications that need:
-
-- **Feature flags** – to turn features on or off and to roll them out gradually (by percentage or by user attributes) across environments such as `dev`, `staging`, and `prod`.
-- **A/B experiments** – to define experiments with multiple variants, assign weights, and deterministically assign users to variants, with assignments stored for consistency.
-- **Auditability** – to record who changed what and when for feature flags (and, where applicable, other entities).
-- **Secure, role-aware access** – so that only authorised users (admins, developers, viewers) can perform the right operations.
-
-The primary interface is **GraphQL over HTTPS**. The service is structured in layers so that API, business logic, and data access stay clearly separated and testable.
-
-### Features and behaviour
-
-**Feature flags**
-
-- Create, update, and delete feature flags.
-- Enable or disable a flag.
-- Support multiple environments (e.g. `dev`, `staging`, `prod`).
-- **Rollout strategies** (one per flag):
-  - **Percentage-based:** deterministic rollout by user ID (e.g. 30% of users); the same user always gets the same result (e.g. via hashing into buckets).
-  - **Attribute-based:** enable/disable based on user attributes (e.g. user ID allowlist, email domain such as `@company.com`); rules refer to attributes and conditions and are evaluated against a context (user ID and any provided attributes).
-- **Evaluation:** the API can evaluate whether a flag is “on” for a given key and evaluation context (e.g. `userId`, `email`).
-
-**Experiments (A/B)**
-
-- Define experiments with multiple variants (A, B, C, …).
-- Assign weights to variants (e.g. 50/50, 90/10).
-- **Deterministic** user-to-variant assignment so the same user consistently receives the same variant.
-- Persist user–experiment–variant assignments in the database.
-
-**Audit log**
-
-- Record every change to feature flags (and, as designed, other critical entities).
-- Store who made the change, when, and what was changed (entity, entity ID, action, actor, timestamp).
-
-**Authentication and authorization**
-
-- **JWT-based authentication:** clients obtain a token (e.g. via a login mutation) and send it with requests.
-- **Role-based access control:** roles such as `admin`, `developer`, and `viewer` govern which operations a user can perform.
-
-### High-level architecture
-
-The codebase follows a **layered, clean-architecture style**:
-
-- **Transport layer** (`transport/graphql`) – GraphQL server, resolvers, and middleware (JWT auth, logging, error handling). Resolvers are thin: they adapt GraphQL input to service calls and map results back to the API. The transport layer depends only on service contracts, not on domain entities or repositories.
-
-- **Service layer** (`internal/flags`, `internal/experiments`, `internal/auth`, …) – Business logic: flag lifecycle, rollout evaluation, experiment assignment, user and auth operations. Services are independent of the transport and of how data is stored.
-
-- **Repository layer** – Database access only: queries and writes against PostgreSQL. Repositories are used by services and hide persistence details. Transaction boundaries are defined here.
-
-- **Domain entities** – Core types (flags, rules, experiments, variants, users, audit entries) used by services and repositories. They are not exposed directly to the transport.
-
-- **Graph and generated code** (`graph/`) – GraphQL schema definitions and gqlgen-generated types and resolver scaffolding. The schema is the single source of truth for the API shape.
-
-- **Infrastructure** – Database connection and schema management (`internal/db`), SQL migrations (`migrations/`), and local development setup (e.g. Docker Compose for PostgreSQL).
-
-Directory-wise, the layout looks like:
-
-- `transport/graphql/` – server, resolvers, middleware  
-- `internal/flags/`, `internal/experiments/`, `internal/auth/`, `internal/users/`, `internal/db/` – services, repositories, and shared infra  
-- `graph/` – schema and gqlgen output  
-- `migrations/` – SQL migrations  
-- `tests/` or `test/` – test suites  
-
-The API is served over **HTTPS**; GraphQL queries and mutations use the standard HTTP request/response model for compatibility with clients, proxies, and caches.
-
-**Technology stack**
-
-- **Go** – implementation language (type safety, concurrency, clarity).
-- **gqlgen** – schema-first GraphQL: schema drives generated types and resolver interfaces.
-- **PostgreSQL** – primary store for users, flags, rules, experiments, variants, assignments, and audit logs.
-- **JWT + RBAC** – authentication and authorization.
-- **Docker Compose** – local PostgreSQL and development environment.
+---
 
 ## Testing
 
-The project relies on **unit tests** and **integration tests**. Unit tests focus on the service layer (flag and experiment logic, rollout and assignment rules) using mocked repositories so that behaviour can be checked in isolation. Integration tests run against a real database (e.g. PostgreSQL via testcontainers or Docker) and hit the GraphQL API over HTTP to verify end-to-end behaviour, including authentication and role enforcement. The aim is to keep core business logic well covered and to validate that the API, services, and database work together correctly.
+Run locally:
 
+```bash
+# Quick validation (fast)
+./scripts/test_all_quick.sh
+
+# Full suite (same as CI)
+./scripts/test_all_full.sh
+```
+
+Coverage:
+
+```bash
+./scripts/coverage/test_coverage.sh
+```
+
+## Notes
+
+This project is best understood as:
+
+> A production-oriented engineering exercise focused on architecture, disciplined development workflow, and high-quality backend design — while intentionally learning and applying new technologies in a real system.
+
+It is not just about building features, but about **how those features are designed, validated, and maintained**.

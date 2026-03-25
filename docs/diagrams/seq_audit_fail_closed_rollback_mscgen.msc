@@ -1,0 +1,25 @@
+msc {
+  width="1200", wordwraparcs="true", arcgradient="10";
+
+  Client [label="Client"],
+  GQL  [label="GraphQL"],
+  FS   [label="flags.Service"],
+  FStore [label="flags.Store\n(Postgres)"],
+  AStore [label="audit.Store\n(Postgres)"];
+
+  // --- Happy path until audit write ---
+  Client=>GQL [label="mutation UpdateFlag(...)"];
+  GQL=>FS [label="UpdateFlag(ctx, input)"];
+
+  FS=>FStore [label="BeginTx / WithTx"];
+  FS=>FStore [label="Update business entity"];
+  FS=>AStore [label="Create(audit entry)"];
+
+  |||;
+
+  // --- Fail-closed: audit fails → rollback, no commit ---
+  AStore=>FS [label="ERROR (audit write failed)"];
+  FS=>FStore [label="Rollback()"];
+  FS=>GQL [label="error (no commit)"];
+  GQL=>Client [label="mutation failed"];
+}

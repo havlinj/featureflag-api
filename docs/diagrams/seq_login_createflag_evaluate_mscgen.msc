@@ -1,0 +1,55 @@
+msc {
+  width="1800", wordwraparcs="true", arcgradient="10";
+
+  Client  [label="Client"],
+  MW      [label="HTTP\nmiddleware"],
+  GQL     [label="GraphQL\n(gqlgen)"],
+  JWT     [label="JWT\n(parse/validate)"],
+  US      [label="users.Service"],
+  UStore  [label="users.Store\n(Postgres)"],
+  FS      [label="flags.Service"],
+  FStore  [label="flags.Store\n(Postgres)"],
+  AStore  [label="audit.Store\n(Postgres)"];
+
+  // --- Login ---
+  Client=>MW [label="POST /graphql (Login)"];
+  MW=>GQL [label="pass-through"];
+  GQL=>US [label="Login(email, password)"];
+  US=>UStore [label="GetByEmail"];
+  UStore=>US [label="user + password_hash"];
+  US=>GQL [label="userID, role"];
+  GQL=>JWT [label="IssueToken(userID, role)"];
+  JWT=>GQL [label="signed token"];
+  GQL=>Client [label="token"];
+
+  |||;
+
+  // --- CreateFlag (tx + audit + commit) ---
+  Client=>MW [label="CreateFlag (Bearer token)"];
+  MW=>JWT [label="ParseAndValidate(token)"];
+  JWT=>MW [label="claims (userID, role)"];
+  MW=>GQL [label="ctx with claims"];
+  GQL=>FS [label="CreateFlag(input)"];
+  FS=>FStore [label="BeginTx / WithTx"];
+  FS=>FStore [label="GetByKeyAndEnvironment"];
+  FS=>FStore [label="Create(flag)"];
+  FS=>FStore [label="ReplaceRulesByFlagID (optional)"];
+  FS=>AStore [label="Create(audit: feature_flag/create)"];
+  FS=>FStore [label="Commit"];
+  FS=>GQL [label="FeatureFlag"];
+  GQL=>Client [label="createFlag result"];
+
+  |||;
+
+  // --- EvaluateFlag (read path) ---
+  Client=>MW [label="EvaluateFlag (Bearer token)"];
+  MW=>JWT [label="ParseAndValidate(token)"];
+  JWT=>MW [label="claims"];
+  MW=>GQL [label="ctx with claims"];
+  GQL=>FS [label="EvaluateFlagInEnvironment(key, env, ctx)"];
+  FS=>FStore [label="GetByKeyAndEnvironment"];
+  FS=>FStore [label="GetRulesByFlagID"];
+  FS=>FS [label="evaluateRulesByStrategy(...)"];
+  FS=>GQL [label="enabled?"];
+  GQL=>Client [label="evaluateFlag = true/false"];
+}
